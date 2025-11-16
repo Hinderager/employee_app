@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 // Vehicle data from OMW Text project
 const VEHICLES = [
@@ -165,9 +166,10 @@ export default function VehicleLocationsPage() {
     markersRef.current.forEach(marker => marker.remove());
     markersRef.current = [];
 
-    // Add new markers for each vehicle
+    // Add new markers for each vehicle (skip vehicles with no valid location)
     vehicleData.forEach(vehicle => {
-      if (vehicle.latitude && vehicle.longitude) {
+      if (vehicle.latitude && vehicle.longitude &&
+          vehicle.latitude !== 0 && vehicle.longitude !== 0) {
         // Create custom icon using image (same as OMW Text project)
         const customIcon = L.icon({
           iconUrl: vehicle.iconUrl,
@@ -215,15 +217,28 @@ export default function VehicleLocationsPage() {
           </div>
         `;
 
-        marker.bindPopup(popupContent);
+        marker.bindPopup(popupContent, {
+          autoClose: false,      // Don't auto-close when another popup opens
+          closeOnClick: true,    // Close when clicking map (outside the pin)
+          closeButton: true,     // Show X button to close
+          autoPan: true,         // Auto-pan map to show popup
+          maxWidth: 300          // Max width for popup
+        });
         markersRef.current.push(marker);
       }
     });
 
     // Auto-fit map to show all vehicles ONLY on first load
     if (markersRef.current.length > 0 && isFirstLoadRef.current) {
-      const group = L.featureGroup(markersRef.current);
-      mapRef.current.fitBounds(group.getBounds().pad(0.1));
+      try {
+        const group = L.featureGroup(markersRef.current);
+        const bounds = group.getBounds();
+        if (bounds.isValid()) {
+          mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+        }
+      } catch (error) {
+        console.log('Unable to fit bounds on initial load:', error);
+      }
       isFirstLoadRef.current = false; // Disable auto-fit after first load
     }
 
@@ -246,33 +261,64 @@ export default function VehicleLocationsPage() {
     }
   };
 
-  // Handle clicking "All Vehicles" button - show all vehicles
+  // Handle clicking "All Vehicles" button - show all vehicles (same as initial load)
   const handleShowAllVehicles = () => {
-    if (!mapRef.current || vehicles.length === 0) return;
-
     const L = (window as any).L;
-    if (!L) return;
 
+    // Stop following any vehicle
     followingVehicleRef.current = null;
     setFollowingVehicle(null);
 
-    // Fit bounds to show all vehicles
-    const validVehicles = vehicles.filter(v => v.latitude && v.longitude);
-    if (validVehicles.length > 0) {
-      const bounds = L.latLngBounds(
-        validVehicles.map(v => [v.latitude, v.longitude])
-      );
-      mapRef.current.fitBounds(bounds.pad(0.1));
+    // Fit bounds to show all vehicles (same as initial load)
+    if (markersRef.current.length > 0 && L && mapRef.current) {
+      if (markersRef.current.length === 1) {
+        // If only one marker, just center on it
+        const latLng = markersRef.current[0].getLatLng();
+        mapRef.current.setView(latLng, 13);
+      } else {
+        // If multiple markers, fit bounds
+        try {
+          const group = L.featureGroup(markersRef.current);
+          mapRef.current.fitBounds(group.getBounds(), { padding: [50, 50] });
+        } catch (error) {
+          console.log('Unable to fit bounds, centering on first vehicle:', error);
+          // Fallback: center on first marker
+          const latLng = markersRef.current[0].getLatLng();
+          mapRef.current.setView(latLng, 13);
+        }
+      }
     }
   };
 
   return (
     <div className="h-screen w-screen relative">
+      {/* Menu Button - Top Left */}
+      <Link
+        href="/home"
+        className="fixed top-4 left-4 z-[1000] bg-white/90 backdrop-blur-sm hover:bg-white shadow-lg rounded-lg px-4 py-2 flex items-center gap-2 transition-all hover:scale-105"
+      >
+        <svg
+          className="w-5 h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4 6h16M4 12h16M4 18h16"
+          />
+        </svg>
+        <span className="font-medium text-gray-900">Menu</span>
+      </Link>
+
       {/* Map Container - Full Screen */}
       <div id="map" className="h-full w-full"></div>
 
       {/* Bottom Navigation Bar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg z-[1000]">
         <div className="flex justify-around items-center px-4 py-3">
           {/* Individual Vehicle Icons */}
           {VEHICLES.map((vehicle) => {
@@ -294,7 +340,7 @@ export default function VehicleLocationsPage() {
                   alt={vehicle.name}
                   className="w-12 h-12 object-contain"
                 />
-                <span className="text-xs mt-1 font-medium" style={{ color: vehicle.color }}>
+                <span className="text-xs mt-1 font-medium text-black">
                   {vehicle.name.split(' ')[0]}
                 </span>
               </button>
