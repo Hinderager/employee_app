@@ -40,6 +40,7 @@ interface VehicleLocation {
   timestamp: string;
   address: string;
   isRunning: boolean;
+  fuelLevel: number;
   color: string;
   iconUrl: string;
 }
@@ -47,6 +48,8 @@ interface VehicleLocation {
 export default function VehicleLocationsPage() {
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const isFirstLoadRef = useRef<boolean>(true);
+  const followingVehicleRef = useRef<string | null>(null); // Track which vehicle to follow (by IMEI)
   const [vehicles, setVehicles] = useState<VehicleLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -105,6 +108,14 @@ export default function VehicleLocationsPage() {
     ).addTo(map);
 
     mapRef.current = map;
+
+    // Stop following vehicle when map is dragged or zoomed manually
+    map.on('dragstart', () => {
+      followingVehicleRef.current = null;
+    });
+    map.on('zoomstart', () => {
+      followingVehicleRef.current = null;
+    });
 
     // Start fetching vehicle locations
     fetchVehicleLocations();
@@ -166,7 +177,14 @@ export default function VehicleLocationsPage() {
           icon: customIcon
         }).addTo(mapRef.current);
 
+        // Add click handler to follow this vehicle
+        marker.on('click', () => {
+          followingVehicleRef.current = vehicle.imei;
+          mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
+        });
+
         // Add popup with vehicle info
+        const fuelIcon = vehicle.fuelLevel > 50 ? '⛽' : vehicle.fuelLevel > 25 ? '🟡' : '🔴';
         const popupContent = `
           <div style="min-width: 200px;">
             <h3 style="margin: 0 0 8px 0; font-weight: bold; color: ${vehicle.color};">
@@ -178,11 +196,17 @@ export default function VehicleLocationsPage() {
             <p style="margin: 4px 0; font-size: 14px;">
               <strong>Status:</strong> ${vehicle.isRunning ? '🟢 Running' : '🔴 Stopped'}
             </p>
+            <p style="margin: 4px 0; font-size: 14px;">
+              <strong>Fuel:</strong> ${fuelIcon} ${vehicle.fuelLevel}%
+            </p>
             <p style="margin: 4px 0; font-size: 12px; color: #666;">
               ${vehicle.address || 'Address unavailable'}
             </p>
             <p style="margin: 4px 0; font-size: 11px; color: #999;">
               Updated: ${new Date(vehicle.timestamp).toLocaleTimeString()}
+            </p>
+            <p style="margin: 4px 0; font-size: 11px; color: #999;">
+              <em>Click marker to follow vehicle</em>
             </p>
           </div>
         `;
@@ -192,10 +216,19 @@ export default function VehicleLocationsPage() {
       }
     });
 
-    // Auto-fit map to show all vehicles
-    if (markersRef.current.length > 0) {
+    // Auto-fit map to show all vehicles ONLY on first load
+    if (markersRef.current.length > 0 && isFirstLoadRef.current) {
       const group = L.featureGroup(markersRef.current);
       mapRef.current.fitBounds(group.getBounds().pad(0.1));
+      isFirstLoadRef.current = false; // Disable auto-fit after first load
+    }
+
+    // If following a vehicle, center on it
+    if (followingVehicleRef.current) {
+      const followedVehicle = vehicleData.find(v => v.imei === followingVehicleRef.current);
+      if (followedVehicle && followedVehicle.latitude && followedVehicle.longitude) {
+        mapRef.current.setView([followedVehicle.latitude, followedVehicle.longitude], mapRef.current.getZoom());
+      }
     }
   };
 

@@ -75,7 +75,8 @@ export async function GET() {
           heading: 0,
           timestamp: new Date().toISOString(),
           address: 'Location unavailable',
-          isRunning: false
+          isRunning: false,
+          fuelLevel: 0
         };
       }
 
@@ -89,7 +90,8 @@ export async function GET() {
         heading: location.heading || 0,
         timestamp: location.timestamp || new Date().toISOString(),
         address: location.address || 'Address unavailable',
-        isRunning: bouncieVehicle.stats.isRunning || false
+        isRunning: bouncieVehicle.stats.isRunning || false,
+        fuelLevel: Math.round(bouncieVehicle.stats.fuelLevel || 0)
       };
     });
 
