@@ -35,6 +35,8 @@ npm start
 
 This app is deployed on Vercel and connected to the `main` branch of the GitHub repository.
 
+**Live URL**: https://employee-app-six-blush.vercel.app
+
 ## PWA Installation
 
 Users can install this app on their mobile devices:
