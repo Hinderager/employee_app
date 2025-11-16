@@ -54,6 +54,7 @@ export default function VehicleLocationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [followingVehicle, setFollowingVehicle] = useState<string | null>(null); // Track for UI highlighting
 
   // Initialize Leaflet map
   useEffect(() => {
@@ -112,9 +113,11 @@ export default function VehicleLocationsPage() {
     // Stop following vehicle when map is dragged or zoomed manually
     map.on('dragstart', () => {
       followingVehicleRef.current = null;
+      setFollowingVehicle(null);
     });
     map.on('zoomstart', () => {
       followingVehicleRef.current = null;
+      setFollowingVehicle(null);
     });
 
     // Start fetching vehicle locations
@@ -180,6 +183,7 @@ export default function VehicleLocationsPage() {
         // Add click handler to follow this vehicle
         marker.on('click', () => {
           followingVehicleRef.current = vehicle.imei;
+          setFollowingVehicle(vehicle.imei);
           mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
         });
 
@@ -232,10 +236,96 @@ export default function VehicleLocationsPage() {
     }
   };
 
+  // Handle clicking a vehicle icon in the bottom nav
+  const handleVehicleClick = (imei: string) => {
+    const vehicle = vehicles.find(v => v.imei === imei);
+    if (vehicle && vehicle.latitude && vehicle.longitude && mapRef.current) {
+      followingVehicleRef.current = imei;
+      setFollowingVehicle(imei);
+      mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
+    }
+  };
+
+  // Handle clicking "All Vehicles" button - show all vehicles
+  const handleShowAllVehicles = () => {
+    if (!mapRef.current || vehicles.length === 0) return;
+
+    const L = (window as any).L;
+    if (!L) return;
+
+    followingVehicleRef.current = null;
+    setFollowingVehicle(null);
+
+    // Fit bounds to show all vehicles
+    const validVehicles = vehicles.filter(v => v.latitude && v.longitude);
+    if (validVehicles.length > 0) {
+      const bounds = L.latLngBounds(
+        validVehicles.map(v => [v.latitude, v.longitude])
+      );
+      mapRef.current.fitBounds(bounds.pad(0.1));
+    }
+  };
+
   return (
     <div className="h-screen w-screen relative">
       {/* Map Container - Full Screen */}
       <div id="map" className="h-full w-full"></div>
+
+      {/* Bottom Navigation Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg">
+        <div className="flex justify-around items-center px-4 py-3">
+          {/* Individual Vehicle Icons */}
+          {VEHICLES.map((vehicle) => {
+            // Use small nav icons for the bottom bar
+            const navIconUrl = vehicle.iconUrl.replace('-icon.png', '-nav.png');
+            return (
+              <button
+                key={vehicle.imei}
+                onClick={() => handleVehicleClick(vehicle.imei)}
+                className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+                  followingVehicle === vehicle.imei
+                    ? 'bg-blue-100 scale-110'
+                    : 'hover:bg-gray-100'
+                }`}
+                title={`Go to ${vehicle.name}`}
+              >
+                <img
+                  src={navIconUrl}
+                  alt={vehicle.name}
+                  className="w-12 h-12 object-contain"
+                />
+                <span className="text-xs mt-1 font-medium" style={{ color: vehicle.color }}>
+                  {vehicle.name.split(' ')[0]}
+                </span>
+              </button>
+            );
+          })}
+
+          {/* All Vehicles Button */}
+          <button
+            onClick={handleShowAllVehicles}
+            className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
+              followingVehicle === null
+                ? 'bg-blue-100 scale-110'
+                : 'hover:bg-gray-100'
+            }`}
+            title="Show all vehicles"
+          >
+            <svg
+              className="w-12 h-12"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" fill="none"/>
+              <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" fill="none"/>
+              <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" fill="none"/>
+              <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" strokeWidth="2" fill="none"/>
+            </svg>
+            <span className="text-xs mt-1 font-medium text-gray-700">All</span>
+          </button>
+        </div>
+      </div>
 
       <style jsx global>{`
         .vehicle-marker {
