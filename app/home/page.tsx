@@ -4,7 +4,10 @@ import Link from "next/link";
 import {
   MapPinIcon,
   ShoppingCartIcon,
-  CreditCardIcon
+  CreditCardIcon,
+  MapIcon,
+  CameraIcon,
+  DocumentTextIcon
 } from "@heroicons/react/24/outline";
 
 const menuItems = [
@@ -14,6 +17,27 @@ const menuItems = [
     href: "/vehicle-locations",
     icon: MapPinIcon,
     color: "bg-blue-500",
+  },
+  {
+    title: "Job Locations",
+    description: "View job sites",
+    href: "/job-locations",
+    icon: MapIcon,
+    color: "bg-orange-500",
+  },
+  {
+    title: "Pictures",
+    description: "Job photos",
+    href: "/pictures",
+    icon: CameraIcon,
+    color: "bg-pink-500",
+  },
+  {
+    title: "Receipts",
+    description: "Upload receipts",
+    href: "/receipts",
+    icon: DocumentTextIcon,
+    color: "bg-amber-500",
   },
   {
     title: "Billing Supplies",
