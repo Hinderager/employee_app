@@ -308,7 +308,7 @@ export default function VehicleLocationsPage() {
             strokeLinecap="round"
             strokeLinejoin="round"
             strokeWidth={2}
-            d="M4 6h16M4 12h16M4 18h16"
+            d="M15 19l-7-7 7-7"
           />
         </svg>
         <span className="font-medium text-gray-900">Menu</span>
@@ -385,6 +385,11 @@ export default function VehicleLocationsPage() {
 
         .leaflet-popup-content {
           margin: 12px;
+        }
+
+        /* Move zoom controls below menu button */
+        .leaflet-top.leaflet-left {
+          top: 70px !important;
         }
       `}</style>
     </div>
