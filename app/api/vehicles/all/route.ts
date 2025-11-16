@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { getBouncieToken } from '@/lib/supabase';
 
 // Vehicle data from OMW Text project
 const VEHICLES = [
@@ -30,8 +31,14 @@ const VEHICLES = [
 
 export async function GET() {
   try {
-    // Get Bouncie access token from environment
-    const bouncieToken = process.env.BOUNCIE_ACCESS_TOKEN;
+    // Get Bouncie access token from Supabase (auto-refreshed by OMW Text n8n workflow)
+    let bouncieToken = await getBouncieToken();
+
+    // Fallback to environment variable if Supabase fails
+    if (!bouncieToken) {
+      console.warn('Failed to get token from Supabase, using environment variable');
+      bouncieToken = process.env.BOUNCIE_ACCESS_TOKEN || null;
+    }
 
     if (!bouncieToken) {
       return NextResponse.json(

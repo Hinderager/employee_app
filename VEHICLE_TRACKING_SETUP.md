@@ -1,44 +1,51 @@
 # Vehicle Tracking Setup Guide
 
 ## Overview
-The Employee App vehicle tracking feature displays all 4 Top Shelf vehicles on a real-time map using the Bouncie GPS API.
+The Employee App vehicle tracking feature displays all 4 Top Shelf vehicles on a real-time map using the Bouncie GPS API with **automatic token refresh**.
 
 ## Features
 - **Full-screen map** - No headers or footers, just the map
 - **All 4 vehicles displayed** - Junk Truck, Moving Truck, F-150, Prius
 - **Real-time updates** - Auto-refreshes every 5 seconds
 - **No link expiration** - Always accessible (unlike customer tracking links)
+- **Auto-refreshing tokens** - Shares Supabase with OMW Text project for always-fresh tokens
 - **Vehicle status** - Shows speed, running status, and location
-- **Fleet overview** - Floating panel with all vehicle statuses
+- **Long-term solution** - No manual token updates needed
+
+## How It Works
+
+### Token Management
+The app uses **Supabase** to fetch always-fresh Bouncie tokens:
+
+1. **Shared Database**: Uses the same Supabase instance as OMW Text project
+2. **Auto-Refresh**: OMW Text's n8n workflow refreshes the token every 50 minutes
+3. **Automatic Retrieval**: Employee App fetches the latest token from Supabase on each request
+4. **Fallback**: Environment variable used only if Supabase is unavailable
+
+**Result:** Tokens never expire - they're always fresh!
 
 ## Setup Instructions
 
-### 1. Get Bouncie Access Token
+### 1. Configure Supabase Connection
 
-The Bouncie access token can be obtained from:
-
-**Option A: From OMW Text Project Supabase**
-1. Go to the OMW Text project Supabase dashboard
-2. Navigate to the `bouncie_tokens` table
-3. Copy the `token_value` where `token_type = 'access_token'`
-
-**Option B: From Bouncie API Dashboard**
-1. Go to https://www.bouncie.dev/
-2. Login to your account
-3. Navigate to API settings
-4. Copy the access token
-
-**Option C: From Root .env File** (if available)
-1. Check `D:\Top Shelf Storage Dropbox\Eric Hinderager\Online Businesses\.env`
-2. Look for `BOUNCIE_ACCESS_TOKEN`
-
-### 2. Update .env.local File
-
-Replace the placeholder in `.env.local`:
+Add to `.env.local`:
 
 ```env
-BOUNCIE_ACCESS_TOKEN=your_actual_token_here
+# Supabase Configuration (shared with OMW Text project)
+SUPABASE_URL="https://lwwjffbeboijnwrbksrf.supabase.co"
+SUPABASE_ANON_KEY="your_supabase_anon_key"
+
+# Optional fallback (not required if Supabase is working)
+BOUNCIE_ACCESS_TOKEN="fallback_token"
 ```
+
+### 2. Install Dependencies
+
+```bash
+npm install
+```
+
+The `@supabase/supabase-js` package is already in package.json.
 
 ### 3. Restart Development Server
 
@@ -54,17 +61,19 @@ Navigate to:
 
 ## Deployment to Vercel
 
-### Add Environment Variable
+### Add Environment Variables
 
 1. Go to Vercel dashboard
 2. Select the Employee App project
 3. Navigate to Settings → Environment Variables
-4. Add new variable:
-   - **Name**: `BOUNCIE_ACCESS_TOKEN`
-   - **Value**: [your token]
+4. Add these variables:
+   - **SUPABASE_URL**: `https://lwwjffbeboijnwrbksrf.supabase.co`
+   - **SUPABASE_ANON_KEY**: `[get from OMW Text .env]`
    - **Environment**: Production, Preview, Development
 
 5. Redeploy the application
+
+**Note:** No need to add `BOUNCIE_ACCESS_TOKEN` to Vercel! The app fetches it from Supabase automatically.
 
 ## Technical Details
 
