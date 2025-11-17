@@ -32,61 +32,53 @@ async function getDriveClient() {
   return google.drive({ version: 'v3', auth: oauth2Client });
 }
 
-// Find the "Pictures" folder - if "Pictures (1)" exists, rename it to "Pictures"
-async function getOrCreatePicturesFolder(drive: any): Promise<string> {
-  const folderName = 'Pictures';
+// Get the existing Pictures folder - NEVER create or rename
+async function getPicturesFolder(drive: any): Promise<string> {
+  // First, try to use the known Pictures folder ID directly
+  const knownPicturesFolderId = '1cDg6cjZR1ZaQL1EhxAi99e-wRNy-kL74';
 
-  // Search for "Pictures" folder
+  try {
+    // Verify this folder exists and is accessible
+    const folderCheck = await drive.files.get({
+      fileId: knownPicturesFolderId,
+      fields: 'id, name, mimeType, trashed',
+    });
+
+    if (folderCheck.data && !folderCheck.data.trashed) {
+      console.log('[upload-media] Using known Pictures folder:', knownPicturesFolderId);
+      return knownPicturesFolderId;
+    }
+  } catch (error) {
+    console.log('[upload-media] Known folder ID not accessible, searching by name...');
+  }
+
+  // Fallback: Search for "Pictures" folder
   const searchResponse = await drive.files.list({
-    q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    q: `name='Pictures' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     fields: 'files(id, name, parents)',
     pageSize: 100,
   });
 
   console.log('[upload-media] Search results for Pictures folder:', JSON.stringify(searchResponse.data.files));
 
-  // If "Pictures" folder found, use it (prefer one in root)
   if (searchResponse.data.files && searchResponse.data.files.length > 0) {
+    // Prefer folder in root, otherwise use first result
     for (const file of searchResponse.data.files) {
       if (file.parents && file.parents.includes('root')) {
-        console.log('[upload-media] Found Pictures folder in root:', file.id);
+        console.log('[upload-media] Found Pictures folder in root via search:', file.id);
         return file.id!;
       }
     }
     const firstFile = searchResponse.data.files[0];
     if (firstFile.id) {
-      console.log('[upload-media] Found Pictures folder (not in root):', firstFile.id);
+      console.log('[upload-media] Found Pictures folder via search:', firstFile.id);
       return firstFile.id;
     }
   }
 
-  // "Pictures" not found - check for "Pictures (1)" and rename it
-  console.log('[upload-media] Pictures folder not found, searching for "Pictures (1)"...');
-  const pictures1SearchResponse = await drive.files.list({
-    q: `name='Pictures (1)' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: 'files(id, name, parents)',
-    pageSize: 10,
-  });
-
-  if (pictures1SearchResponse.data.files && pictures1SearchResponse.data.files.length > 0) {
-    const pictures1Folder = pictures1SearchResponse.data.files[0];
-    console.log('[upload-media] Found "Pictures (1)", renaming to "Pictures"...', pictures1Folder.id);
-
-    // Rename "Pictures (1)" to "Pictures"
-    await drive.files.update({
-      fileId: pictures1Folder.id,
-      requestBody: {
-        name: 'Pictures',
-      },
-    });
-
-    console.log('[upload-media] Successfully renamed "Pictures (1)" to "Pictures"');
-    return pictures1Folder.id!;
-  }
-
-  // Neither "Pictures" nor "Pictures (1)" found
-  console.error('[upload-media] Neither "Pictures" nor "Pictures (1)" folder found in Google Drive!');
-  throw new Error('Pictures folder not found in Google Drive. Please ensure a Pictures folder exists.');
+  // If nothing found, throw error - do NOT create or rename anything
+  console.error('[upload-media] Pictures folder not found or not accessible');
+  throw new Error('Pictures folder not found in Google Drive. Please ensure the Pictures folder exists and is accessible with proper permissions.');
 }
 
 // Convert Buffer to Readable stream
@@ -134,8 +126,8 @@ export async function POST(request: NextRequest) {
     // Initialize Google Drive client (server-side authentication)
     const drive = await getDriveClient();
 
-    // Get or create Pictures folder
-    const picturesFolderId = await getOrCreatePicturesFolder(drive);
+    // Get the existing Pictures folder (never create or rename)
+    const picturesFolderId = await getPicturesFolder(drive);
 
     // Get or create "from employee app" subfolder inside Pictures
     const employeeAppFolderName = 'from employee app';
