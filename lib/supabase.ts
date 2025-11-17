@@ -1,13 +1,14 @@
 import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
-// Supabase configuration (same as OMW Text project)
+// ===== TOP SHELF EMPLOYEE APP SUPABASE =====
+// This Supabase project contains: job_materials table (for move billing)
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
-// Create Supabase client (singleton for server-side)
+// Create Supabase client (singleton for server-side) - Employee App
 export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
 
-// Create client function for client components
+// Create client function for client components - Employee App (for move billing)
 export function createClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -19,20 +20,28 @@ export function createClient() {
   return createSupabaseClient(url, key);
 }
 
+// ===== OMW TEXT SUPABASE (for Vehicle Locations) =====
+// This Supabase project contains: bouncie_tokens table (for vehicle GPS tracking)
+const omwTextUrl = process.env.OMW_TEXT_SUPABASE_URL || '';
+const omwTextAnonKey = process.env.OMW_TEXT_SUPABASE_ANON_KEY || '';
+
+// Create separate OMW Text Supabase client for vehicle locations
+export const omwTextSupabase = createSupabaseClient(omwTextUrl, omwTextAnonKey);
+
 /**
- * Get the current Bouncie access token from Supabase
+ * Get the current Bouncie access token from OMW Text Supabase
  * This token is auto-refreshed every 50 minutes by the OMW Text n8n workflow
  */
 export async function getBouncieToken(): Promise<string | null> {
   try {
-    const { data, error } = await supabase
+    const { data, error } = await omwTextSupabase
       .from('bouncie_tokens')
       .select('token_value')
       .eq('token_type', 'access_token')
       .single();
 
     if (error) {
-      console.error('Error fetching Bouncie token from Supabase:', error);
+      console.error('Error fetching Bouncie token from OMW Text Supabase:', error);
       return null;
     }
 
