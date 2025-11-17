@@ -48,8 +48,23 @@ async function getPicturesFolder(drive: any): Promise<string> {
       console.log('[upload-media] Using known Pictures folder:', knownPicturesFolderId);
       return knownPicturesFolderId;
     }
-  } catch (error) {
-    console.log('[upload-media] Known folder ID not accessible, searching by name...');
+  } catch (error: any) {
+    console.log('[upload-media] Known folder ID not accessible:', error.message);
+    console.log('[upload-media] Error code:', error.code);
+  }
+
+  // Debug: List ALL folders we CAN access
+  console.log('[upload-media] Listing all accessible folders...');
+  try {
+    const allFoldersResponse = await drive.files.list({
+      q: `mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id, name, parents)',
+      pageSize: 100,
+    });
+    console.log('[upload-media] Total accessible folders:', allFoldersResponse.data.files?.length);
+    console.log('[upload-media] All accessible folders:', JSON.stringify(allFoldersResponse.data.files));
+  } catch (error: any) {
+    console.log('[upload-media] Could not list folders:', error.message);
   }
 
   // Fallback: Search for "Pictures" folder
