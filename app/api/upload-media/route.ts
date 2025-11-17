@@ -32,44 +32,51 @@ async function getDriveClient() {
   return google.drive({ version: 'v3', auth: oauth2Client });
 }
 
-// Find or create the "Pictures" folder in Google Drive (search anywhere, prefer root)
+// Find or create the "Pictures" folder in Google Drive
 async function getOrCreatePicturesFolder(drive: any): Promise<string> {
   const folderName = 'Pictures';
 
-  // First, search for Pictures folder in My Drive root
-  const rootResponse = await drive.files.list({
-    q: `name='${folderName}' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: 'files(id, name)',
-    spaces: 'drive',
+  // Search for ANY folder named "Pictures" or "Pictures (1)" - be flexible
+  const searchResponse = await drive.files.list({
+    q: `(name='${folderName}' or name='${folderName} (1)') and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'files(id, name, parents)',
+    pageSize: 100,
   });
 
-  if (rootResponse.data.files && rootResponse.data.files.length > 0) {
-    const folderId = rootResponse.data.files[0].id;
-    if (!folderId) {
-      throw new Error('Failed to get Pictures folder ID');
+  console.log('[upload-media] Search results for Pictures folders:', JSON.stringify(searchResponse.data.files));
+
+  // Prefer "Pictures" over "Pictures (1)", and prefer ones in root
+  let picturesFolder = null;
+  let picturesOneFolder = null;
+
+  if (searchResponse.data.files && searchResponse.data.files.length > 0) {
+    for (const file of searchResponse.data.files) {
+      if (file.name === 'Pictures') {
+        picturesFolder = file;
+        // If this one is in root, use it immediately
+        if (file.parents && file.parents.includes('root')) {
+          console.log('[upload-media] Found Pictures folder in root:', file.id);
+          return file.id!;
+        }
+      } else if (file.name === 'Pictures (1)') {
+        picturesOneFolder = file;
+      }
     }
-    console.log('[upload-media] Found existing Pictures folder in root:', folderId);
-    return folderId;
+
+    // If we found "Pictures" anywhere (not just root), use it
+    if (picturesFolder && picturesFolder.id) {
+      console.log('[upload-media] Found Pictures folder:', picturesFolder.id);
+      return picturesFolder.id;
+    }
+
+    // Fall back to "Pictures (1)" if that's all we have
+    if (picturesOneFolder && picturesOneFolder.id) {
+      console.log('[upload-media] Using Pictures (1) folder:', picturesOneFolder.id);
+      return picturesOneFolder.id;
+    }
   }
 
-  // If not in root, search for Pictures folder anywhere in My Drive
-  const anywhereResponse = await drive.files.list({
-    q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: 'files(id, name)',
-    spaces: 'drive',
-    orderBy: 'createdTime',
-  });
-
-  if (anywhereResponse.data.files && anywhereResponse.data.files.length > 0) {
-    const folderId = anywhereResponse.data.files[0].id;
-    if (!folderId) {
-      throw new Error('Failed to get Pictures folder ID');
-    }
-    console.log('[upload-media] Found existing Pictures folder (not in root):', folderId);
-    return folderId;
-  }
-
-  // Create Pictures folder in My Drive root if it doesn't exist anywhere
+  // No Pictures folder exists at all - create it
   const folderMetadata = {
     name: folderName,
     mimeType: 'application/vnd.google-apps.folder',
@@ -78,14 +85,14 @@ async function getOrCreatePicturesFolder(drive: any): Promise<string> {
 
   const folder = await drive.files.create({
     requestBody: folderMetadata,
-    fields: 'id',
+    fields: 'id, name',
   });
 
   const folderId = folder.data.id;
   if (!folderId) {
     throw new Error('Failed to create Pictures folder');
   }
-  console.log('[upload-media] Created new Pictures folder:', folderId);
+  console.log('[upload-media] Created new Pictures folder:', folderId, folder.data.name);
   return folderId;
 }
 
