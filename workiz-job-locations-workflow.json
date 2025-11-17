@@ -1,0 +1,270 @@
+{
+  "name": "Workiz Job Locations Sync - Fixed",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule_trigger",
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "today_date",
+              "name": "today",
+              "value": "={{ $now.toFormat('yyyy-MM-dd') }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get_today_date",
+      "name": "Get Today's Date",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.workiz.com/api/v1/api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw/job/all/",
+        "options": {}
+      },
+      "id": "fetch_workiz_jobs",
+      "name": "Fetch Workiz Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Extract the jobs array from Workiz response\nconst workizData = items[0].json;\nconst jobs = workizData.data || [];\n\n// Convert to n8n items format\nreturn jobs.map(job => ({\n  json: job\n}));"
+      },
+      "id": "extract_jobs_array",
+      "name": "Extract Jobs Array",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split_jobs",
+      "name": "Split Into Jobs",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "job_number",
+              "name": "job_number",
+              "value": "={{ $json.ClientId || $json.JobNumber || $json.id }}",
+              "type": "string"
+            },
+            {
+              "id": "job_type",
+              "name": "job_type",
+              "value": "={{ $json.JobType || 'Unknown' }}",
+              "type": "string"
+            },
+            {
+              "id": "job_start_time",
+              "name": "job_start_time",
+              "value": "={{ $json.StartDate || $json.ScheduledStart || $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "job_description",
+              "name": "job_description",
+              "value": "={{ $json.JobNotes || $json.Comments || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "customer_name",
+              "name": "customer_name",
+              "value": "={{ ($json.FirstName || '') + ' ' + ($json.LastName || '') }}",
+              "type": "string"
+            },
+            {
+              "id": "customer_phone",
+              "name": "customer_phone",
+              "value": "={{ $json.Phone || $json.SecondPhone || '' }}",
+              "type": "string"
+            },
+            {
+              "id": "address",
+              "name": "address",
+              "value": "={{ ($json.Address || '') + ', ' + ($json.City || '') + ', ' + ($json.State || '') + ' ' + ($json.PostalCode || '') }}",
+              "type": "string"
+            },
+            {
+              "id": "latitude",
+              "name": "latitude",
+              "value": "={{ $json.Latitude }}",
+              "type": "number"
+            },
+            {
+              "id": "longitude",
+              "name": "longitude",
+              "value": "={{ $json.Longitude }}",
+              "type": "number"
+            },
+            {
+              "id": "scheduled_date",
+              "name": "scheduled_date",
+              "value": "={{ $json.StartDate ? $json.StartDate.split(' ')[0] : $now.toFormat('yyyy-MM-dd') }}",
+              "type": "string"
+            },
+            {
+              "id": "workiz_job_id",
+              "name": "workiz_job_id",
+              "value": "={{ $json.UUID || $json.ClientId }}",
+              "type": "string"
+            },
+            {
+              "id": "last_synced_at",
+              "name": "last_synced_at",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "prepare_job_data",
+      "name": "Prepare Job Data",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "upsert",
+        "tableId": "job_locations",
+        "options": {
+          "onConflict": "job_number"
+        }
+      },
+      "id": "upsert_to_supabase",
+      "name": "Upsert to Supabase",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [1450, 300],
+      "credentials": {
+        "supabaseApi": {
+          "id": "top_shelf_supabase",
+          "name": "Top Shelf Supabase"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Get Today's Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Today's Date": {
+      "main": [
+        [
+          {
+            "node": "Fetch Workiz Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Workiz Jobs": {
+      "main": [
+        [
+          {
+            "node": "Extract Jobs Array",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Jobs Array": {
+      "main": [
+        [
+          {
+            "node": "Split Into Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Jobs": {
+      "main": [
+        [
+          {
+            "node": "Prepare Job Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Prepare Job Data": {
+      "main": [
+        [
+          {
+            "node": "Upsert to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Split Into Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveExecutionProgress": true,
+    "saveManualExecutions": true,
+    "timezone": "America/New_York"
+  },
+  "active": false
+}
