@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
-} from 'stream';
+import { Readable } from 'stream';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
+const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Initialize OAuth client
 function getOAuthClient() {
@@ -302,13 +308,32 @@ export async function POST(request: NextRequest) {
     console.log('[upload-media]       → address folder (' + targetFolderName + '):', targetFolderId);
     console.log(`[upload-media] Successfully uploaded ${uploadedFiles.length} files to folder: ${targetFolderName}`);
 
+    // Save folder URL to Supabase if job number is provided
+    const folderUrl = `https://drive.google.com/drive/folders/${targetFolderId}`;
+    if (jobNumber && jobNumber.trim()) {
+      try {
+        const { error: supabaseError } = await supabase
+          .from('jobs_from_pictures')
+          .update({ google_drive_folder_url: folderUrl })
+          .eq('job_number', jobNumber.trim());
+
+        if (supabaseError) {
+          console.error('[upload-media] Failed to update folder URL in Supabase:', supabaseError);
+        } else {
+          console.log('[upload-media] Saved folder URL to Supabase for job:', jobNumber);
+        }
+      } catch (err) {
+        console.error('[upload-media] Error updating Supabase:', err);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       uploadedCount: uploadedFiles.length,
       files: uploadedFiles,
       folderId: targetFolderId,
       folderName: targetFolderName,
-      }`,
+      folderUrl: folderUrl,
       message: `Successfully uploaded ${uploadedFiles.length} file(s) to Google Drive`,
     });
 
@@ -323,10 +348,4 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-} from \'stream\';/import { Readable } from 'stream';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
-const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);}`,/folderUrl: folderUrl,}
+}
