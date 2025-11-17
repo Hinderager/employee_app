@@ -318,10 +318,14 @@ export async function POST(request: NextRequest) {
     }
 
     console.log('[upload-media] === FINAL FOLDER HIERARCHY ===');
-    console.log('[upload-media] Pictures:', picturesFolderId);
-    console.log('[upload-media]   → from employee app:', employeeAppFolderId);
-    console.log('[upload-media]     → by address:', byAddressFolderId);
-    console.log('[upload-media]       → address folder (' + targetFolderName + '):', targetFolderId);
+    if (jobNumber && jobNumber.trim()) {
+      console.log('[upload-media] Pictures:', picturesFolderId);
+      console.log('[upload-media]   → from employee app:', employeeAppFolderId);
+      console.log('[upload-media]     → by address: (within employee app folder)');
+      console.log('[upload-media]       → address folder (' + targetFolderName + '):', targetFolderId);
+    } else {
+      console.log('[upload-media] Direct upload to general media folder:', targetFolderId);
+    }
     console.log(`[upload-media] Successfully uploaded ${uploadedFiles.length} files to folder: ${targetFolderName}`);
 
     // Save folder URL to Supabase if job number is provided
