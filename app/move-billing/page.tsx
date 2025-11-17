@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase";
+
+// Create Supabase client once at module level
+const supabase = createClient();
 
 // Supply items data
 const SUPPLY_ITEMS = [
@@ -26,6 +30,139 @@ const SUPPLY_ITEMS = [
 
 export default function BillingPage() {
   const [selectedItems, setSelectedItems] = useState<{[key: number]: number}>({});
+  const [jobNumber, setJobNumber] = useState("");
+  const [activeJobNumber, setActiveJobNumber] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const isLoadingRef = useRef(false);
+
+  // Load job when Load button is clicked
+  const handleLoadJob = async () => {
+    if (!jobNumber.trim()) {
+      return;
+    }
+
+    setActiveJobNumber(jobNumber.trim());
+
+      setIsLoading(true);
+      isLoadingRef.current = true;
+
+      try {
+        const { data, error } = await supabase
+          .from('job_materials')
+          .select('materials')
+          .eq('job_number', jobNumber.trim())
+          .maybeSingle();
+
+        if (error) {
+          console.error('Error loading materials:', error);
+          return;
+        }
+
+        // Load materials if they exist, otherwise start fresh
+        if (data && data.materials) {
+          setSelectedItems(data.materials);
+        } else {
+          setSelectedItems({});
+        }
+      } catch (error) {
+        console.error('Error loading materials:', error);
+      } finally {
+        setIsLoading(false);
+        setTimeout(() => {
+          isLoadingRef.current = false;
+        }, 500);
+      }
+  };
+
+  // Save materials to Supabase (debounced)
+  useEffect(() => {
+    if (!activeJobNumber || isLoadingRef.current) {
+      return;
+    }
+
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+
+    // Debounce save by 1 second
+    saveTimeoutRef.current = setTimeout(async () => {
+      setIsSaving(true);
+      try {
+        const { error } = await supabase
+          .from('job_materials')
+          .upsert({
+            job_number: activeJobNumber,
+            materials: selectedItems,
+          }, {
+            onConflict: 'job_number'
+          });
+
+        if (error) {
+          console.error('Error saving materials:', error);
+        }
+      } catch (error) {
+        console.error('Error saving materials:', error);
+      } finally {
+        setIsSaving(false);
+      }
+    }, 1000);
+
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, [selectedItems, activeJobNumber]);
+
+  // Real-time subscription for collaborative updates
+  useEffect(() => {
+    if (!activeJobNumber || !jobNumber.trim()) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`job_materials:${activeJobNumber}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'job_materials',
+          filter: `job_number=eq.${activeJobNumber}`
+        },
+        (payload) => {
+          if (payload.new && typeof payload.new === 'object' && 'materials' in payload.new) {
+            const newMaterials = payload.new.materials as {[key: number]: number};
+
+            // Merge strategy: if both users are editing, sum the quantities
+            setSelectedItems(prevItems => {
+              const merged: {[key: number]: number} = { ...newMaterials };
+
+              // For items that exist in both old and new, use the higher value
+              // This prevents losing data when multiple people add items simultaneously
+              Object.keys(prevItems).forEach(key => {
+                const id = parseInt(key);
+                const prevQty = prevItems[id] || 0;
+                const newQty = newMaterials[id] || 0;
+
+                // Use max to prevent accidental decreases from race conditions
+                merged[id] = Math.max(prevQty, newQty);
+              });
+
+              return merged;
+            });
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeJobNumber]);
 
   const handleQuantityChange = (id: number, quantity: number) => {
     if (quantity <= 0) {
@@ -39,6 +176,17 @@ export default function BillingPage() {
 
   const getTotalItems = () => {
     return Object.values(selectedItems).reduce((sum, qty) => sum + qty, 0);
+  };
+
+  const getTotalCharge = () => {
+    return Object.entries(selectedItems).reduce((total, [id, qty]) => {
+      const item = SUPPLY_ITEMS.find(item => item.id === parseInt(id));
+      if (item && item.price) {
+        const price = typeof item.price === 'string' ? parseFloat(item.price) : item.price;
+        return total + (price * qty);
+      }
+      return total;
+    }, 0);
   };
 
   return (
@@ -65,7 +213,43 @@ export default function BillingPage() {
         <span className="font-medium text-gray-900">Menu</span>
       </Link>
 
-      <div className="px-6 py-6 pt-20">
+      {/* Job Number Field */}
+      <div className="px-6 pt-20 pb-4">
+        <div className="max-w-md bg-white rounded-xl shadow-md p-4">
+          <div className="flex items-center gap-4">
+            <label htmlFor="jobNumberInput" className="font-semibold text-gray-700 whitespace-nowrap">
+              Job Number:
+            </label>
+            <input
+              id="jobNumberInput"
+              type="text"
+              value={jobNumber}
+              onChange={(e) => setJobNumber(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleLoadJob()}
+              placeholder="Enter job number"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-topshelf-yellow"
+            />
+            <button
+              onClick={handleLoadJob}
+              disabled={!jobNumber.trim() || isLoading}
+              className="px-6 py-2 bg-topshelf-yellow hover:bg-yellow-400 active:bg-yellow-500 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
+            >
+              {isLoading ? 'Loading...' : 'Load'}
+            </button>
+          </div>
+          {activeJobNumber && (
+            <div className="mt-2 text-sm flex items-center gap-2">
+              {isSaving ? (
+                <span className="text-green-600">Saving...</span>
+              ) : (
+                <span className="text-gray-500">Job: {activeJobNumber} - Synced</span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="px-6 py-6">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {SUPPLY_ITEMS.map((item) => (
             <div
@@ -103,9 +287,17 @@ export default function BillingPage() {
                   <input
                     type="number"
                     min="0"
+                    step="0.01"
                     value={selectedItems[item.id] || 0}
-                    onChange={(e) => handleQuantityChange(item.id, parseInt(e.target.value) || 0)}
-                    className="w-12 h-8 text-center border border-gray-300 rounded-lg font-semibold"
+                    onChange={(e) => handleQuantityChange(item.id, parseFloat(e.target.value) || 0)}
+                    onFocus={(e) => {
+                      e.target.select();
+                      if (parseFloat(e.target.value) === 0) {
+                        e.target.value = '';
+                      }
+                    }}
+                    onWheel={(e) => e.currentTarget.blur()}
+                    className="w-12 h-8 text-center border border-gray-300 rounded-lg font-semibold [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   />
                   <button
                     onClick={() => handleQuantityChange(item.id, (selectedItems[item.id] || 0) + 1)}
@@ -121,15 +313,14 @@ export default function BillingPage() {
       </div>
 
       {getTotalItems() > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg p-4 z-20">
+        <div className="fixed bottom-0 left-0 right-0 bg-topshelf-yellow border-t border-yellow-600 shadow-lg py-6 px-4 z-[1000]">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div>
-              <div className="text-sm text-gray-600">Total Items</div>
-              <div className="text-2xl font-bold text-gray-900">{getTotalItems()}</div>
+            <div className="text-xl font-semibold text-gray-900">
+              Total Materials Charge:
             </div>
-            <button className="bg-topshelf-yellow hover:bg-yellow-400 active:bg-yellow-500 text-black font-bold px-8 py-3 rounded-lg shadow-md transition-colors">
-              Add to Bill
-            </button>
+            <div className="text-3xl font-bold text-gray-900">
+              ${getTotalCharge().toFixed(2)}
+            </div>
           </div>
         </div>
       )}

@@ -1,11 +1,23 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 // Supabase configuration (same as OMW Text project)
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
-// Create Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Create Supabase client (singleton for server-side)
+export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+
+// Create client function for client components
+export function createClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+  if (!url || !key) {
+    console.error('Supabase URL or Anon Key is missing');
+  }
+
+  return createSupabaseClient(url, key);
+}
 
 /**
  * Get the current Bouncie access token from Supabase
