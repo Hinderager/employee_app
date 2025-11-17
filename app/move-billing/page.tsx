@@ -232,7 +232,7 @@ export default function BillingPage() {
             <button
               onClick={handleLoadJob}
               disabled={!jobNumber.trim() || isLoading}
-              className="px-6 py-2 bg-topshelf-yellow hover:bg-yellow-400 active:bg-yellow-500 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors"
+              className="px-6 py-2 bg-topshelf-blue hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
             >
               {isLoading ? 'Loading...' : 'Load'}
             </button>
@@ -313,12 +313,12 @@ export default function BillingPage() {
       </div>
 
       {getTotalItems() > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 bg-topshelf-yellow border-t border-yellow-600 shadow-lg py-6 px-4 z-[1000]">
+        <div className="fixed bottom-0 left-0 right-0 bg-topshelf-blue border-t border-blue-800 shadow-lg py-6 px-4 z-[1000]">
           <div className="max-w-4xl mx-auto flex items-center justify-between">
-            <div className="text-xl font-semibold text-gray-900">
+            <div className="text-xl font-semibold text-white">
               Total Materials Charge:
             </div>
-            <div className="text-3xl font-bold text-gray-900">
+            <div className="text-3xl font-bold text-white">
               ${getTotalCharge().toFixed(2)}
             </div>
           </div>
