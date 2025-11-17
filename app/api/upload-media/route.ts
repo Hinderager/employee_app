@@ -314,11 +314,20 @@ export async function POST(request: NextRequest) {
       try {
         const { error: supabaseError } = await supabase
           .from('jobs_from_pictures')
-          .update({ google_drive_folder_url: folderUrl })
-          .eq('job_number', jobNumber.trim());
+          .upsert(
+            {
+              job_number: jobNumber.trim(),
+              address: address || 'Unknown Address',
+              google_drive_folder_url: folderUrl,
+              updated_at: new Date().toISOString(),
+            },
+            {
+              onConflict: 'job_number',
+            }
+          );
 
         if (supabaseError) {
-          console.error('[upload-media] Failed to update folder URL in Supabase:', supabaseError);
+          console.error('[upload-media] Failed to save folder URL in Supabase:', supabaseError);
         } else {
           console.log('[upload-media] Saved folder URL to Supabase for job:', jobNumber);
         }
