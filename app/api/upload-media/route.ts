@@ -78,13 +78,6 @@ export async function POST(request: NextRequest) {
     const loadNumber = formData.get('loadNumber') as string;
     const files = formData.getAll('files') as File[];
 
-    if (!jobNumber) {
-      return NextResponse.json(
-        { error: 'Job number is required' },
-        { status: 400 }
-      );
-    }
-
     if (files.length === 0) {
       return NextResponse.json(
         { error: 'No files provided' },
@@ -98,10 +91,19 @@ export async function POST(request: NextRequest) {
     // Get or create Pictures folder
     const picturesFolderId = await getOrCreatePicturesFolder(drive);
 
-    // Create subfolder for this job
-    const jobFolderName = loadNumber
-      ? `Job_${jobNumber}_Load_${loadNumber}`
-      : `Job_${jobNumber}`;
+    // Create subfolder for this upload
+    const now = new Date();
+    const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
+
+    let jobFolderName: string;
+    if (jobNumber && loadNumber) {
+      jobFolderName = `Job_${jobNumber}_Load_${loadNumber}`;
+    } else if (jobNumber) {
+      jobFolderName = `Job_${jobNumber}`;
+    } else {
+      // If no job number, use timestamp
+      jobFolderName = `General_${timestamp}`;
+    }
 
     const jobFolderMetadata = {
       name: jobFolderName,

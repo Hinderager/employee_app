@@ -10,7 +10,7 @@ function getOAuthClient() {
     process.env.GOOGLE_CLIENT_SECRET,
     process.env.NODE_ENV === 'production'
       ? process.env.GOOGLE_REDIRECT_URI
-      : 'http://localhost:3001/api/setup-google-drive/callback'
+      : 'http://localhost:3001/api/setup-google-drive'
   );
 }
 

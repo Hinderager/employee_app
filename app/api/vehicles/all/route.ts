@@ -105,9 +105,9 @@ export async function GET() {
         ...vehicle,
         latitude: location.lat || 0,
         longitude: location.lon || 0,
-        speed: Math.round(location.speed || 0),
+        speed: Math.round(bouncieVehicle.stats.speed || 0),
         heading: location.heading || 0,
-        timestamp: location.timestamp || new Date().toISOString(),
+        timestamp: bouncieVehicle.stats.lastUpdated || new Date().toISOString(),
         address: location.address || 'Address unavailable',
         isRunning: bouncieVehicle.stats.isRunning || false,
         fuelLevel: Math.round(bouncieVehicle.stats.fuelLevel || 0)
