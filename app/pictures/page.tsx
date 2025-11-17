@@ -45,7 +45,6 @@ export default function PicturesPage() {
       }
 
       setAddress(result.address);
-      alert(`Job loaded! Address: ${result.address}`);
     } catch (error) {
       console.error('Load job error:', error);
       alert(error instanceof Error ? error.message : 'Failed to load job. Please try again.');
@@ -137,9 +136,18 @@ export default function PicturesPage() {
           <Link href="/home" className="p-2 -ml-2 active:bg-white/10 rounded-lg">
             <ArrowLeftIcon className="h-6 w-6 text-white" />
           </Link>
-          <div>
+          <div className="flex-1">
             <h1 className="text-xl font-bold text-white">Pictures</h1>
-            <p className="text-sm text-gray-100">Upload photos and videos</p>
+            {isLoadingJob ? (
+              <div className="flex items-center gap-2 text-sm text-gray-100">
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
+                <span>Loading job details...</span>
+              </div>
+            ) : address ? (
+              <p className="text-sm text-gray-100">{address}</p>
+            ) : (
+              <p className="text-sm text-gray-100">Upload photos and videos</p>
+            )}
           </div>
         </div>
       </header>
@@ -187,7 +195,12 @@ export default function PicturesPage() {
         <div className="grid grid-cols-2 gap-4">
           <button
             onClick={() => cameraInputRef.current?.click()}
-            className="bg-blue-500 text-white rounded-2xl shadow-md p-6 active:scale-95 transition-transform flex flex-col items-center"
+            disabled={isLoadingJob}
+            className={`text-white rounded-2xl shadow-md p-6 transition-transform flex flex-col items-center ${
+              isLoadingJob
+                ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                : 'bg-blue-500 active:scale-95'
+            }`}
           >
             <CameraIcon className="h-12 w-12 mb-2" />
             <span className="font-bold">Take Photo/Video</span>
@@ -195,7 +208,12 @@ export default function PicturesPage() {
 
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="bg-purple-500 text-white rounded-2xl shadow-md p-6 active:scale-95 transition-transform flex flex-col items-center"
+            disabled={isLoadingJob}
+            className={`text-white rounded-2xl shadow-md p-6 transition-transform flex flex-col items-center ${
+              isLoadingJob
+                ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                : 'bg-purple-500 active:scale-95'
+            }`}
           >
             <PhotoIcon className="h-12 w-12 mb-2" />
             <span className="font-bold">Choose Files</span>
