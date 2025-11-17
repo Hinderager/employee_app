@@ -33,7 +33,7 @@ async function getDriveClient() {
 }
 
 // Find or create the "Pictures" folder in Google Drive
-async function getOrCreatePicturesFolder(drive: any) {
+async function getOrCreatePicturesFolder(drive: any): Promise<string> {
   const folderName = 'Pictures';
 
   // Search for existing Pictures folder
@@ -44,7 +44,11 @@ async function getOrCreatePicturesFolder(drive: any) {
   });
 
   if (response.data.files && response.data.files.length > 0) {
-    return response.data.files[0].id;
+    const folderId = response.data.files[0].id;
+    if (!folderId) {
+      throw new Error('Failed to get Pictures folder ID');
+    }
+    return folderId;
   }
 
   // Create Pictures folder if it doesn't exist
@@ -58,7 +62,11 @@ async function getOrCreatePicturesFolder(drive: any) {
     fields: 'id',
   });
 
-  return folder.data.id;
+  const folderId = folder.data.id;
+  if (!folderId) {
+    throw new Error('Failed to create Pictures folder');
+  }
+  return folderId;
 }
 
 // Convert Buffer to Readable stream
@@ -117,6 +125,9 @@ export async function POST(request: NextRequest) {
     });
 
     const jobFolderId = jobFolder.data.id;
+    if (!jobFolderId) {
+      throw new Error('Failed to create job folder');
+    }
 
     // Upload each file
     const uploadedFiles = [];
