@@ -6,8 +6,9 @@ const supabaseUrl = process.env.SUPABASE_URL!;
 const supabaseKey = process.env.SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// n8n webhook URL for fetching job address from Workiz
-const N8N_WEBHOOK_URL = 'https://n8n.srv1041426.hstgr.cloud/webhook/employee-app-job-address';
+// Workiz API credentials
+const WORKIZ_API_KEY = process.env.WORKIZ_API_KEY || 'api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw';
+const WORKIZ_API_URL = `https://app.workiz.com/api/v1/${WORKIZ_API_KEY}/job/all/`;
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,35 +24,53 @@ export async function POST(request: NextRequest) {
 
     console.log(`[load-job] Fetching address for job: ${jobNumber}`);
 
-    // Call n8n webhook to get job details from Workiz
-    const n8nResponse = await fetch(N8N_WEBHOOK_URL, {
-      method: 'POST',
+    // Call Workiz API directly to get all jobs
+    const workizResponse = await fetch(WORKIZ_API_URL, {
+      method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
+        'Accept': 'application/json',
       },
-      body: JSON.stringify({ job_number: jobNumber }),
     });
 
-    if (!n8nResponse.ok) {
-      const errorText = await n8nResponse.text();
-      console.error('[load-job] n8n webhook error:', errorText);
+    if (!workizResponse.ok) {
+      const errorText = await workizResponse.text();
+      console.error('[load-job] Workiz API error:', errorText);
       return NextResponse.json(
         { error: 'Failed to fetch job details from Workiz' },
         { status: 500 }
       );
     }
 
-    const workizData = await n8nResponse.json();
+    const workizData = await workizResponse.json();
 
-    if (!workizData.success || !workizData.address) {
-      console.error('[load-job] No address found:', workizData);
+    // Find the job with matching SerialId
+    const jobs = workizData.data || [];
+    const job = jobs.find((j: any) => String(j.SerialId) === String(jobNumber));
+
+    if (!job) {
+      console.error(`[load-job] Job ${jobNumber} not found in Workiz`);
       return NextResponse.json(
-        { error: 'Job not found or address missing' },
+        { error: `Job ${jobNumber} not found` },
         { status: 404 }
       );
     }
 
-    const { address } = workizData;
+    // Extract address from Workiz job data
+    const addressParts = [];
+    if (job.Address) addressParts.push(job.Address);
+    if (job.City) addressParts.push(job.City);
+    if (job.State) addressParts.push(job.State);
+    if (job.Zip) addressParts.push(job.Zip);
+
+    const address = addressParts.join(', ').trim() || job.FullAddress || '';
+
+    if (!address) {
+      console.error(`[load-job] No address found for job ${jobNumber}`);
+      return NextResponse.json(
+        { error: 'Address not found for this job' },
+        { status: 404 }
+      );
+    }
 
     console.log(`[load-job] Found address: ${address}`);
 
