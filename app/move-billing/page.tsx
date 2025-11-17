@@ -36,6 +36,7 @@ export default function BillingPage() {
   const [isSaving, setIsSaving] = useState(false);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isLoadingRef = useRef(false);
+  const serverValuesRef = useRef<{[key: number]: number}>({});
 
   // Load job when Load button is clicked
   const handleLoadJob = async () => {
@@ -61,11 +62,9 @@ export default function BillingPage() {
         }
 
         // Load materials if they exist, otherwise start fresh
-        if (data && data.materials) {
-          setSelectedItems(data.materials);
-        } else {
-          setSelectedItems({});
-        }
+        const loadedMaterials = (data && data.materials) ? data.materials : {};
+        setSelectedItems(loadedMaterials);
+        serverValuesRef.current = { ...loadedMaterials };
       } catch (error) {
         console.error('Error loading materials:', error);
       } finally {
@@ -81,6 +80,7 @@ export default function BillingPage() {
     setJobNumber("");
     setActiveJobNumber("");
     setSelectedItems({});
+    serverValuesRef.current = {};
   };
 
   // Save materials to Supabase (debounced)
@@ -98,17 +98,38 @@ export default function BillingPage() {
     saveTimeoutRef.current = setTimeout(async () => {
       setIsSaving(true);
       try {
-        const { error } = await supabase
-          .from('job_materials')
-          .upsert({
-            job_number: activeJobNumber,
-            materials: selectedItems,
-          }, {
-            onConflict: 'job_number'
-          });
+        // Calculate deltas (what changed since we loaded from server)
+        const deltas: {[key: string]: number} = {};
+        const allIds = new Set([
+          ...Object.keys(selectedItems),
+          ...Object.keys(serverValuesRef.current)
+        ]);
 
-        if (error) {
-          console.error('Error saving materials:', error);
+        for (const idStr of allIds) {
+          const id = parseInt(idStr);
+          const currentQty = selectedItems[id] || 0;
+          const serverQty = serverValuesRef.current[id] || 0;
+          const delta = currentQty - serverQty;
+
+          if (delta !== 0) {
+            deltas[idStr] = delta;
+          }
+        }
+
+        // Only save if there are changes
+        if (Object.keys(deltas).length > 0) {
+          const { data, error } = await supabase
+            .rpc('apply_material_deltas', {
+              p_job_number: activeJobNumber,
+              p_deltas: deltas
+            });
+
+          if (error) {
+            console.error('Error saving materials:', error);
+          } else {
+            // Update server values to match what we just saved
+            serverValuesRef.current = { ...selectedItems };
+          }
         }
       } catch (error) {
         console.error('Error saving materials:', error);
@@ -144,23 +165,10 @@ export default function BillingPage() {
           if (payload.new && typeof payload.new === 'object' && 'materials' in payload.new) {
             const newMaterials = payload.new.materials as {[key: number]: number};
 
-            // Merge strategy: if both users are editing, sum the quantities
-            setSelectedItems(prevItems => {
-              const merged: {[key: number]: number} = { ...newMaterials };
-
-              // For items that exist in both old and new, use the higher value
-              // This prevents losing data when multiple people add items simultaneously
-              Object.keys(prevItems).forEach(key => {
-                const id = parseInt(key);
-                const prevQty = prevItems[id] || 0;
-                const newQty = newMaterials[id] || 0;
-
-                // Use max to prevent accidental decreases from race conditions
-                merged[id] = Math.max(prevQty, newQty);
-              });
-
-              return merged;
-            });
+            // Update both UI and server reference with the database state
+            // The PostgreSQL function handles atomic delta merging, so we can trust the DB value
+            setSelectedItems(newMaterials);
+            serverValuesRef.current = { ...newMaterials };
           }
         }
       )
