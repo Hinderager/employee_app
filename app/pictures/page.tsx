@@ -46,6 +46,11 @@ export default function PicturesPage() {
       }
 
       setAddress(result.address);
+      
+      // Set folder URL if it exists in the database
+      if (result.folderUrl) {
+        setFolderUrl(result.folderUrl);
+      }
     } catch (error) {
       console.error('Load job error:', error);
       alert(error instanceof Error ? error.message : 'Failed to load job. Please try again.');
