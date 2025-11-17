@@ -217,9 +217,6 @@ export default function BillingPage() {
       <div className="px-6 pt-20 pb-4">
         <div className="max-w-md bg-white rounded-xl shadow-md p-4">
           <div className="flex items-center gap-4">
-            <label htmlFor="jobNumberInput" className="font-semibold text-gray-700 whitespace-nowrap">
-              Job Number:
-            </label>
             <input
               id="jobNumberInput"
               type="text"
@@ -231,8 +228,8 @@ export default function BillingPage() {
             />
             <button
               onClick={handleLoadJob}
-              disabled={!jobNumber.trim() || isLoading}
-              className="px-6 py-2 bg-topshelf-blue hover:bg-blue-700 active:bg-blue-800 disabled:bg-gray-300 disabled:cursor-not-allowed rounded-lg font-semibold text-white transition-colors"
+              
+              className="px-6 py-2 bg-topshelf-blue hover:bg-blue-700 active:bg-blue-800 rounded-lg font-semibold text-white transition-colors"
             >
               {isLoading ? 'Loading...' : 'Load'}
             </button>
