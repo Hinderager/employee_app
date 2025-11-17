@@ -8,20 +8,20 @@ import { useState } from "react";
 // Supply items data
 const SUPPLY_ITEMS = [
   { id: 1, name: "X-Large Box", price: 6, image: "/supplies/asset-1.png" },
-  { id: 2, name: "Large Box", image: "/supplies/asset-2.png" },
-  { id: 3, name: "Medium Box", image: "/supplies/asset-3.png" },
-  { id: 4, name: "Small Box", image: "/supplies/asset-4.png" },
-  { id: 5, name: "TV Box", image: "/supplies/asset-5.png" },
-  { id: 6, name: "5\" x 1,000' Wrap", image: "/supplies/asset-6.png" },
-  { id: 7, name: "15\" x 820' Wrap", image: "/supplies/asset-7.png" },
-  { id: 8, name: "Moving Pads", image: "/supplies/asset-8.png" },
-  { id: 9, name: "Mattress Cover", image: "/supplies/asset-9.png" },
-  { id: 10, name: "Sofa Cover", image: "/supplies/asset-10.png" },
-  { id: 11, name: "Chair Cover", image: "/supplies/asset-11.png" },
-  { id: 12, name: "Bubble Wrap", image: "/supplies/asset-12.png" },
-  { id: 13, name: "10lbs Wrapping Paper", image: "/supplies/asset-13.png" },
-  { id: 14, name: "Ratchet Strap", image: "/supplies/asset-14.png" },
-  { id: 15, name: "24\" x 50' floor runner", image: "/supplies/asset-15.png" },
+  { id: 2, name: "Large Box", price: 5, image: "/supplies/asset-2.png" },
+  { id: 3, name: "Medium Box", price: 4, image: "/supplies/asset-3.png" },
+  { id: 4, name: "Small Box", price: 3, image: "/supplies/asset-4.png" },
+  { id: 5, name: "TV Box", price: 60, image: "/supplies/asset-5.png" },
+  { id: 6, name: "5\" x 1,000' Wrap", price: 10, image: "/supplies/asset-6.png" },
+  { id: 7, name: "15\" x 820' Wrap", price: 20, image: "/supplies/asset-7.png" },
+  { id: 8, name: "Moving Pads", price: 10, image: "/supplies/asset-8.png" },
+  { id: 9, name: "Mattress Cover", price: 8, image: "/supplies/asset-9.png" },
+  { id: 10, name: "Sofa Cover", price: 8, image: "/supplies/asset-10.png" },
+  { id: 11, name: "Chair Cover", price: 6, image: "/supplies/asset-11.png" },
+  { id: 12, name: "Bubble Wrap", price: 30, image: "/supplies/asset-12.png" },
+  { id: 13, name: "10lbs Wrapping Paper", price: 20, image: "/supplies/asset-13.png" },
+  { id: 14, name: "Ratchet Strap", price: 7, image: "/supplies/asset-14.png" },
+  { id: 15, name: "24\" x 50' floor runner", price: 25, image: "/supplies/asset-15.png" },
 ];
 
 export default function BillingPage() {
@@ -88,7 +88,7 @@ export default function BillingPage() {
                     {item.name}
                   </h3>
                   {item.price && (
-                    <span className="font-bold text-gray-900 text-2xl">
+                    <span className="font-bold text-gray-900 text-4xl">
                       ${item.price}
                     </span>
                   )}
