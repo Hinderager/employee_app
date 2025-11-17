@@ -88,7 +88,8 @@ export default function PicturesPage() {
 
     } catch (error) {
       console.error('Upload error:', error);
-      alert('Failed to upload files. Please try again.');
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to upload files: ${errorMessage}`);
     } finally {
       setIsUploading(false);
     }

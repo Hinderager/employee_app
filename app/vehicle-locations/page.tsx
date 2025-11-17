@@ -56,6 +56,7 @@ export default function VehicleLocationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [followingVehicle, setFollowingVehicle] = useState<string | null>(null); // Track for UI highlighting
+  const [mapReady, setMapReady] = useState(false); // Track when map is initialized
 
   // Initialize Leaflet map
   useEffect(() => {
@@ -121,14 +122,25 @@ export default function VehicleLocationsPage() {
       setFollowingVehicle(null);
     });
 
-    // Start fetching vehicle locations
+    // Start fetching vehicle locations immediately
     fetchVehicleLocations();
 
-    // Auto-refresh every 5 seconds (same as OMW Text)
+    // Mark map as ready to trigger interval setup
+    setMapReady(true);
+  };
+
+  // Auto-refresh vehicle locations every 5 seconds
+  useEffect(() => {
+    if (!mapReady) return; // Wait for map to be initialized
+
+    // Set up interval to fetch locations
     const interval = setInterval(fetchVehicleLocations, 5000);
 
-    return () => clearInterval(interval);
-  };
+    // Clean up interval when component unmounts
+    return () => {
+      clearInterval(interval);
+    };
+  }, [mapReady]);
 
   // Fetch all vehicle locations
   const fetchVehicleLocations = async () => {
