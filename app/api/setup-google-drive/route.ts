@@ -113,7 +113,7 @@ export async function GET(request: NextRequest) {
     const oauth2Client = getOAuthClient();
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
-      scope: ['https://www.googleapis.com/auth/drive.file'],
+      scope: ['https://www.googleapis.com/auth/drive'],
       prompt: 'consent', // Force consent to ensure we get a refresh token
     });
 

@@ -15,7 +15,7 @@ export async function GET() {
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline', // Request refresh token
       scope: [
-        'https://www.googleapis.com/auth/drive.file', // Access to create and manage files
+        'https://www.googleapis.com/auth/drive', // Access to create and manage files
       ],
       prompt: 'consent', // Force consent screen to get refresh token
     });
