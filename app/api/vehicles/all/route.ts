@@ -1,6 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getBouncieToken } from '@/lib/supabase';
 
+// Force dynamic rendering - never cache this route
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 // Vehicle data from OMW Text project
 const VEHICLES = [
   {
@@ -117,6 +121,11 @@ export async function GET() {
     return NextResponse.json({
       vehicles: vehiclesWithLocations,
       timestamp: new Date().toISOString()
+    }, {
+      headers: {
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache'
+      }
     });
 
   } catch (error) {
@@ -127,7 +136,13 @@ export async function GET() {
         error: 'Failed to fetch vehicle locations',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+          'Pragma': 'no-cache'
+        }
+      }
     );
   }
 }
