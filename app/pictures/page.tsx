@@ -14,10 +14,45 @@ interface MediaFile {
 export default function PicturesPage() {
   const [jobNumber, setJobNumber] = useState("");
   const [loadNumber, setLoadNumber] = useState("");
+  const [address, setAddress] = useState("");
+  const [isLoadingJob, setIsLoadingJob] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+
+  const handleLoadJob = async () => {
+    if (!jobNumber.trim()) {
+      alert('Please enter a job number');
+      return;
+    }
+
+    setIsLoadingJob(true);
+
+    try {
+      const response = await fetch('/api/load-job', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ jobNumber: jobNumber.trim() }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load job');
+      }
+
+      setAddress(result.address);
+      alert(`Job loaded! Address: ${result.address}`);
+    } catch (error) {
+      console.error('Load job error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to load job. Please try again.');
+    } finally {
+      setIsLoadingJob(false);
+    }
+  };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -64,6 +99,7 @@ export default function PicturesPage() {
       const formData = new FormData();
       formData.append('jobNumber', jobNumber.trim());
       formData.append('loadNumber', loadNumber.trim());
+      formData.append('address', address); // Pass address to upload endpoint
 
       mediaFiles.forEach((mediaFile) => {
         formData.append('files', mediaFile.file);
@@ -88,8 +124,7 @@ export default function PicturesPage() {
 
     } catch (error) {
       console.error('Upload error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      alert(`Failed to upload files: ${errorMessage}`);
+      alert('Failed to upload files. Please try again.');
     } finally {
       setIsUploading(false);
     }
@@ -122,14 +157,16 @@ export default function PicturesPage() {
               className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-topshelf-yellow"
             />
             <button
-              onClick={() => {}}
-              className="px-6 py-2 bg-topshelf-blue rounded-lg font-semibold text-white transition-colors"
+              onClick={handleLoadJob}
+              disabled={isLoadingJob}
+              className="px-6 py-2 bg-topshelf-blue rounded-lg font-semibold text-white transition-colors disabled:bg-gray-400"
             >
-              Load
+              {isLoadingJob ? 'Loading...' : 'Load'}
             </button>
             <button
               onClick={() => {
                 setJobNumber("");
+                setAddress("");
                 mediaFiles.forEach(f => URL.revokeObjectURL(f.preview));
                 setMediaFiles([]);
               }}
@@ -138,6 +175,12 @@ export default function PicturesPage() {
               Clear
             </button>
           </div>
+          {address && (
+            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-sm font-medium text-green-900">Address:</p>
+              <p className="text-sm text-green-800">{address}</p>
+            </div>
+          )}
         </div>
 
         {/* Camera and Upload Buttons */}
@@ -231,7 +274,7 @@ export default function PicturesPage() {
           <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
             <h3 className="font-bold text-blue-900 mb-2">Instructions:</h3>
             <ol className="list-decimal list-inside text-sm text-blue-800 space-y-1">
-              <li>Optionally enter a job number</li>
+              <li>Optionally enter a job number and click Load</li>
               <li>Take photos/videos or choose from your device</li>
               <li>Review your selections</li>
               <li>Click upload to save to Google Drive</li>

@@ -32,13 +32,13 @@ async function getDriveClient() {
   return google.drive({ version: 'v3', auth: oauth2Client });
 }
 
-// Find or create the "Pictures" folder in Google Drive
+// Find or create the "Pictures" folder in Google Drive root (My Drive)
 async function getOrCreatePicturesFolder(drive: any): Promise<string> {
   const folderName = 'Pictures';
 
-  // Search for existing Pictures folder
+  // Search for existing Pictures folder in My Drive root
   const response = await drive.files.list({
-    q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    q: `name='${folderName}' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     fields: 'files(id, name)',
     spaces: 'drive',
   });
@@ -48,13 +48,15 @@ async function getOrCreatePicturesFolder(drive: any): Promise<string> {
     if (!folderId) {
       throw new Error('Failed to get Pictures folder ID');
     }
+    console.log('[upload-media] Found existing Pictures folder:', folderId);
     return folderId;
   }
 
-  // Create Pictures folder if it doesn't exist
+  // Create Pictures folder in My Drive root if it doesn't exist
   const folderMetadata = {
     name: folderName,
     mimeType: 'application/vnd.google-apps.folder',
+    parents: ['root'],
   };
 
   const folder = await drive.files.create({
@@ -66,6 +68,7 @@ async function getOrCreatePicturesFolder(drive: any): Promise<string> {
   if (!folderId) {
     throw new Error('Failed to create Pictures folder');
   }
+  console.log('[upload-media] Created new Pictures folder:', folderId);
   return folderId;
 }
 
@@ -78,13 +81,31 @@ function bufferToStream(buffer: Buffer): Readable {
   return readable;
 }
 
+// Sanitize address string for use as folder name
+function sanitizeAddressForFolderName(address: string): string {
+  // Remove invalid characters for folder names: / \ : * ? " < > |
+  // Also remove extra whitespace and trim
+  return address
+    .replace(/[/\\:*?"<>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 export async function POST(request: NextRequest) {
   try {
     // Parse multipart form data
     const formData = await request.formData();
     const jobNumber = formData.get('jobNumber') as string;
     const loadNumber = formData.get('loadNumber') as string;
+    const address = formData.get('address') as string;
     const files = formData.getAll('files') as File[];
+
+    console.log('[upload-media] Received request:', {
+      jobNumber,
+      loadNumber,
+      address,
+      fileCount: files.length
+    });
 
     if (files.length === 0) {
       return NextResponse.json(
@@ -132,34 +153,53 @@ export async function POST(request: NextRequest) {
       employeeAppFolderId = createdId;
     }
 
-    // Create subfolder for this upload
-    const now = new Date();
-    const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
-
-    let jobFolderName: string;
-    if (jobNumber && loadNumber) {
-      jobFolderName = `Job_${jobNumber}_Load_${loadNumber}`;
-    } else if (jobNumber) {
-      jobFolderName = `Job_${jobNumber}`;
+    // Determine folder name based on address
+    let targetFolderName: string;
+    if (address && address.trim()) {
+      // Use address as folder name (sanitized)
+      targetFolderName = sanitizeAddressForFolderName(address);
+      console.log('[upload-media] Using address-based folder:', targetFolderName);
     } else {
-      // If no job number, use timestamp
-      jobFolderName = `General_${timestamp}`;
+      // Use "General Media" folder for uploads without job/address
+      targetFolderName = 'General Media';
+      console.log('[upload-media] Using General Media folder');
     }
 
-    const jobFolderMetadata = {
-      name: jobFolderName,
-      mimeType: 'application/vnd.google-apps.folder',
-      parents: [employeeAppFolderId],
-    };
-
-    const jobFolder = await drive.files.create({
-      requestBody: jobFolderMetadata,
-      fields: 'id',
+    // Search for existing folder with this name
+    const folderSearchResponse = await drive.files.list({
+      q: `name='${targetFolderName}' and '${employeeAppFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id, name)',
+      spaces: 'drive',
     });
 
-    const jobFolderId = jobFolder.data.id;
-    if (!jobFolderId) {
-      throw new Error('Failed to create job folder');
+    let targetFolderId: string;
+    if (folderSearchResponse.data.files && folderSearchResponse.data.files.length > 0) {
+      // Folder exists, use it
+      const foundId = folderSearchResponse.data.files[0].id;
+      if (!foundId) {
+        throw new Error('Failed to get target folder ID');
+      }
+      targetFolderId = foundId;
+      console.log('[upload-media] Found existing folder:', targetFolderName);
+    } else {
+      // Create new folder
+      const folderMetadata = {
+        name: targetFolderName,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [employeeAppFolderId],
+      };
+
+      const folder = await drive.files.create({
+        requestBody: folderMetadata,
+        fields: 'id',
+      });
+
+      const createdId = folder.data.id;
+      if (!createdId) {
+        throw new Error('Failed to create target folder');
+      }
+      targetFolderId = createdId;
+      console.log('[upload-media] Created new folder:', targetFolderName);
     }
 
     // Upload each file
@@ -171,7 +211,7 @@ export async function POST(request: NextRequest) {
 
       const fileMetadata = {
         name: file.name,
-        parents: [jobFolderId],
+        parents: [targetFolderId],
       };
 
       const media = {
@@ -192,16 +232,19 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    console.log(`[upload-media] Successfully uploaded ${uploadedFiles.length} files to folder: ${targetFolderName}`);
+
     return NextResponse.json({
       success: true,
       uploadedCount: uploadedFiles.length,
       files: uploadedFiles,
-      folderId: jobFolderId,
+      folderId: targetFolderId,
+      folderName: targetFolderName,
       message: `Successfully uploaded ${uploadedFiles.length} file(s) to Google Drive`,
     });
 
   } catch (error: any) {
-    console.error('Error uploading to Google Drive:', error);
+    console.error('[upload-media] Error uploading to Google Drive:', error);
 
     return NextResponse.json(
       {
