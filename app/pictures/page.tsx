@@ -15,6 +15,7 @@ export default function PicturesPage() {
   const [jobNumber, setJobNumber] = useState("");
   const [loadNumber, setLoadNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [folderUrl, setFolderUrl] = useState("");
   const [isLoadingJob, setIsLoadingJob] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -115,6 +116,11 @@ export default function PicturesPage() {
         throw new Error(result.error || 'Upload failed');
       }
 
+      // Save the folder URL for display
+      if (result.folderUrl) {
+        setFolderUrl(result.folderUrl);
+      }
+
       alert(`Successfully uploaded ${result.uploadedCount} files!`);
 
       // Clear files after successful upload
@@ -175,6 +181,7 @@ export default function PicturesPage() {
               onClick={() => {
                 setJobNumber("");
                 setAddress("");
+                setFolderUrl("");
                 mediaFiles.forEach(f => URL.revokeObjectURL(f.preview));
                 setMediaFiles([]);
               }}
@@ -187,6 +194,18 @@ export default function PicturesPage() {
             <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
               <p className="text-sm font-medium text-green-900">Address:</p>
               <p className="text-sm text-green-800">{address}</p>
+              {folderUrl && (
+                <div className="mt-2 pt-2 border-t border-green-300">
+                  <a
+                    href={folderUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
+                  >
+                    View Google Drive Folder →
+                  </a>
+                </div>
+              )}
             </div>
           )}
         </div>

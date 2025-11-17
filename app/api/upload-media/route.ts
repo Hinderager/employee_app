@@ -308,6 +308,7 @@ export async function POST(request: NextRequest) {
       files: uploadedFiles,
       folderId: targetFolderId,
       folderName: targetFolderName,
+      folderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
       message: `Successfully uploaded ${uploadedFiles.length} file(s) to Google Drive`,
     });
 
