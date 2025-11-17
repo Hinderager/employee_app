@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import RegisterServiceWorker from "./register-sw";
 
 export const metadata: Metadata = {
   title: "Top Shelf Employee App",
@@ -27,7 +28,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-gray-50">{children}</body>
+      <body className="bg-gray-50">
+        <RegisterServiceWorker />
+        {children}
+      </body>
     </html>
   );
 }
