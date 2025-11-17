@@ -61,12 +61,31 @@ export async function GET() {
 
     const bouncieData = await response.json();
 
+    // DEBUG: Log the full Bouncie API response structure
+    console.log('=== BOUNCIE API DEBUG ===');
+    console.log('Number of vehicles returned:', bouncieData.length);
+    console.log('Full Bouncie response:', JSON.stringify(bouncieData, null, 2));
+
     // Map Bouncie data to our vehicle format
     const vehiclesWithLocations = VEHICLES.map(vehicle => {
       // Find matching vehicle in Bouncie data
       const bouncieVehicle = bouncieData.find((bv: any) => bv.imei === vehicle.imei);
 
+      // DEBUG: Log each vehicle's data structure
+      console.log(`\n--- Vehicle: ${vehicle.name} (${vehicle.imei}) ---`);
+      if (bouncieVehicle) {
+        console.log('Found in Bouncie data:', JSON.stringify(bouncieVehicle, null, 2));
+        console.log('Has stats?', !!bouncieVehicle.stats);
+        console.log('Has stats.location?', !!bouncieVehicle.stats?.location);
+        if (bouncieVehicle.stats) {
+          console.log('Stats keys:', Object.keys(bouncieVehicle.stats));
+        }
+      } else {
+        console.log('NOT FOUND in Bouncie data');
+      }
+
       if (!bouncieVehicle || !bouncieVehicle.stats?.location) {
+        console.log(`⚠️ RETURNING 0,0 for ${vehicle.name} - no location data`);
         return {
           ...vehicle,
           latitude: 0,
