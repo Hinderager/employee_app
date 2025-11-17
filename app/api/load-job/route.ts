@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
           onConflict: 'job_number',
         }
       )
-      .select();
+      .select(job_number, address, google_drive_folder_url, updated_at);
 
     if (error) {
       console.error('[load-job] Supabase error:', error);
@@ -99,11 +99,24 @@ export async function POST(request: NextRequest) {
 
     console.log(`[load-job] Stored in Supabase:`, data);
 
-    // Return success with address
+    // Return success with address and folder URL if available
+    const folderUrl = data // Return success with address
     return NextResponse.json({
       success: true,
       job_number: jobNumber,
       address: address,
+    });// Return success with address
+    return NextResponse.json({
+      success: true,
+      job_number: jobNumber,
+      address: address,
+    }); data.length > 0 ? data[0].google_drive_folder_url : null;
+    
+    return NextResponse.json({
+      success: true,
+      job_number: jobNumber,
+      address: address,
+      folderUrl: folderUrl,
     });
 
   } catch (error) {

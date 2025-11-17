@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { Readable } from 'stream';
+} from 'stream';
 
 // Initialize OAuth client
 function getOAuthClient() {
@@ -308,7 +308,7 @@ export async function POST(request: NextRequest) {
       files: uploadedFiles,
       folderId: targetFolderId,
       folderName: targetFolderName,
-      folderUrl: `https://drive.google.com/drive/folders/${targetFolderId}`,
+      }`,
       message: `Successfully uploaded ${uploadedFiles.length} file(s) to Google Drive`,
     });
 
@@ -323,4 +323,10 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
+} from \'stream\';/import { Readable } from 'stream';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
+const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);}`,/folderUrl: folderUrl,}
