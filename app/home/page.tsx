@@ -40,9 +40,9 @@ const menuItems = [
     color: "bg-amber-500",
   },
   {
-    title: "Billing Supplies",
+    title: "Moving Billing",
     description: "Moving supplies charges",
-    href: "/billing",
+    href: "/move-billing",
     icon: CreditCardIcon,
     color: "bg-purple-500",
   },
