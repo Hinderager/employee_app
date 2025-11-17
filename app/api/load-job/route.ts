@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
           onConflict: 'job_number',
         }
       )
-      .select(job_number, address, google_drive_folder_url, updated_at);
+      .select('job_number, address, google_drive_folder_url, updated_at');
 
     if (error) {
       console.error('[load-job] Supabase error:', error);
