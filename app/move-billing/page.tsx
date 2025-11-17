@@ -117,6 +117,7 @@ export default function BillingPage() {
         }
 
         // Only save if there are changes
+          console.log('[Save] Sending deltas:', deltas, 'for job:', activeJobNumber);
         if (Object.keys(deltas).length > 0) {
           const { data, error } = await supabase
             .rpc('apply_material_deltas', {
@@ -125,14 +126,15 @@ export default function BillingPage() {
             });
 
           if (error) {
-            console.error('Error saving materials:', error);
+            console.error('[Save] Error saving materials:', error);
           } else {
+            console.log('[Save] Successfully saved. New materials:', data);
             // Update server values to match what we just saved
             serverValuesRef.current = { ...selectedItems };
           }
         }
       } catch (error) {
-        console.error('Error saving materials:', error);
+        console.error('[Save] Error saving materials:', error);
       } finally {
         setIsSaving(false);
       }
@@ -151,6 +153,8 @@ export default function BillingPage() {
       return;
     }
 
+    console.log('[Realtime] Setting up subscription for job:', activeJobNumber);
+
     const channel = supabase
       .channel(`job_materials:${activeJobNumber}`)
       .on(
@@ -162,8 +166,10 @@ export default function BillingPage() {
           filter: `job_number=eq.${activeJobNumber}`
         },
         (payload) => {
+          console.log('[Realtime] Received update:', payload);
           if (payload.new && typeof payload.new === 'object' && 'materials' in payload.new) {
             const newMaterials = payload.new.materials as {[key: number]: number};
+            console.log('[Realtime] Updating materials:', newMaterials);
 
             // Update both UI and server reference with the database state
             // The PostgreSQL function handles atomic delta merging, so we can trust the DB value
@@ -172,7 +178,9 @@ export default function BillingPage() {
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log('[Realtime] Subscription status:', status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
