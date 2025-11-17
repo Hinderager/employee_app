@@ -1,6 +1,14 @@
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
 
+// Type for bouncie_tokens table
+type BouncieToken = {
+  token_type: string;
+  token_value: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export async function GET() {
   try {
     console.log('=== BOUNCIE TOKEN DEBUG ===');
@@ -23,7 +31,8 @@ export async function GET() {
     const { data, error } = await supabase
       .from('bouncie_tokens')
       .select('*')
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .returns<BouncieToken[]>();
 
     if (error) {
       console.error('Supabase query error:', error);
