@@ -2,11 +2,28 @@ import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 
 // ===== TOP SHELF EMPLOYEE APP SUPABASE =====
 // This Supabase project contains: job_materials table (for move billing)
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || '';
 
-// Create Supabase client (singleton for server-side) - Employee App
-export const supabase = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+// Server-side client cache - DO NOT use in client components
+let serverSupabaseInstance: ReturnType<typeof createSupabaseClient> | null = null;
+
+// Server-side only - this will be tree-shaken out of client bundles
+function getServerSupabase() {
+  if (!serverSupabaseInstance) {
+    const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+    const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+
+    if (!supabaseUrl || !supabaseAnonKey) {
+      throw new Error('Server Supabase configuration is missing');
+    }
+
+    serverSupabaseInstance = createSupabaseClient(supabaseUrl, supabaseAnonKey);
+  }
+
+  return serverSupabaseInstance;
+}
+
+// Export for server-side use only - import from '@/lib/supabase-server' instead
+export const supabase = getServerSupabase();
 
 // Create client function for client components - Employee App (for move billing)
 export function createClient() {
@@ -14,10 +31,16 @@ export function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
   if (!url || !key) {
-    console.error('Supabase URL or Anon Key is missing');
+    console.error('[Supabase] ERROR: URL or Anon Key is missing!', { url: !!url, key: !!key });
+    throw new Error('Supabase configuration is missing. Check your .env.local file.');
   }
 
-  return createSupabaseClient(url, key);
+  try {
+    return createSupabaseClient(url, key);
+  } catch (error) {
+    console.error('[Supabase] ERROR creating client:', error);
+    throw error;
+  }
 }
 
 // ===== OMW TEXT SUPABASE (for Vehicle Locations) =====

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
-import { createClient } from "@/lib/supabase";
+import { createClient } from "@/lib/supabase-client";
 
 // Create Supabase client once at module level
 const supabase = createClient();
