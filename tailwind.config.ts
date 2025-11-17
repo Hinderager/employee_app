@@ -10,7 +10,7 @@ const config: Config = {
     extend: {
       colors: {
         'topshelf-yellow': '#FFC845',
-        'topshelf-blue': '#0066A1',
+        'topshelf-blue': '#06649b',
       },
     },
   },
