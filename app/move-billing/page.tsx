@@ -186,6 +186,37 @@ export default function BillingPage() {
       supabase.removeChannel(channel);
     };
   }, [activeJobNumber]);
+  // Polling fallback - refresh every 10 seconds
+  useEffect(() => {
+    if (!activeJobNumber) {
+      return;
+    }
+
+    console.log('[Polling] Setting up 10-second refresh for job:', activeJobNumber);
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('job_materials')
+          .select('materials')
+          .eq('job_number', activeJobNumber)
+          .maybeSingle();
+
+        if (!error && data && data.materials) {
+          console.log('[Polling] Refreshed materials:', data.materials);
+          setSelectedItems(data.materials);
+          serverValuesRef.current = { ...data.materials };
+        }
+      } catch (error) {
+        console.error('[Polling] Error:', error);
+      }
+    }, 10000);
+
+    return () => {
+      clearInterval(pollInterval);
+    };
+  }, [activeJobNumber]);
+
 
   const handleQuantityChange = (id: number, quantity: number) => {
     if (quantity <= 0) {
