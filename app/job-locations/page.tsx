@@ -6,14 +6,14 @@ import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 export default function JobLocationsPage() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-      <header className="bg-topshelf-yellow shadow-sm">
+      <header className="shadow-sm safe-top" style={{ backgroundColor: '#06649b' }}>
         <div className="px-6 py-4 flex items-center space-x-4">
-          <Link href="/home" className="p-2 -ml-2 active:bg-black/10 rounded-lg">
-            <ArrowLeftIcon className="h-6 w-6 text-black" />
+          <Link href="/home" className="p-2 -ml-2 active:bg-white/10 rounded-lg">
+            <ArrowLeftIcon className="h-6 w-6 text-white" />
           </Link>
           <div>
-            <h1 className="text-xl font-bold text-black">Job Locations</h1>
-            <p className="text-sm text-gray-800">View job sites</p>
+            <h1 className="text-xl font-bold text-white">Job Locations</h1>
+            <p className="text-sm text-gray-100">View job sites</p>
           </div>
         </div>
       </header>

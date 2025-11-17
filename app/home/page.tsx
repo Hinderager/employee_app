@@ -19,6 +19,13 @@ const menuItems = [
     color: "bg-blue-500",
   },
   {
+    title: "Move Billing",
+    description: "Moving supplies charges",
+    href: "/move-billing",
+    icon: CreditCardIcon,
+    color: "bg-purple-500",
+  },
+  {
     title: "Job Locations",
     description: "View job sites",
     href: "/job-locations",
@@ -40,13 +47,6 @@ const menuItems = [
     color: "bg-amber-500",
   },
   {
-    title: "Moving Billing",
-    description: "Moving supplies charges",
-    href: "/move-billing",
-    icon: CreditCardIcon,
-    color: "bg-purple-500",
-  },
-  {
     title: "Order Supplies",
     description: "Request materials",
     href: "/supplies",
@@ -57,18 +57,17 @@ const menuItems = [
 
 export default function Home() {
   return (
-    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 safe-top safe-bottom">
+    <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 safe-bottom">
       {/* Header */}
-      <header className="bg-topshelf-yellow shadow-sm">
-        <div className="px-6 py-6">
-          <h1 className="text-2xl font-bold text-black">Top Shelf</h1>
-          <p className="text-sm text-gray-800 mt-1">Employee Portal</p>
+      <header className="shadow-sm safe-top" style={{ backgroundColor: '#06649b' }}>
+        <div className="px-6 py-4 text-center">
+          <h1 className="text-lg font-bold text-white">Top Shelf Employee Portal</h1>
         </div>
       </header>
 
       {/* Main Content */}
       <div className="px-4 py-8">
-        <div className="max-w-md mx-auto space-y-4">
+        <div className="max-w-4xl mx-auto grid grid-cols-2 gap-4">
           {menuItems.map((item) => (
             <Link
               key={item.href}
@@ -76,31 +75,18 @@ export default function Home() {
               className="block group"
             >
               <div className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-200 p-6 border border-gray-200 active:scale-98">
-                <div className="flex items-center space-x-4">
+                <div className="flex flex-col items-center text-center space-y-3">
                   <div className={`${item.color} p-4 rounded-xl shadow-md`}>
                     <item.icon className="h-8 w-8 text-white" />
                   </div>
-                  <div className="flex-1">
-                    <h2 className="text-lg font-bold text-gray-900 group-hover:text-gray-700">
+                  <div>
+                    <h2 className="text-base font-bold text-gray-900 group-hover:text-gray-700">
                       {item.title}
                     </h2>
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 mt-1">
                       {item.description}
                     </p>
                   </div>
-                  <svg
-                    className="h-6 w-6 text-gray-400 group-hover:text-gray-600 transition-colors"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 5l7 7-7 7"
-                    />
-                  </svg>
                 </div>
               </div>
             </Link>
