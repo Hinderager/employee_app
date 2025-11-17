@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Initialize Supabase client (server-side)
-const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_ANON_KEY!;
+// Initialize Supabase client (server-side) for Employee App
+const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
+const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Workiz API credentials
