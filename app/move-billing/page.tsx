@@ -247,7 +247,7 @@ export default function BillingPage() {
               onChange={(e) => setJobNumber(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleLoadJob()}
               placeholder="Enter job number"
-              className="w-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-topshelf-yellow"
+              className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-topshelf-yellow"
             />
             <button
               onClick={handleLoadJob}
