@@ -149,7 +149,7 @@ export default function BillingPage() {
 
   // Real-time subscription for collaborative updates
   useEffect(() => {
-    if (!activeJobNumber || !jobNumber.trim()) {
+    if (!activeJobNumber) {
       return;
     }
 
