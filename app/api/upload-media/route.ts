@@ -32,27 +32,44 @@ async function getDriveClient() {
   return google.drive({ version: 'v3', auth: oauth2Client });
 }
 
-// Find or create the "Pictures" folder in Google Drive root (My Drive)
+// Find or create the "Pictures" folder in Google Drive (search anywhere, prefer root)
 async function getOrCreatePicturesFolder(drive: any): Promise<string> {
   const folderName = 'Pictures';
 
-  // Search for existing Pictures folder in My Drive root
-  const response = await drive.files.list({
+  // First, search for Pictures folder in My Drive root
+  const rootResponse = await drive.files.list({
     q: `name='${folderName}' and 'root' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     fields: 'files(id, name)',
     spaces: 'drive',
   });
 
-  if (response.data.files && response.data.files.length > 0) {
-    const folderId = response.data.files[0].id;
+  if (rootResponse.data.files && rootResponse.data.files.length > 0) {
+    const folderId = rootResponse.data.files[0].id;
     if (!folderId) {
       throw new Error('Failed to get Pictures folder ID');
     }
-    console.log('[upload-media] Found existing Pictures folder:', folderId);
+    console.log('[upload-media] Found existing Pictures folder in root:', folderId);
     return folderId;
   }
 
-  // Create Pictures folder in My Drive root if it doesn't exist
+  // If not in root, search for Pictures folder anywhere in My Drive
+  const anywhereResponse = await drive.files.list({
+    q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'files(id, name)',
+    spaces: 'drive',
+    orderBy: 'createdTime',
+  });
+
+  if (anywhereResponse.data.files && anywhereResponse.data.files.length > 0) {
+    const folderId = anywhereResponse.data.files[0].id;
+    if (!folderId) {
+      throw new Error('Failed to get Pictures folder ID');
+    }
+    console.log('[upload-media] Found existing Pictures folder (not in root):', folderId);
+    return folderId;
+  }
+
+  // Create Pictures folder in My Drive root if it doesn't exist anywhere
   const folderMetadata = {
     name: folderName,
     mimeType: 'application/vnd.google-apps.folder',
