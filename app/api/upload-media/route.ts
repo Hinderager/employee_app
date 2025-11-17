@@ -35,7 +35,7 @@ async function getDriveClient() {
 // Get the existing Pictures folder - NEVER create or rename
 async function getPicturesFolder(drive: any): Promise<string> {
   // First, try to use the known Pictures folder ID directly
-  const knownPicturesFolderId = '1cDg6cjZR1ZaQL1EhxAi99e-wRNy-kL74';
+  const knownPicturesFolderId = '1aDVWwz_DFbLiImO-3FB_LAML7OKXUjiL';
 
   try {
     // Verify this folder exists and is accessible
