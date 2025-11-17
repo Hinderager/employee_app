@@ -99,6 +99,39 @@ export async function POST(request: NextRequest) {
     // Get or create Pictures folder
     const picturesFolderId = await getOrCreatePicturesFolder(drive);
 
+    // Get or create "from employee app" subfolder inside Pictures
+    const employeeAppFolderName = 'from employee app';
+    const employeeAppSearchResponse = await drive.files.list({
+      q: `name='${employeeAppFolderName}' and '${picturesFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      fields: 'files(id, name)',
+      spaces: 'drive',
+    });
+
+    let employeeAppFolderId: string;
+    if (employeeAppSearchResponse.data.files && employeeAppSearchResponse.data.files.length > 0) {
+      const foundId = employeeAppSearchResponse.data.files[0].id;
+      if (!foundId) {
+        throw new Error('Failed to get employee app folder ID');
+      }
+      employeeAppFolderId = foundId;
+    } else {
+      // Create "from employee app" folder
+      const employeeAppFolderMetadata = {
+        name: employeeAppFolderName,
+        mimeType: 'application/vnd.google-apps.folder',
+        parents: [picturesFolderId],
+      };
+      const employeeAppFolder = await drive.files.create({
+        requestBody: employeeAppFolderMetadata,
+        fields: 'id',
+      });
+      const createdId = employeeAppFolder.data.id;
+      if (!createdId) {
+        throw new Error('Failed to create employee app folder');
+      }
+      employeeAppFolderId = createdId;
+    }
+
     // Create subfolder for this upload
     const now = new Date();
     const timestamp = now.toISOString().replace(/[:.]/g, '-').substring(0, 19);
@@ -116,7 +149,7 @@ export async function POST(request: NextRequest) {
     const jobFolderMetadata = {
       name: jobFolderName,
       mimeType: 'application/vnd.google-apps.folder',
-      parents: [picturesFolderId],
+      parents: [employeeAppFolderId],
     };
 
     const jobFolder = await drive.files.create({
