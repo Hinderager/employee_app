@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     // Store job number and address in Supabase (upsert)
     const { data, error } = await supabase
-      .from('jobs')
+      .from('jobs_from_pictures')
       .upsert(
         {
           job_number: jobNumber,
