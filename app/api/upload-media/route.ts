@@ -3,6 +3,11 @@ import { google } from 'googleapis';
 import { Readable } from 'stream';
 import { createClient } from '@supabase/supabase-js';
 
+// Increase function execution time to 60 seconds for large uploads
+export const maxDuration = 60;
+
+// Force dynamic to handle large request bodies
+export const dynamic = 'force-dynamic';
 // Initialize Supabase client
 const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
 const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
