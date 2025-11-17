@@ -190,90 +190,101 @@ export async function POST(request: NextRequest) {
       console.log('[upload-media] ✓ CREATED \"from employee app\" folder:', employeeAppFolderId);
     }
 
-    // Get or create "by address" subfolder inside "from employee app"
-    const byAddressFolderName = 'by address';
-    console.log('[upload-media] === SEARCHING FOR \"by address\" ===');
-    console.log('[upload-media] Parent \"from employee app\" folder ID:', employeeAppFolderId);
-    const byAddressSearchResponse = await drive.files.list({
-      q: `name='${byAddressFolderName}' and '${employeeAppFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: 'files(id, name, parents)',
-      spaces: 'drive',
-    });
-
-    let byAddressFolderId: string;
-    if (byAddressSearchResponse.data.files && byAddressSearchResponse.data.files.length > 0) {
-      const foundId = byAddressSearchResponse.data.files[0].id;
-      if (!foundId) {
-        throw new Error('Failed to get by address folder ID');
-      }
-      byAddressFolderId = foundId;
-      console.log('[upload-media] ✓ Using EXISTING \"by address\" folder:', byAddressFolderId);
-    } else {
-      // Create "by address" folder
-      const byAddressFolderMetadata = {
-        name: byAddressFolderName,
-        mimeType: 'application/vnd.google-apps.folder',
-        parents: [employeeAppFolderId],
-      };
-      const byAddressFolder = await drive.files.create({
-        requestBody: byAddressFolderMetadata,
-        fields: 'id',
-      });
-      const createdId = byAddressFolder.data.id;
-      if (!createdId) {
-        throw new Error('Failed to create by address folder');
-      }
-      byAddressFolderId = createdId;
-      console.log('[upload-media] ✓ CREATED \"by address\" folder:', byAddressFolderId);
-    }
-
-    // Determine folder name based on address
-    let targetFolderName: string;
-    if (address && address.trim()) {
-      // Use address as folder name (sanitized)
-      targetFolderName = sanitizeAddressForFolderName(address);
-      console.log('[upload-media] Using address-based folder:', targetFolderName);
-    } else {
-      // Use "General Media" folder for uploads without job/address
-      targetFolderName = 'General Media';
-      console.log('[upload-media] Using General Media folder');
-    }
-
-    // Search for existing folder with this name inside "by address" folder
-    const folderSearchResponse = await drive.files.list({
-      q: `name='${targetFolderName}' and '${byAddressFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: 'files(id, name)',
-      spaces: 'drive',
-    });
-
     let targetFolderId: string;
-    if (folderSearchResponse.data.files && folderSearchResponse.data.files.length > 0) {
-      // Folder exists, use it
-      const foundId = folderSearchResponse.data.files[0].id;
-      if (!foundId) {
-        throw new Error('Failed to get target folder ID');
-      }
-      targetFolderId = foundId;
-      console.log('[upload-media] Found existing folder:', targetFolderName);
-    } else {
-      // Create new folder inside "by address"
-      const folderMetadata = {
-        name: targetFolderName,
-        mimeType: 'application/vnd.google-apps.folder',
-        parents: [byAddressFolderId],
-      };
+    let targetFolderName: string;
 
-      const folder = await drive.files.create({
-        requestBody: folderMetadata,
-        fields: 'id',
+    // Check if job number is provided to determine upload location
+    if (!jobNumber || !jobNumber.trim()) {
+      // No job number: upload directly to "general media" folder
+      // This is the hardcoded folder ID for "general media"
+      targetFolderId = '1qgTSIsI3uVjc6qINSnrVpWr5qdz3N_XI';
+      targetFolderName = 'general media';
+      console.log('[upload-media] No job number - uploading to general media folder:', targetFolderId);
+    } else {
+      // Job number provided: use the address-based folder structure
+      // Get or create "by address" subfolder inside "from employee app"
+      const byAddressFolderName = 'by address';
+      console.log('[upload-media] === SEARCHING FOR "by address" ===');
+      console.log('[upload-media] Parent "from employee app" folder ID:', employeeAppFolderId);
+      const byAddressSearchResponse = await drive.files.list({
+        q: `name='${byAddressFolderName}' and '${employeeAppFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: 'files(id, name, parents)',
+        spaces: 'drive',
       });
 
-      const createdId = folder.data.id;
-      if (!createdId) {
-        throw new Error('Failed to create target folder');
+      let byAddressFolderId: string;
+      if (byAddressSearchResponse.data.files && byAddressSearchResponse.data.files.length > 0) {
+        const foundId = byAddressSearchResponse.data.files[0].id;
+        if (!foundId) {
+          throw new Error('Failed to get by address folder ID');
+        }
+        byAddressFolderId = foundId;
+        console.log('[upload-media] ✓ Using EXISTING "by address" folder:', byAddressFolderId);
+      } else {
+        // Create "by address" folder
+        const byAddressFolderMetadata = {
+          name: byAddressFolderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [employeeAppFolderId],
+        };
+        const byAddressFolder = await drive.files.create({
+          requestBody: byAddressFolderMetadata,
+          fields: 'id',
+        });
+        const createdId = byAddressFolder.data.id;
+        if (!createdId) {
+          throw new Error('Failed to create by address folder');
+        }
+        byAddressFolderId = createdId;
+        console.log('[upload-media] ✓ CREATED "by address" folder:', byAddressFolderId);
       }
-      targetFolderId = createdId;
-      console.log('[upload-media] Created new folder:', targetFolderName);
+
+      // Determine folder name based on address
+      if (address && address.trim()) {
+        // Use address as folder name (sanitized)
+        targetFolderName = sanitizeAddressForFolderName(address);
+        console.log('[upload-media] Using address-based folder:', targetFolderName);
+      } else {
+        // Use "General Media" folder for uploads without address
+        targetFolderName = 'General Media';
+        console.log('[upload-media] Using General Media folder');
+      }
+
+      // Search for existing folder with this name inside "by address" folder
+      const folderSearchResponse = await drive.files.list({
+        q: `name='${targetFolderName}' and '${byAddressFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+        fields: 'files(id, name)',
+        spaces: 'drive',
+      });
+
+      if (folderSearchResponse.data.files && folderSearchResponse.data.files.length > 0) {
+        // Folder exists, use it
+        const foundId = folderSearchResponse.data.files[0].id;
+        if (!foundId) {
+          throw new Error('Failed to get target folder ID');
+        }
+        targetFolderId = foundId;
+        console.log('[upload-media] Found existing folder:', targetFolderName);
+      } else {
+        // Create new folder inside "by address"
+        const folderMetadata = {
+          name: targetFolderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [byAddressFolderId],
+        };
+
+        const folder = await drive.files.create({
+          requestBody: folderMetadata,
+          fields: 'id',
+        });
+
+        const createdId = folder.data.id;
+        if (!createdId) {
+          throw new Error('Failed to create target folder');
+        }
+        targetFolderId = createdId;
+        console.log('[upload-media] Created new folder:', targetFolderName);
+      }
     }
 
     // Upload each file

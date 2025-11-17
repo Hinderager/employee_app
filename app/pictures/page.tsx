@@ -230,18 +230,30 @@ export default function PicturesPage() {
             <span className="font-bold">Take Photo/Video</span>
           </button>
 
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={isLoadingJob}
-            className={`text-white rounded-2xl shadow-md p-6 transition-transform flex flex-col items-center ${
-              isLoadingJob
-                ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                : 'bg-purple-500 active:scale-95'
-            }`}
-          >
-            <PhotoIcon className="h-12 w-12 mb-2" />
-            <span className="font-bold">Choose Files</span>
-          </button>
+          {jobNumber && jobNumber.trim() ? (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isLoadingJob}
+              className={`text-white rounded-2xl shadow-md p-6 transition-transform flex flex-col items-center ${
+                isLoadingJob
+                  ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                  : 'bg-purple-500 active:scale-95'
+              }`}
+            >
+              <PhotoIcon className="h-12 w-12 mb-2" />
+              <span className="font-bold">Choose Files</span>
+            </button>
+          ) : (
+            <a
+              href="https://drive.google.com/drive/u/0/folders/1qgTSIsI3uVjc6qINSnrVpWr5qdz3N_XI"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-white rounded-2xl shadow-md p-6 transition-transform flex flex-col items-center bg-purple-500 active:scale-95"
+            >
+              <PhotoIcon className="h-12 w-12 mb-2" />
+              <span className="font-bold text-center">Upload Large or Multiple Files</span>
+            </a>
+          )}
         </div>
 
         {/* Hidden file inputs */}
