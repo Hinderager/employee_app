@@ -148,7 +148,7 @@ export async function POST(request: NextRequest) {
     const employeeAppFolderName = 'from employee app';
     const employeeAppSearchResponse = await drive.files.list({
       q: `name='${employeeAppFolderName}' and '${picturesFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: 'files(id, name)',
+      fields: 'files(id, name, parents)',
       spaces: 'drive',
     });
 
@@ -159,6 +159,7 @@ export async function POST(request: NextRequest) {
         throw new Error('Failed to get employee app folder ID');
       }
       employeeAppFolderId = foundId;
+      console.log('[upload-media] ✓ Using EXISTING \"from employee app\" folder:', employeeAppFolderId);
     } else {
       // Create "from employee app" folder
       const employeeAppFolderMetadata = {
@@ -175,13 +176,16 @@ export async function POST(request: NextRequest) {
         throw new Error('Failed to create employee app folder');
       }
       employeeAppFolderId = createdId;
+      console.log('[upload-media] ✓ CREATED \"from employee app\" folder:', employeeAppFolderId);
     }
 
     // Get or create "by address" subfolder inside "from employee app"
     const byAddressFolderName = 'by address';
+    console.log('[upload-media] === SEARCHING FOR \"by address\" ===');
+    console.log('[upload-media] Parent \"from employee app\" folder ID:', employeeAppFolderId);
     const byAddressSearchResponse = await drive.files.list({
       q: `name='${byAddressFolderName}' and '${employeeAppFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-      fields: 'files(id, name)',
+      fields: 'files(id, name, parents)',
       spaces: 'drive',
     });
 
@@ -192,7 +196,7 @@ export async function POST(request: NextRequest) {
         throw new Error('Failed to get by address folder ID');
       }
       byAddressFolderId = foundId;
-      console.log('[upload-media] Found existing "by address" folder:', byAddressFolderId);
+      console.log('[upload-media] ✓ Using EXISTING \"by address\" folder:', byAddressFolderId);
     } else {
       // Create "by address" folder
       const byAddressFolderMetadata = {
@@ -209,7 +213,7 @@ export async function POST(request: NextRequest) {
         throw new Error('Failed to create by address folder');
       }
       byAddressFolderId = createdId;
-      console.log('[upload-media] Created new "by address" folder:', byAddressFolderId);
+      console.log('[upload-media] ✓ CREATED \"by address\" folder:', byAddressFolderId);
     }
 
     // Determine folder name based on address
@@ -291,6 +295,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
+    console.log('[upload-media] === FINAL FOLDER HIERARCHY ===');
+    console.log('[upload-media] Pictures:', picturesFolderId);
+    console.log('[upload-media]   → from employee app:', employeeAppFolderId);
+    console.log('[upload-media]     → by address:', byAddressFolderId);
+    console.log('[upload-media]       → address folder (' + targetFolderName + '):', targetFolderId);
     console.log(`[upload-media] Successfully uploaded ${uploadedFiles.length} files to folder: ${targetFolderName}`);
 
     return NextResponse.json({
