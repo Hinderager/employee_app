@@ -36,6 +36,14 @@ async function getDriveClient() {
 async function getOrCreatePicturesFolder(drive: any): Promise<string> {
   const folderName = 'Pictures';
 
+  // First, list ALL folders in root to see what's available (for debugging)
+  const allFoldersResponse = await drive.files.list({
+    q: `mimeType='application/vnd.google-apps.folder' and trashed=false and 'root' in parents`,
+    fields: 'files(id, name)',
+    pageSize: 50,
+  });
+  console.log('[upload-media] All root folders found:', JSON.stringify(allFoldersResponse.data.files));
+
   // Search ONLY for folder named "Pictures" (never use "Pictures (1)" or other variants)
   const searchResponse = await drive.files.list({
     q: `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`,
@@ -63,9 +71,10 @@ async function getOrCreatePicturesFolder(drive: any): Promise<string> {
     }
   }
 
-  // No "Pictures" folder found - this should never happen
-  console.error('[upload-media] Pictures folder not found in Google Drive!');
-  throw new Error('Pictures folder not found in Google Drive. Please ensure the Pictures folder exists.');
+  // No "Pictures" folder found - show what folders we DID find
+  const foundFolders = allFoldersResponse.data.files?.map((f: any) => f.name).join(', ') || 'none';
+  console.error('[upload-media] Pictures folder not found! Root folders found:', foundFolders);
+  throw new Error(`Pictures folder not found in Google Drive. Root folders found: ${foundFolders}`);
 }
 
 // Convert Buffer to Readable stream
