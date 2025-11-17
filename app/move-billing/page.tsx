@@ -76,6 +76,13 @@ export default function BillingPage() {
       }
   };
 
+  // Clear job number and reset everything locally
+  const handleClear = () => {
+    setJobNumber("");
+    setActiveJobNumber("");
+    setSelectedItems({});
+  };
+
   // Save materials to Supabase (debounced)
   useEffect(() => {
     if (!activeJobNumber || isLoadingRef.current) {
@@ -224,14 +231,19 @@ export default function BillingPage() {
               onChange={(e) => setJobNumber(e.target.value)}
               onKeyPress={(e) => e.key === 'Enter' && handleLoadJob()}
               placeholder="Enter job number"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-topshelf-yellow"
+              className="w-48 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-topshelf-yellow"
             />
             <button
               onClick={handleLoadJob}
-              
               className="px-6 py-2 bg-topshelf-blue hover:bg-blue-700 active:bg-blue-800 rounded-lg font-semibold text-white transition-colors"
             >
               {isLoading ? 'Loading...' : 'Load'}
+            </button>
+            <button
+              onClick={handleClear}
+              className="px-6 py-2 bg-gray-500 hover:bg-gray-600 active:bg-gray-700 rounded-lg font-semibold text-white transition-colors"
+            >
+              Clear
             </button>
           </div>
           {activeJobNumber && (
