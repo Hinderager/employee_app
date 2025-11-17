@@ -251,13 +251,13 @@ export default function BillingPage() {
             />
             <button
               onClick={handleLoadJob}
-              className="px-6 py-2 bg-topshelf-blue hover:bg-blue-700 active:bg-blue-800 rounded-lg font-semibold text-white transition-colors"
+              className="px-6 py-2 bg-topshelf-blue rounded-lg font-semibold text-white transition-colors"
             >
               {isLoading ? 'Loading...' : 'Load'}
             </button>
             <button
               onClick={handleClear}
-              className="px-6 py-2 bg-gray-500 hover:bg-gray-600 active:bg-gray-700 rounded-lg font-semibold text-white transition-colors"
+              className="px-6 py-2 bg-gray-500 rounded-lg font-semibold text-white transition-colors"
             >
               Clear
             </button>
