@@ -29,6 +29,7 @@ export async function GET() {
       .from('job_locations')
       .select('*')
       .eq('scheduled_date', today)
+      .eq('job_status', 'Submitted')
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
       .order('job_start_time', { ascending: true });
