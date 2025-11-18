@@ -1,5 +1,5 @@
 {
-  "name": "Workiz Job Locations Sync - Fixed",
+  "name": "Workiz Job Locations Sync - Simplified",
   "nodes": [
     {
       "parameters": {
@@ -31,14 +31,26 @@
     },
     {
       "parameters": {
-        "url": "=https://api.workiz.com/api/v1/api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw/job/all/?start_date={{ $json.today }}",
+        "method": "POST",
+        "url": "https://employee-f6p1r7lh0-eric-1619s-projects.vercel.app/api/cleanup-old-jobs",
+        "options": {}
+      },
+      "id": "cleanup_old_jobs",
+      "name": "Cleanup Old Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.workiz.com/api/v1/api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw/job/all/",
         "options": {}
       },
       "id": "fetch_workiz_jobs",
       "name": "Fetch Workiz Jobs",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [650, 300]
+      "position": [850, 300]
     },
     {
       "parameters": {
@@ -49,29 +61,18 @@
       "name": "Extract Jobs Array",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [850, 300]
+      "position": [1050, 300]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Get today's date in MST (YYYY-MM-DD format)\nconst now = new Date();\nconst mstDateString = now.toLocaleString('en-US', { \n  timeZone: 'America/Denver',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit'\n});\nconst [month, day, year] = mstDateString.split(/[\\/,\\s]+/);\nconst today = `${year}-${month}-${day}`;\n\nconsole.log('=== FILTER DEBUG ===');\nconsole.log('Today in MST:', today);\nconsole.log('Total items to filter:', items.length);\n\n// Filter jobs for today only\nconst filtered = items.filter((item, index) => {\n  const job = item.json;\n  \n  // Must have SerialId\n  if (!job.SerialId) {\n    console.log(`Job ${index}: NO SerialId - FILTERED OUT`);\n    return false;\n  }\n  \n  // Get the job's date - try multiple fields\n  let jobDateStr = job.StartDate || job.JobDateTime;\n  \n  if (!jobDateStr) {\n    console.log(`Job ${index} (${job.SerialId}): NO date field - FILTERED OUT`);\n    return false;\n  }\n  \n  // Parse the date and convert to MST YYYY-MM-DD\n  let jobDateMST;\n  \n  // Handle ISO format: 2016-08-29T09:12:33.001Z\n  if (jobDateStr.includes('T')) {\n    const jobDate = new Date(jobDateStr);\n    const jobMSTString = jobDate.toLocaleString('en-US', {\n      timeZone: 'America/Denver',\n      year: 'numeric',\n      month: '2-digit',\n      day: '2-digit'\n    });\n    const [m, d, y] = jobMSTString.split(/[\\/,\\s]+/);\n    jobDateMST = `${y}-${m}-${d}`;\n  } \n  // Handle SQL format: 2016-08-29 09:12:33 or 2016-08-29\n  else {\n    jobDateMST = jobDateStr.split(' ')[0];\n  }\n  \n  const isMatch = jobDateMST === today;\n  console.log(`Job ${index} (${job.SerialId}): date=${jobDateMST}, match=${isMatch}`);\n  \n  // Only return jobs scheduled for today\n  return isMatch;\n});\n\nconsole.log('Filtered result:', filtered.length, 'jobs');\nconsole.log('===================');\n\nreturn filtered;"
+        "jsCode": "// Get today's date in MST\nconst now = new Date();\nconst mstDateString = now.toLocaleString('en-US', { \n  timeZone: 'America/Denver',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit'\n});\nconst [month, day, year] = mstDateString.split(/[\\/, ]+/).filter(x => x);\nconst today = `${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`;\n\nconsole.log('Today (MST):', today);\n\n// Filter jobs for today\nconst filtered = items.filter(item => {\n  const job = item.json;\n  \n  if (!job.SerialId) return false;\n  \n  // Get date from StartDate or JobDateTime\n  let jobDateStr = job.StartDate || job.JobDateTime;\n  if (!jobDateStr) return false;\n  \n  // Extract date part\n  let jobDate;\n  if (jobDateStr.includes('T')) {\n    // ISO format\n    jobDate = jobDateStr.split('T')[0];\n  } else {\n    // SQL format\n    jobDate = jobDateStr.split(' ')[0];\n  }\n  \n  return jobDate === today;\n});\n\nconsole.log('Filtered:', filtered.length, 'of', items.length, 'jobs');\nreturn filtered;"
       },
-      "id": "filter_valid_jobs",
-      "name": "Filter Valid Jobs",
+      "id": "filter_today_jobs",
+      "name": "Filter Today's Jobs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [950, 300]
-    },
-    {
-      "parameters": {
-        "batchSize": 1,
-        "options": {}
-      },
-      "id": "split_jobs",
-      "name": "Split Into Jobs",
-      "type": "n8n-nodes-base.splitInBatches",
-      "typeVersion": 3,
-      "position": [1050, 300]
+      "position": [1250, 300]
     },
     {
       "parameters": {
@@ -134,13 +135,13 @@
             {
               "id": "scheduled_date",
               "name": "scheduled_date",
-              "value": "={{ $json.StartDate ? $json.StartDate.split(' ')[0] : $now.toFormat('yyyy-MM-dd') }}",
+              "value": "={{ $json.StartDate ? $json.StartDate.split(' ')[0] : $json.JobDateTime.split('T')[0] }}",
               "type": "string"
             },
             {
               "id": "workiz_job_id",
               "name": "workiz_job_id",
-              "value": "={{ $json.UUID || $json.ClientId }}",
+              "value": "={{ $json.UUID || String($json.ClientId) }}",
               "type": "string"
             },
             {
@@ -157,29 +158,18 @@
       "name": "Prepare Job Data",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1250, 300]
+      "position": [1450, 300]
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "fix_timezone",
-              "name": "job_start_time",
-              "value": "={{ $json.job_start_time.replace(' ', 'T') + '-07:00' }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {
-          "includeOtherFields": true
-        }
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse start time without timezone conversion\nreturn items.map(item => {\n  const job = item.json;\n  let startTime = job.job_start_time;\n  \n  // Just extract time portion as-is\n  if (startTime) {\n    // If ISO format: 2016-08-29T09:12:33.001Z -> keep as is\n    // If SQL format: 2016-08-29 09:12:33 -> convert to ISO with offset\n    if (startTime.includes('T')) {\n      // Already ISO format, leave as is\n    } else if (startTime.includes(' ')) {\n      // SQL format - add T and MST offset\n      startTime = startTime.replace(' ', 'T') + '-07:00';\n    }\n  }\n  \n  return {\n    json: {\n      ...job,\n      job_start_time: startTime\n    }\n  };\n});"
       },
-      "id": "convert_timezone",
-      "name": "Convert to MST Timezone",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [1350, 300]
+      "id": "parse_start_time",
+      "name": "Parse Start Time",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 300]
     },
     {
       "parameters": {
@@ -193,25 +183,13 @@
       "name": "Upsert to Supabase",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [1550, 300],
+      "position": [1850, 300],
       "credentials": {
         "supabaseApi": {
           "id": "top_shelf_supabase",
           "name": "Top Shelf Supabase"
         }
       }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://employee-f6p1r7lh0-eric-1619s-projects.vercel.app/api/cleanup-old-jobs",
-        "options": {}
-      },
-      "id": "cleanup_old_jobs",
-      "name": "Cleanup Old Jobs",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [1650, 300]
     }
   ],
   "connections": {
@@ -227,6 +205,17 @@
       ]
     },
     "Get Today's Date": {
+      "main": [
+        [
+          {
+            "node": "Cleanup Old Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cleanup Old Jobs": {
       "main": [
         [
           {
@@ -252,36 +241,18 @@
       "main": [
         [
           {
-            "node": "Filter Valid Jobs",
+            "node": "Filter Today's Jobs",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Filter Valid Jobs": {
-      "main": [
-        [
-          {
-            "node": "Split Into Jobs",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Split Into Jobs": {
+    "Filter Today's Jobs": {
       "main": [
         [
           {
             "node": "Prepare Job Data",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Cleanup Old Jobs",
             "type": "main",
             "index": 0
           }
@@ -292,29 +263,18 @@
       "main": [
         [
           {
-            "node": "Convert to MST Timezone",
+            "node": "Parse Start Time",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Convert to MST Timezone": {
+    "Parse Start Time": {
       "main": [
         [
           {
             "node": "Upsert to Supabase",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Upsert to Supabase": {
-      "main": [
-        [
-          {
-            "node": "Split Into Jobs",
             "type": "main",
             "index": 0
           }
@@ -328,7 +288,7 @@
     "saveDataSuccessExecution": "all",
     "saveExecutionProgress": true,
     "saveManualExecutions": true,
-    "timezone": "America/New_York"
+    "timezone": "America/Denver"
   },
   "active": false
 }
