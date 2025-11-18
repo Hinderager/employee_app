@@ -90,7 +90,7 @@
             {
               "id": "job_start_time",
               "name": "job_start_time",
-              "value": "={{ $json.JobDateTime }}",
+              "value": "={{ $json.JobDateTime || $json.ScheduledStart || $json.StartDate || '' }}",
               "type": "string"
             },
             {
