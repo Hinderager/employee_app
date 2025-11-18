@@ -20,27 +20,18 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "today_date",
-              "name": "today",
-              "value": "={{ $now.toFormat('yyyy-MM-dd') }}",
-              "type": "string"
-            }
-          ]
-        },
-        "options": {}
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Get today's date in MST timezone\nconst mstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Denver' }));\nconst today = mstDate.toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    today: today\n  }\n}];"
       },
       "id": "get_today_date",
       "name": "Get Today's Date",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [450, 300]
     },
     {
       "parameters": {
-        "url": "https://api.workiz.com/api/v1/api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw/job/all/",
+        "url": "=https://api.workiz.com/api/v1/api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw/job/all/?start_date={{ $json.today }}&end_date={{ $json.today }}",
         "options": {}
       },
       "id": "fetch_workiz_jobs",
