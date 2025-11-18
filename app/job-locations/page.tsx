@@ -150,34 +150,35 @@ export default function JobLocationsPage() {
         const jobOrder = index + 1;
         const isJunkJob = job.job_type.toLowerCase().includes("junk");
         const jobColor = isJunkJob ? "#FF6B6B" : "#4ECDC4"; // Red for junk, blue for moving
-        // Parse the time from Workiz (should be in MST)
-        // The StartDate from Workiz is stored without timezone info, so we need to
-        // parse it correctly assuming it's already in MST
+        // Parse the time from Workiz
+        // Workiz sends times in format "YYYY-MM-DD HH:MM:SS" already in local time (MST/MDT)
+        // We just need to extract and format the time portion without timezone conversion
         let startTime = '';
         try {
-          // If the string is in "YYYY-MM-DD HH:MM:SS" format (no timezone)
-          // we need to append timezone info before parsing
-          let dateStr = job.job_start_time;
+          const dateStr = job.job_start_time;
 
-          // Check if it's missing timezone info (doesn't end with Z or +/- offset)
-          if (!dateStr.match(/Z|[+-]\d{2}:\d{2}$/)) {
-            // Treat it as MST by appending the timezone
-            // Convert to ISO format that specifies MST offset
-            const parts = dateStr.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
-            if (parts) {
-              // Format as ISO with MST offset (MST is UTC-7, MDT is UTC-6)
-              // Use -07:00 for MST (standard time)
-              dateStr = `${parts[1]}T${parts[2]}-07:00`;
-            }
+          // Try to match "YYYY-MM-DD HH:MM:SS" format
+          const parts = dateStr.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+          if (parts) {
+            // Extract hour and minute
+            let hour = parseInt(parts[2], 10);
+            const minute = parts[3];
+
+            // Convert to 12-hour format
+            const period = hour >= 12 ? 'PM' : 'AM';
+            if (hour === 0) hour = 12;
+            else if (hour > 12) hour -= 12;
+
+            startTime = `${hour}:${minute} ${period}`;
+          } else {
+            // Fallback: try parsing as Date and format
+            const jobDate = new Date(dateStr);
+            startTime = jobDate.toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            });
           }
-
-          const jobDate = new Date(dateStr);
-          startTime = jobDate.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-            timeZone: 'America/Denver'
-          });
         } catch (e) {
           // Fallback to original string if parsing fails
           startTime = job.job_start_time;
