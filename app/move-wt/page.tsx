@@ -404,6 +404,7 @@ export default function MoveWalkthrough() {
           jobNumber: jobNumber.trim(),
           address: address,
           formData: formData,
+          folderUrl: folderUrl,
         }),
       });
 
@@ -414,7 +415,13 @@ export default function MoveWalkthrough() {
       }
 
       console.log("Form submitted:", formData);
-      alert("Walk-through completed! Data saved successfully.");
+
+      let message = "Walk-through completed! Data saved successfully.";
+      if (result.pdf_url) {
+        message += `\n\nPDF Cut Sheet generated: ${result.pdf_url}`;
+      }
+
+      alert(message);
     } catch (error) {
       console.error('Save form error:', error);
       alert(error instanceof Error ? error.message : 'Failed to save form. Please try again.');
@@ -489,6 +496,23 @@ export default function MoveWalkthrough() {
 
       <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 space-y-6">
 
+        {/* Pics and Videos */}
+        {folderUrl && (
+          <section className="bg-white rounded-lg shadow p-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Pics and Videos</h2>
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <a
+                href={folderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
+              >
+                View Google Drive Folder for this job →
+              </a>
+            </div>
+          </section>
+        )}
+
         {/* Service Type */}
         <section className="bg-white rounded-lg shadow p-4">
           <h2 className="text-xl font-bold text-gray-900 mb-4">Service Type</h2>
@@ -525,23 +549,6 @@ export default function MoveWalkthrough() {
             </div>
           </div>
         </section>
-
-        {/* Pics and Videos */}
-        {folderUrl && (
-          <section className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Pics and Videos</h2>
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <a
-                href={folderUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
-              >
-                View Google Drive Folder for this job →
-              </a>
-            </div>
-          </section>
-        )}
 
         {/* Customer Information */}
         <section className="bg-white rounded-lg shadow p-4">
