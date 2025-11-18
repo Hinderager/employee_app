@@ -31,7 +31,7 @@
     },
     {
       "parameters": {
-        "url": "=https://api.workiz.com/api/v1/api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw/job/all/?start_date={{ $json.today }}&end_date={{ $json.today }}",
+        "url": "https://api.workiz.com/api/v1/api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw/job/all/",
         "options": {}
       },
       "id": "fetch_workiz_jobs",
@@ -53,31 +53,12 @@
     },
     {
       "parameters": {
-        "conditions": {
-          "options": {
-            "caseSensitive": true,
-            "leftValue": "",
-            "typeValidation": "strict"
-          },
-          "conditions": [
-            {
-              "id": "has_serial_id",
-              "leftValue": "={{ $json.SerialId }}",
-              "rightValue": "",
-              "operator": {
-                "type": "exists",
-                "operation": "exists",
-                "singleValue": true
-              }
-            }
-          ],
-          "combinator": "and"
-        },
-        "options": {}
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Get today's date in MST\nconst mstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Denver' }));\nconst today = mstDate.toISOString().split('T')[0];\n\n// Filter jobs for today only and with valid SerialId\nconst filtered = items.filter(item => {\n  const job = item.json;\n  \n  // Check if SerialId exists\n  if (!job.SerialId) {\n    return false;\n  }\n  \n  // Check if StartDate matches today\n  if (job.StartDate) {\n    const jobDate = job.StartDate.split(' ')[0]; // Extract date part (yyyy-mm-dd)\n    return jobDate === today;\n  }\n  \n  return false;\n});\n\nreturn filtered;"
       },
       "id": "filter_valid_jobs",
-      "name": "Filter Valid Jobs",
-      "type": "n8n-nodes-base.filter",
+      "name": "Filter Today's Jobs",
+      "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [950, 300]
     },
