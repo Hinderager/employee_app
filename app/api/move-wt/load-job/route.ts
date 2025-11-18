@@ -74,7 +74,19 @@ export async function POST(request: NextRequest) {
 
     console.log(`[move-wt/load-job] Found address: ${address}`);
 
+    // Debug: Log all available fields from Workiz job
+    console.log(`[move-wt/load-job] Workiz job fields:`, Object.keys(job));
+    console.log(`[move-wt/load-job] Zip-related fields:`, {
+      Zip: job.Zip,
+      ZipCode: job.ZipCode,
+      PostalCode: job.PostalCode,
+      Zipcode: job.Zipcode,
+    });
+
     // Extract customer information from Workiz
+    // Try multiple possible zip code field names
+    const zipCode = job.Zip || job.ZipCode || job.PostalCode || job.Zipcode || '';
+
     const customerInfo = {
       firstName: job.FirstName || '',
       lastName: job.LastName || '',
@@ -84,7 +96,7 @@ export async function POST(request: NextRequest) {
       pickupUnit: '',  // Not in Workiz by default
       pickupCity: job.City || '',
       pickupState: job.State || '',
-      pickupZip: job.Zip || '',
+      pickupZip: zipCode,
     };
 
     // Get Google Drive folder URL from jobs_from_pictures table
