@@ -31,7 +31,7 @@
     },
     {
       "parameters": {
-        "url": "https://api.workiz.com/api/v1/api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw/job/all/",
+        "url": "=https://api.workiz.com/api/v1/api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw/job/all/?start_date={{ $json.today }}",
         "options": {}
       },
       "id": "fetch_workiz_jobs",
