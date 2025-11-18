@@ -108,7 +108,7 @@
             {
               "id": "job_number",
               "name": "job_number",
-              "value": "={{ $json.SerialId }}",
+              "value": "={{ String($json.SerialId) }}",
               "type": "string"
             },
             {
@@ -189,8 +189,6 @@
     },
     {
       "parameters": {
-        "mode": "manual",
-        "duplicateItem": false,
         "assignments": {
           "assignments": [
             {
@@ -202,10 +200,8 @@
           ]
         },
         "options": {
-          "dotNotation": false,
-          "ignoreConversionErrors": false
-        },
-        "includeOtherFields": true
+          "includeOtherFields": true
+        }
       },
       "id": "convert_timezone",
       "name": "Convert to MST Timezone",
