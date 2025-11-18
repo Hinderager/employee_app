@@ -8,7 +8,9 @@ export default function MoveWalkthrough() {
   const router = useRouter();
   const [jobNumber, setJobNumber] = useState("");
   const [address, setAddress] = useState("");
+  const [folderUrl, setFolderUrl] = useState("");
   const [isLoadingJob, setIsLoadingJob] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     // Service Type
@@ -178,7 +180,7 @@ export default function MoveWalkthrough() {
     setIsLoadingJob(true);
 
     try {
-      const response = await fetch('/api/load-job', {
+      const response = await fetch('/api/move-wt/load-job', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -193,6 +195,32 @@ export default function MoveWalkthrough() {
       }
 
       setAddress(result.address);
+      setFolderUrl(result.folderUrl || '');
+
+      // Populate customer information
+      if (result.customerInfo) {
+        setFormData(prev => ({
+          ...prev,
+          firstName: result.customerInfo.firstName || prev.firstName,
+          lastName: result.customerInfo.lastName || prev.lastName,
+          phone: result.customerInfo.phone || prev.phone,
+          email: result.customerInfo.email || prev.email,
+          pickupAddress: result.customerInfo.pickupAddress || prev.pickupAddress,
+          pickupUnit: result.customerInfo.pickupUnit || prev.pickupUnit,
+          pickupCity: result.customerInfo.pickupCity || prev.pickupCity,
+          pickupState: result.customerInfo.pickupState || prev.pickupState,
+          pickupZip: result.customerInfo.pickupZip || prev.pickupZip,
+        }));
+      }
+
+      // Populate existing form data if available
+      if (result.existingFormData) {
+        setFormData(prev => ({
+          ...prev,
+          ...result.existingFormData,
+        }));
+        alert('Previous form data loaded for this address!');
+      }
     } catch (error) {
       console.error('Load job error:', error);
       alert(error instanceof Error ? error.message : 'Failed to load job. Please try again.');
@@ -204,6 +232,7 @@ export default function MoveWalkthrough() {
   const handleClear = () => {
     setJobNumber("");
     setAddress("");
+    setFolderUrl("");
     // Reset form to initial state
     setFormData({
       // Service Type
@@ -355,11 +384,43 @@ export default function MoveWalkthrough() {
     });
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Save to database or send to API
-    console.log("Form submitted:", formData);
-    alert("Walk-through completed! Data saved.");
+
+    if (!jobNumber || !address) {
+      alert('Please load a job number first');
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const response = await fetch('/api/move-wt/save-form', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobNumber: jobNumber.trim(),
+          address: address,
+          formData: formData,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save form');
+      }
+
+      console.log("Form submitted:", formData);
+      alert("Walk-through completed! Data saved successfully.");
+    } catch (error) {
+      console.error('Save form error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to save form. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -464,6 +525,23 @@ export default function MoveWalkthrough() {
             </div>
           </div>
         </section>
+
+        {/* Pics and Videos */}
+        {folderUrl && (
+          <section className="bg-white rounded-lg shadow p-4">
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Pics and Videos</h2>
+            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <a
+                href={folderUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
+              >
+                View Google Drive Folder for this job →
+              </a>
+            </div>
+          </section>
+        )}
 
         {/* Customer Information */}
         <section className="bg-white rounded-lg shadow p-4">
@@ -2413,10 +2491,11 @@ export default function MoveWalkthrough() {
         <div className="sticky bottom-0 bg-white p-4 shadow-lg rounded-lg">
           <button
             type="submit"
-            className="w-full py-3 px-4 text-white font-bold rounded-lg shadow-md transition-all"
-            style={{ backgroundColor: '#06649b' }}
+            disabled={isSaving || !jobNumber || !address}
+            className="w-full py-3 px-4 text-white font-bold rounded-lg shadow-md transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
+            style={{ backgroundColor: isSaving || !jobNumber || !address ? '#9CA3AF' : '#06649b' }}
           >
-            Complete Walk-Through
+            {isSaving ? 'Saving...' : 'Complete Walk-Through'}
           </button>
         </div>
       </form>
