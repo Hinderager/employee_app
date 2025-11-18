@@ -182,17 +182,17 @@ export default function JobLocationsPage() {
               </div>
               <div style="
                 position: absolute;
-                top: -60px;
+                top: -35px;
                 left: 50%;
                 transform: translateX(-50%);
                 background: ${jobColor};
                 color: white;
-                padding: 8px 24px;
-                border-radius: 12px;
-                font-size: 44px;
+                padding: 4px 14px;
+                border-radius: 6px;
+                font-size: 18px;
                 font-weight: bold;
                 white-space: nowrap;
-                box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
               ">${startTime}</div>
             </div>
           `,
