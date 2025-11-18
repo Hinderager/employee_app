@@ -176,6 +176,18 @@
           "name": "Top Shelf Supabase"
         }
       }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://your-app-url.vercel.app/api/cleanup-old-jobs",
+        "options": {}
+      },
+      "id": "cleanup_old_jobs",
+      "name": "Cleanup Old Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1650, 300]
     }
   ],
   "connections": {
@@ -232,7 +244,13 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Cleanup Old Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Prepare Job Data": {
