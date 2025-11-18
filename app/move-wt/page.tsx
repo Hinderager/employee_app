@@ -204,6 +204,7 @@ export default function MoveWalkthrough() {
   const handleClear = () => {
     setJobNumber("");
     setAddress("");
+    // Reset form to initial state
     setFormData({
       // Service Type
       serviceType: "truck",
@@ -218,29 +219,116 @@ export default function MoveWalkthrough() {
       pickupAddress: "",
       pickupUnit: "",
       pickupCity: "",
+      pickupState: "",
       pickupZip: "",
+      pickupLocationType: "house",
+      pickupLocationOther: "",
+      pickupHouseSquareFeet: "",
+      pickupApartmentBedBath: "",
+      pickupStorageUnitQuantity: 1,
+      pickupStorageUnitSizes: [""],
+      pickupStorageUnitHowFull: [""],
 
       // Addresses - Delivery
       deliveryAddress: "",
       deliveryUnit: "",
       deliveryCity: "",
+      deliveryState: "",
       deliveryZip: "",
+      deliveryLocationType: "house",
+      deliveryLocationOther: "",
+      deliveryHouseSquareFeet: "",
+      deliveryApartmentBedBath: "",
+      deliveryStorageUnitQuantity: 1,
+      deliveryStorageUnitSizes: [""],
+      deliveryPODQuantity: 1,
+      deliveryPODSize: "",
+      deliveryTruckLength: "",
 
-      // Property Details - Pickup
-      pickupHomeType: "",
-      pickupApproximateSize: "",
-      pickupFloors: "",
+      // Addresses - Additional Stop
+      hasAdditionalStop: false,
+      additionalStopAddress: "",
+      additionalStopUnit: "",
+      additionalStopCity: "",
+      additionalStopState: "",
+      additionalStopZip: "",
+      additionalStopLocationType: "house",
+      additionalStopLocationOther: "",
+      additionalStopHouseSquareFeet: "",
+      additionalStopApartmentBedBath: "",
+      additionalStopStorageUnitQuantity: 1,
+      additionalStopStorageUnitSizes: [""],
+      additionalStopNotes: "",
 
-      // Property Details - Delivery
-      deliveryHomeType: "",
-      deliveryApproximateSize: "",
-      deliveryFloors: "",
+      // Property Access - Pickup
+      pickupStairs: 1,
+      pickupNarrowDoorways: false,
+      pickupElevator: false,
+      pickupParkingDistance: "close",
+      pickupAccessNotes: "",
+
+      // Property Access - Delivery
+      deliveryStairs: 1,
+      deliveryNarrowDoorways: false,
+      deliveryElevator: false,
+      deliveryParkingDistance: "close",
+      deliveryAccessNotes: "",
+
+      // Heavy/Special Items
+      gunSafes: false,
+      gunSafesQty: 1,
+      gunSafesDetails: "",
+      pianos: false,
+      pianosQty: 1,
+      pianosDetails: "",
+      otherHeavyItems: false,
+      otherHeavyItemsDetails: "",
+      largeTVs: false,
+      largeTVsQty: 1,
+      largeTVsDetails: "",
+      purpleGreenMattress: false,
+      purpleGreenMattressDetails: "",
+      treadmills: false,
+      treadmillsDetails: "",
+      largeAppliances: false,
+      applianceFridge: false,
+      applianceFridgeQty: 1,
+      applianceWasher: false,
+      applianceWasherQty: 1,
+      applianceDryer: false,
+      applianceDryerQty: 1,
+      applianceOven: false,
+      applianceOvenQty: 1,
+      applianceDishwasher: false,
+      applianceDishwasherQty: 1,
+      applianceOtherDetails: "",
+      plants: false,
+      plantsDetails: "",
+      bunkBeds: false,
+      bunkBedsQty: 1,
+      bunkBedsDetails: "",
+      trampoline: false,
+      trampolineQty: 1,
+      trampolineDetails: "",
+      tableSaw: false,
+      tableSawQty: 1,
+      tableSawDetails: "",
+      gymEquipment: false,
+      gymEquipmentQty: 1,
+      gymEquipmentDetails: "",
+      sauna: false,
+      saunaQty: 1,
+      saunaDetails: "",
+      specialDisassemblyOther: false,
+      specialDisassemblyOtherDetails: "",
+
+      // Pets
+      catsPresent: false,
 
       // Packing
       packingStatus: "moderate",
+      needsPacking: false,
       packingKitchen: false,
-      packingBedrooms: false,
-      packingLivingRoom: false,
       packingGarage: false,
       packingAttic: false,
       packingWardrobeBoxes: false,
@@ -264,59 +352,6 @@ export default function MoveWalkthrough() {
 
       // Special Notes
       specialRequests: "",
-
-      // Heavy/Special Items
-      pianoPresent: false,
-      pianosQty: 1,
-      pianosDetails: "",
-      gunSafes: false,
-      gunSafesQty: 1,
-      gunSafesDetails: "",
-      poolTable: false,
-      hotTub: false,
-      largeTVs: false,
-      largeTVsQty: 1,
-      largeTVsDetails: "",
-      aquarium: false,
-      tableSaw: false,
-      tableSawQty: 1,
-      tableSawDetails: "",
-
-      // Special Disassembly
-      trampoline: false,
-      trampolineQty: 1,
-      trampolineDetails: "",
-      bunkBeds: false,
-      bunkBedsQty: 1,
-      bunkBedsDetails: "",
-      gymEquipment: false,
-      gymEquipmentQty: 1,
-      gymEquipmentDetails: "",
-      sauna: false,
-      saunaQty: 1,
-      saunaDetails: "",
-      specialDisassemblyOther: false,
-      specialDisassemblyOtherDetails: "",
-
-      // Pets
-      catsPresent: false,
-      dogsPresent: false,
-      otherPets: false,
-      petDetails: "",
-
-      // Accessibility - Pickup
-      pickupStairsLevels: "",
-      pickupElevatorAccess: false,
-      pickupLongWalk: false,
-      pickupParkingDistance: "",
-      pickupNarrowDoorways: false,
-
-      // Accessibility - Delivery
-      deliveryStairsLevels: "",
-      deliveryElevatorAccess: false,
-      deliveryLongWalk: false,
-      deliveryParkingDistance: "",
-      deliveryNarrowDoorways: false,
     });
   };
 
