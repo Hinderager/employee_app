@@ -2,17 +2,35 @@ import { NextRequest, NextResponse } from 'next/server';
 import { jsPDF } from 'jspdf';
 import { google } from 'googleapis';
 
-// Google Drive setup
-const GOOGLE_CREDENTIALS = JSON.parse(
-  Buffer.from(process.env.GOOGLE_SERVICE_ACCOUNT_KEY || '', 'base64').toString('utf-8')
-);
+// Initialize OAuth client
+function getOAuthClient() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.NODE_ENV === 'production'
+      ? process.env.GOOGLE_REDIRECT_URI
+      : 'http://localhost:3001/api/auth/google/callback'
+  );
+}
 
-const auth = new google.auth.GoogleAuth({
-  credentials: GOOGLE_CREDENTIALS,
-  scopes: ['https://www.googleapis.com/auth/drive'],
-});
+// Get Drive client with OAuth tokens
+async function getDriveClient() {
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
-const drive = google.drive({ version: 'v3', auth });
+  if (!refreshToken) {
+    throw new Error('Server not configured with Google Drive credentials');
+  }
+
+  const oauth2Client = getOAuthClient();
+  oauth2Client.setCredentials({
+    refresh_token: refreshToken,
+  });
+
+  // Refresh the access token automatically
+  await oauth2Client.getAccessToken();
+
+  return google.drive({ version: 'v3', auth: oauth2Client });
+}
 
 interface FormData {
   [key: string]: any;
@@ -31,6 +49,9 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`[generate-pdf] Generating PDF for job ${jobNumber}`);
+
+    // Get Drive client
+    const drive = await getDriveClient();
 
     // Extract folder ID from folderUrl
     let folderId = null;
