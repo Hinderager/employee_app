@@ -84,11 +84,11 @@ export default function JobLocationsPage() {
     fetchLocations();
   };
 
-  // Auto-refresh every 5 seconds
+  // Auto-refresh every 30 seconds
   useEffect(() => {
     if (!mapReady) return;
 
-    const interval = setInterval(fetchLocations, 5000);
+    const interval = setInterval(fetchLocations, 30000);
     return () => clearInterval(interval);
   }, [mapReady]);
 
