@@ -7,7 +7,8 @@ import {
   CreditCardIcon,
   MapIcon,
   CameraIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  TruckIcon
 } from "@heroicons/react/24/outline";
 
 const menuItems = [
@@ -52,6 +53,13 @@ const menuItems = [
     href: "/supplies",
     icon: ShoppingCartIcon,
     color: "bg-green-500",
+  },
+  {
+    title: "Move WT",
+    description: "Move work tracking",
+    href: "/move-wt",
+    icon: TruckIcon,
+    color: "bg-red-500",
   },
 ];
 
