@@ -167,14 +167,14 @@ export default function JobLocationsPage() {
               </div>
               <div style="
                 position: absolute;
-                top: -25px;
+                top: -40px;
                 left: 50%;
                 transform: translateX(-50%);
                 background: ${jobColor};
                 color: white;
-                padding: 2px 8px;
-                border-radius: 4px;
-                font-size: 11px;
+                padding: 4px 16px;
+                border-radius: 8px;
+                font-size: 22px;
                 font-weight: bold;
                 white-space: nowrap;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);
