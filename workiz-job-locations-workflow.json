@@ -159,6 +159,8 @@
     },
     {
       "parameters": {
+        "mode": "manual",
+        "duplicateItem": false,
         "assignments": {
           "assignments": [
             {
@@ -169,7 +171,11 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "dotNotation": false,
+          "ignoreConversionErrors": false
+        },
+        "includeOtherFields": true
       },
       "id": "convert_timezone",
       "name": "Convert to MST Timezone",
