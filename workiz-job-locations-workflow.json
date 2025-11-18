@@ -62,6 +62,36 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has_serial_id",
+              "leftValue": "={{ $json.SerialId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "exists",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter_valid_jobs",
+      "name": "Filter Valid Jobs",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [950, 300]
+    },
+    {
+      "parameters": {
         "batchSize": 1,
         "options": {}
       },
@@ -251,6 +281,17 @@
       ]
     },
     "Extract Jobs Array": {
+      "main": [
+        [
+          {
+            "node": "Filter Valid Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Valid Jobs": {
       "main": [
         [
           {
