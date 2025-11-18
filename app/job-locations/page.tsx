@@ -21,6 +21,7 @@ export default function JobLocationsPage() {
   const mapRef = useRef<any>(null);
   const jobMarkersRef = useRef<any[]>([]);
   const isFirstLoadRef = useRef<boolean>(true);
+  const openPopupJobIdRef = useRef<string | null>(null); // Track which popup is open
   const [jobs, setJobs] = useState<JobLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -119,6 +120,20 @@ export default function JobLocationsPage() {
 
     const L = (window as any).L;
     if (!L) return;
+
+    // Save which popup is currently open (if any)
+    let currentOpenJobId: string | null = null;
+    jobMarkersRef.current.forEach((marker, index) => {
+      if (marker.isPopupOpen && marker.isPopupOpen()) {
+        // Find which job this marker belongs to by index
+        const sortedJobs = [...jobs].sort((a, b) =>
+          new Date(a.job_start_time).getTime() - new Date(b.job_start_time).getTime()
+        );
+        if (sortedJobs[index]) {
+          currentOpenJobId = sortedJobs[index].id;
+        }
+      }
+    });
 
     // Clear existing markers
     jobMarkersRef.current.forEach(marker => marker.remove());
@@ -271,6 +286,11 @@ export default function JobLocationsPage() {
         });
 
         jobMarkersRef.current.push(marker);
+
+        // Reopen popup if this was the previously open one
+        if (currentOpenJobId === job.id) {
+          marker.openPopup();
+        }
       }
     });
 
@@ -322,6 +342,20 @@ export default function JobLocationsPage() {
               Updated: {lastUpdate.toLocaleTimeString()}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Legend - Bottom Center */}
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-lg px-6 py-3">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ backgroundColor: '#FF6B6B' }}></div>
+            <span className="text-sm font-medium text-gray-900">Junk Removal</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded" style={{ backgroundColor: '#4ECDC4' }}></div>
+            <span className="text-sm font-medium text-gray-900">Moving</span>
+          </div>
         </div>
       </div>
 
