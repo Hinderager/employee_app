@@ -90,7 +90,7 @@
             {
               "id": "job_start_time",
               "name": "job_start_time",
-              "value": "={{ $json.StartDate ? DateTime.fromISO($json.StartDate).setZone('America/Denver').toFormat('yyyy-MM-dd HH:mm:ss') : DateTime.fromISO($json.ScheduledStart || $now.toISO()).setZone('America/Denver').toFormat('yyyy-MM-dd HH:mm:ss') }}",
+              "value": "={{ $json.JobDateTime || $json.StartDate || $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
               "type": "string"
             },
             {
