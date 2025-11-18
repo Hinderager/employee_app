@@ -150,12 +150,38 @@ export default function JobLocationsPage() {
         const jobOrder = index + 1;
         const isJunkJob = job.job_type.toLowerCase().includes("junk");
         const jobColor = isJunkJob ? "#FF6B6B" : "#4ECDC4"; // Red for junk, blue for moving
-        const startTime = new Date(job.job_start_time).toLocaleTimeString('en-US', {
-          hour: 'numeric',
-          minute: '2-digit',
-          hour12: true,
-          timeZone: 'America/Denver'
-        });
+        // Parse the time from Workiz (should be in MST)
+        // The StartDate from Workiz is stored without timezone info, so we need to
+        // parse it correctly assuming it's already in MST
+        let startTime = '';
+        try {
+          // If the string is in "YYYY-MM-DD HH:MM:SS" format (no timezone)
+          // we need to append timezone info before parsing
+          let dateStr = job.job_start_time;
+
+          // Check if it's missing timezone info (doesn't end with Z or +/- offset)
+          if (!dateStr.match(/Z|[+-]\d{2}:\d{2}$/)) {
+            // Treat it as MST by appending the timezone
+            // Convert to ISO format that specifies MST offset
+            const parts = dateStr.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})/);
+            if (parts) {
+              // Format as ISO with MST offset (MST is UTC-7, MDT is UTC-6)
+              // Use -07:00 for MST (standard time)
+              dateStr = `${parts[1]}T${parts[2]}-07:00`;
+            }
+          }
+
+          const jobDate = new Date(dateStr);
+          startTime = jobDate.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'America/Denver'
+          });
+        } catch (e) {
+          // Fallback to original string if parsing fails
+          startTime = job.job_start_time;
+        }
 
         // Create custom div icon with job order and time
         const jobIcon = L.divIcon({
