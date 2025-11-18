@@ -69,11 +69,11 @@ export default function JobLocationsPage() {
       zoomControl: true
     });
 
-    // Add CartoDB Dark Matter tile layer
+    // Add OpenStreetMap tile layer (daytime colors)
     L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
       {
-        attribution: "© OpenStreetMap contributors © CARTO",
+        attribution: "© OpenStreetMap contributors",
         maxZoom: 19
       }
     ).addTo(map);
@@ -153,7 +153,8 @@ export default function JobLocationsPage() {
         const startTime = new Date(job.job_start_time).toLocaleTimeString('en-US', {
           hour: 'numeric',
           minute: '2-digit',
-          hour12: true
+          hour12: true,
+          timeZone: 'America/Denver'
         });
 
         // Create custom div icon with job order and time
@@ -189,7 +190,7 @@ export default function JobLocationsPage() {
                 color: white;
                 padding: 4px 14px;
                 border-radius: 6px;
-                font-size: 18px;
+                font-size: 13pt;
                 font-weight: bold;
                 white-space: nowrap;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);
@@ -347,13 +348,13 @@ export default function JobLocationsPage() {
 
       {/* Legend - Bottom Center */}
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-lg px-6 py-3">
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-6 flex-nowrap whitespace-nowrap">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ backgroundColor: '#FF6B6B' }}></div>
+            <div className="w-6 h-6 rounded flex-shrink-0" style={{ backgroundColor: '#FF6B6B' }}></div>
             <span className="text-sm font-medium text-gray-900">Junk Removal</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded" style={{ backgroundColor: '#4ECDC4' }}></div>
+            <div className="w-6 h-6 rounded flex-shrink-0" style={{ backgroundColor: '#4ECDC4' }}></div>
             <span className="text-sm font-medium text-gray-900">Moving</span>
           </div>
         </div>
