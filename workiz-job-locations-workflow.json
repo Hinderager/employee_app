@@ -90,7 +90,7 @@
             {
               "id": "job_start_time",
               "name": "job_start_time",
-              "value": "={{ $json.JobDateTime.replace(' ', 'T') + '-07:00' }}",
+              "value": "={{ $json.JobDateTime }}",
               "type": "string"
             },
             {
@@ -159,6 +159,26 @@
     },
     {
       "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "fix_timezone",
+              "name": "job_start_time",
+              "value": "={{ $json.job_start_time.replace(' ', 'T') + '-07:00' }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "convert_timezone",
+      "name": "Convert to MST Timezone",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1350, 300]
+    },
+    {
+      "parameters": {
         "operation": "upsert",
         "tableId": "job_locations",
         "options": {
@@ -169,7 +189,7 @@
       "name": "Upsert to Supabase",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [1450, 300],
+      "position": [1550, 300],
       "credentials": {
         "supabaseApi": {
           "id": "top_shelf_supabase",
@@ -254,6 +274,17 @@
       ]
     },
     "Prepare Job Data": {
+      "main": [
+        [
+          {
+            "node": "Convert to MST Timezone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to MST Timezone": {
       "main": [
         [
           {
