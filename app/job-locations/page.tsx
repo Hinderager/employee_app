@@ -68,9 +68,9 @@ export default function JobLocationsPage() {
       zoomControl: true
     });
 
-    // Add CartoDB Voyager tile layer
+    // Add CartoDB Dark Matter tile layer
     L.tileLayer(
-      "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+      "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
       {
         attribution: "© OpenStreetMap contributors © CARTO",
         maxZoom: 19
