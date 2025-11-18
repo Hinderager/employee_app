@@ -3,49 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 
-// Vehicle data from OMW Text project
-const VEHICLES = [
-  {
-    name: "Junk Truck",
-    imei: "865612071394114",
-    color: "#FF6B6B",
-    iconUrl: "/icons/junk-truck-icon.png"
-  },
-  {
-    name: "Moving Truck",
-    imei: "865612071391698",
-    color: "#4ECDC4",
-    iconUrl: "/icons/moving-truck-icon.png"
-  },
-  {
-    name: "F-150 Pickup",
-    imei: "865612071397489",
-    color: "#45B7D1",
-    iconUrl: "/icons/f150-icon.png"
-  },
-  {
-    name: "Prius",
-    imei: "865612071479667",
-    color: "#96CEB4",
-    iconUrl: "/icons/prius-icon.png"
-  }
-];
-
-interface VehicleLocation {
-  name: string;
-  imei: string;
-  latitude: number;
-  longitude: number;
-  speed: number;
-  heading: number;
-  timestamp: string;
-  address: string;
-  isRunning: boolean;
-  fuelLevel: number;
-  color: string;
-  iconUrl: string;
-}
-
 interface JobLocation {
   id: string;
   job_number: string;
@@ -62,10 +19,8 @@ interface JobLocation {
 
 export default function JobLocationsPage() {
   const mapRef = useRef<any>(null);
-  const vehicleMarkersRef = useRef<any[]>([]);
   const jobMarkersRef = useRef<any[]>([]);
   const isFirstLoadRef = useRef<boolean>(true);
-  const [vehicles, setVehicles] = useState<VehicleLocation[]>([]);
   const [jobs, setJobs] = useState<JobLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -137,25 +92,20 @@ export default function JobLocationsPage() {
     return () => clearInterval(interval);
   }, [mapReady]);
 
-  // Fetch both vehicle and job locations
+  // Fetch job locations only
   const fetchLocations = async () => {
     try {
-      // Fetch vehicles
-      const vehiclesResponse = await fetch("/api/vehicles/all");
-      const vehiclesData = await vehiclesResponse.json();
-
       // Fetch jobs
       const jobsResponse = await fetch("/api/job-locations");
       const jobsData = await jobsResponse.json();
 
-      setVehicles(vehiclesData.vehicles || []);
       setJobs(jobsData.jobs || []);
       setLastUpdate(new Date());
       setLoading(false);
       setError(null);
 
       // Update map markers
-      updateMapMarkers(vehiclesData.vehicles || [], jobsData.jobs || []);
+      updateMapMarkers(jobsData.jobs || []);
     } catch (err) {
       console.error("Error fetching locations:", err);
       setError(err instanceof Error ? err.message : "Unknown error");
@@ -164,67 +114,15 @@ export default function JobLocationsPage() {
   };
 
   // Update markers on map
-  const updateMapMarkers = (vehicleData: VehicleLocation[], jobData: JobLocation[]) => {
+  const updateMapMarkers = (jobData: JobLocation[]) => {
     if (!mapRef.current) return;
 
     const L = (window as any).L;
     if (!L) return;
 
     // Clear existing markers
-    vehicleMarkersRef.current.forEach(marker => marker.remove());
     jobMarkersRef.current.forEach(marker => marker.remove());
-    vehicleMarkersRef.current = [];
     jobMarkersRef.current = [];
-
-    // Add vehicle markers
-    vehicleData.forEach(vehicle => {
-      if (vehicle.latitude && vehicle.longitude &&
-          vehicle.latitude !== 0 && vehicle.longitude !== 0) {
-        const customIcon = L.icon({
-          iconUrl: vehicle.iconUrl,
-          iconSize: [75, 75],
-          iconAnchor: [75/2, 75],
-          popupAnchor: [0, -75]
-        });
-
-        const marker = L.marker([vehicle.latitude, vehicle.longitude], {
-          icon: customIcon
-        }).addTo(mapRef.current);
-
-        const fuelIcon = vehicle.fuelLevel > 50 ? '⛽' : vehicle.fuelLevel > 25 ? '🟡' : '🔴';
-        const popupContent = `
-          <div style="min-width: 200px;">
-            <h3 style="margin: 0 0 8px 0; font-weight: bold; color: ${vehicle.color};">
-              ${vehicle.name}
-            </h3>
-            <p style="margin: 4px 0; font-size: 14px;">
-              <strong>Speed:</strong> ${vehicle.speed} mph
-            </p>
-            <p style="margin: 4px 0; font-size: 14px;">
-              <strong>Status:</strong> ${vehicle.isRunning ? '🟢 Running' : '🔴 Stopped'}
-            </p>
-            <p style="margin: 4px 0; font-size: 14px;">
-              <strong>Fuel:</strong> ${fuelIcon} ${vehicle.fuelLevel}%
-            </p>
-            <p style="margin: 4px 0; font-size: 12px; color: #666;">
-              ${vehicle.address || 'Address unavailable'}
-            </p>
-            <p style="margin: 4px 0; font-size: 11px; color: #999;">
-              Updated: ${new Date(vehicle.timestamp).toLocaleTimeString()}
-            </p>
-          </div>
-        `;
-
-        marker.bindPopup(popupContent, {
-          closeOnClick: true,
-          closeButton: true,
-          autoPan: true,
-          maxWidth: 300
-        });
-
-        vehicleMarkersRef.current.push(marker);
-      }
-    });
 
     // Sort jobs by start time to determine order
     const sortedJobs = [...jobData].sort((a, b) =>
@@ -292,6 +190,13 @@ export default function JobLocationsPage() {
           icon: jobIcon
         }).addTo(mapRef.current);
 
+        // Truncate description if too long (approx 3 lines = ~150 chars)
+        const descriptionLimit = 150;
+        const description = job.job_description || '';
+        const needsTruncation = description.length > descriptionLimit;
+        const truncatedDesc = needsTruncation ? description.substring(0, descriptionLimit) + '...' : description;
+        const popupId = `popup-${job.id}`;
+
         const popupContent = `
           <div style="min-width: 220px;">
             <h3 style="margin: 0 0 8px 0; font-weight: bold; color: ${jobColor};">
@@ -311,18 +216,50 @@ export default function JobLocationsPage() {
                 <strong>Phone:</strong> <a href="tel:${job.customer_phone}" style="color: #4ECDC4;">${job.customer_phone}</a>
               </p>
             ` : ''}
-            ${job.job_description ? `
-              <p style="margin: 4px 0; font-size: 13px; color: #666;">
-                ${job.job_description}
-              </p>
+            ${description ? `
+              <div style="margin: 4px 0;">
+                <p id="${popupId}-short" style="margin: 0; font-size: 13px; color: #666; ${needsTruncation ? '' : 'display: none;'}">
+                  ${truncatedDesc}
+                </p>
+                <p id="${popupId}-full" style="margin: 0; font-size: 13px; color: #666; display: ${needsTruncation ? 'none' : 'block'};">
+                  ${description}
+                </p>
+                ${needsTruncation ? `
+                  <button
+                    id="${popupId}-btn"
+                    onclick="
+                      const short = document.getElementById('${popupId}-short');
+                      const full = document.getElementById('${popupId}-full');
+                      const btn = document.getElementById('${popupId}-btn');
+                      if (full.style.display === 'none') {
+                        short.style.display = 'none';
+                        full.style.display = 'block';
+                        btn.textContent = 'Show less';
+                      } else {
+                        short.style.display = 'block';
+                        full.style.display = 'none';
+                        btn.textContent = 'Show more';
+                      }
+                    "
+                    style="
+                      margin-top: 4px;
+                      padding: 2px 8px;
+                      font-size: 11px;
+                      color: #4ECDC4;
+                      background: none;
+                      border: 1px solid #4ECDC4;
+                      border-radius: 4px;
+                      cursor: pointer;
+                      transition: all 0.2s;
+                    "
+                    onmouseover="this.style.background='#4ECDC4'; this.style.color='white';"
+                    onmouseout="this.style.background='none'; this.style.color='#4ECDC4';"
+                  >
+                    Show more
+                  </button>
+                ` : ''}
+              </div>
             ` : ''}
-            <p style="margin: 4px 0; font-size: 12px;">
-              <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(job.address)}"
-                 target="_blank"
-                 style="color: #4ECDC4; text-decoration: underline;">
-                📍 ${job.address}
-              </a>
-            </p>
           </div>
         `;
 
@@ -337,11 +274,10 @@ export default function JobLocationsPage() {
       }
     });
 
-    // Auto-fit map to show all markers on first load
-    const allMarkers = [...vehicleMarkersRef.current, ...jobMarkersRef.current];
-    if (allMarkers.length > 0 && isFirstLoadRef.current) {
+    // Auto-fit map to show all job markers on first load
+    if (jobMarkersRef.current.length > 0 && isFirstLoadRef.current) {
       try {
-        const group = L.featureGroup(allMarkers);
+        const group = L.featureGroup(jobMarkersRef.current);
         const bounds = group.getBounds();
         if (bounds.isValid()) {
           mapRef.current.fitBounds(bounds, { padding: [50, 50] });
