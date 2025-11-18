@@ -20,8 +20,9 @@ export async function GET() {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get today's date in YYYY-MM-DD format
-    const today = new Date().toISOString().split('T')[0];
+    // Get today's date in MST timezone (YYYY-MM-DD format)
+    const mstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Denver' }));
+    const today = mstDate.toISOString().split('T')[0];
 
     // Fetch today's scheduled jobs from job_locations table
     const { data: jobs, error } = await supabase
