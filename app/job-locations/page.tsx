@@ -69,11 +69,11 @@ export default function JobLocationsPage() {
       zoomControl: true
     });
 
-    // Add OpenStreetMap tile layer (daytime colors)
+    // Add CartoDB Positron tile layer (light theme)
     L.tileLayer(
-      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
       {
-        attribution: "© OpenStreetMap contributors",
+        attribution: "© OpenStreetMap contributors © CARTO",
         maxZoom: 19
       }
     ).addTo(map);
