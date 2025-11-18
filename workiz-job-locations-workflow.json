@@ -78,7 +78,7 @@
             {
               "id": "job_number",
               "name": "job_number",
-              "value": "={{ $json.SerialID || $json.JobNumber || $json.UUID }}",
+              "value": "={{ $json.SerialId }}",
               "type": "string"
             },
             {
@@ -90,7 +90,7 @@
             {
               "id": "job_start_time",
               "name": "job_start_time",
-              "value": "={{ $json.JobDateTime || $json.StartDate || $now.toFormat('yyyy-MM-dd HH:mm:ss') }}",
+              "value": "={{ DateTime.fromISO($json.JobDateTime).setZone('America/Denver').toFormat('yyyy-MM-dd HH:mm:ss') }}",
               "type": "string"
             },
             {
