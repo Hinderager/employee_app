@@ -78,7 +78,7 @@
             {
               "id": "job_number",
               "name": "job_number",
-              "value": "={{ $json.ClientId || $json.JobNumber || $json.id }}",
+              "value": "={{ $json.JobNumber || $json.UUID || $json.id }}",
               "type": "string"
             },
             {
