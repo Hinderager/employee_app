@@ -90,7 +90,7 @@
             {
               "id": "job_start_time",
               "name": "job_start_time",
-              "value": "={{ $json.JobDateTime ? DateTime.fromISO($json.JobDateTime).setZone('America/Denver').toFormat('yyyy-MM-dd HH:mm:ss') : '' }}",
+              "value": "={{ $json.JobDateTime }}",
               "type": "string"
             },
             {

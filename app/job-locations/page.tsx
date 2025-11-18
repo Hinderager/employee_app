@@ -151,36 +151,25 @@ export default function JobLocationsPage() {
         const isJunkJob = job.job_type.toLowerCase().includes("junk");
         const jobColor = isJunkJob ? "#FF6B6B" : "#4ECDC4"; // Red for junk, blue for moving
         // Parse the time from Workiz
-        // Workiz sends times in format "YYYY-MM-DD HH:MM:SS" already in local time (MST/MDT)
-        // We just need to extract and format the time portion without timezone conversion
+        // JobDateTime comes from Workiz API as ISO 8601 UTC: "2016-08-29T09:12:33.001Z"
+        // Convert to MST and display in 12-hour format
         let startTime = '';
         try {
           const dateStr = job.job_start_time;
 
-          // Try to match "YYYY-MM-DD HH:MM:SS" format
-          const parts = dateStr.match(/(\d{4}-\d{2}-\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
-          if (parts) {
-            // Extract hour and minute
-            let hour = parseInt(parts[2], 10);
-            const minute = parts[3];
+          // Parse as Date object (handles ISO 8601 format)
+          const jobDate = new Date(dateStr);
 
-            // Convert to 12-hour format
-            const period = hour >= 12 ? 'PM' : 'AM';
-            if (hour === 0) hour = 12;
-            else if (hour > 12) hour -= 12;
-
-            startTime = `${hour}:${minute} ${period}`;
-          } else {
-            // Fallback: try parsing as Date and format
-            const jobDate = new Date(dateStr);
-            startTime = jobDate.toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true
-            });
-          }
+          // Convert to MST and format as 12-hour time
+          startTime = jobDate.toLocaleTimeString('en-US', {
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+            timeZone: 'America/Denver'
+          });
         } catch (e) {
           // Fallback to original string if parsing fails
+          console.error('Error parsing job start time:', e);
           startTime = job.job_start_time;
         }
 
