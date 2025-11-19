@@ -74,7 +74,7 @@ export default function MoveWalkthrough() {
   });
   const [distanceData, setDistanceData] = useState<{
     toPickup: { miles: number; minutes: number; charge: number };
-    pickupToDelivery: { miles: number; minutes: number };
+    pickupToDelivery: { miles: number; minutes: number; charge: number };
     fromDelivery: { miles: number; minutes: number; charge: number };
     totalCharge: number;
   } | null>(null);
@@ -1268,6 +1268,7 @@ export default function MoveWalkthrough() {
       description: string;
       amount: number;
       subItems?: Array<{ description: string; amount: number }>;
+      discount?: string;
     }> = [];
     let baseRate = 0;
 
