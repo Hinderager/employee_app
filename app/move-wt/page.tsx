@@ -547,6 +547,95 @@ export default function MoveWalkthrough() {
         throw new Error(result.error || 'Failed to load job');
       }
 
+      // Check if phone search returned multiple forms
+      if (result.forms && result.forms.length > 0) {
+        // Show selection dialog for multiple forms
+        let message = `Found ${result.forms.length} saved form(s) for this contact:\n\n`;
+        result.forms.forEach((form: any, index: number) => {
+          const date = form.updatedAt ? new Date(form.updatedAt).toLocaleDateString() : 'No date';
+          message += `${index + 1}. ${date} - ${form.address}\n`;
+        });
+        message += `\nEnter number to load that form, or type "new" to start a new form with just contact info:`;
+
+        const selection = prompt(message);
+
+        if (!selection) {
+          // User cancelled
+          setIsLoadingJob(false);
+          return;
+        }
+
+        if (selection.toLowerCase() === 'new') {
+          // Load just customer info, no form data
+          if (result.customerInfo) {
+            setFormData(prev => ({
+              ...prev,
+              firstName: result.customerInfo.firstName || prev.firstName,
+              lastName: result.customerInfo.lastName || prev.lastName,
+              phone: result.customerInfo.phone || prev.phone,
+              email: result.customerInfo.email || prev.email,
+              pickupAddress: result.customerInfo.pickupAddress || prev.pickupAddress,
+              pickupUnit: result.customerInfo.pickupUnit || prev.pickupUnit,
+              pickupCity: result.customerInfo.pickupCity || prev.pickupCity,
+              pickupState: result.customerInfo.pickupState || prev.pickupState,
+              pickupZip: result.customerInfo.pickupZip || prev.pickupZip,
+            }));
+          }
+          setIsLoadingJob(false);
+          return;
+        }
+
+        const selectedIndex = parseInt(selection) - 1;
+        if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= result.forms.length) {
+          alert('Invalid selection');
+          setIsLoadingJob(false);
+          return;
+        }
+
+        const selectedForm = result.forms[selectedIndex];
+
+        // Load the selected form
+        setAddress(selectedForm.address);
+        setJobNumber(selectedForm.jobNumber);
+
+        // Load customer info if available
+        if (result.customerInfo) {
+          setFormData(prev => ({
+            ...prev,
+            firstName: result.customerInfo.firstName || prev.firstName,
+            lastName: result.customerInfo.lastName || prev.lastName,
+            phone: result.customerInfo.phone || prev.phone,
+            email: result.customerInfo.email || prev.email,
+            pickupAddress: result.customerInfo.pickupAddress || prev.pickupAddress,
+            pickupUnit: result.customerInfo.pickupUnit || prev.pickupUnit,
+            pickupCity: result.customerInfo.pickupCity || prev.pickupCity,
+            pickupState: result.customerInfo.pickupState || prev.pickupState,
+            pickupZip: result.customerInfo.pickupZip || prev.pickupZip,
+          }));
+        }
+
+        // Load form data
+        if (selectedForm.formData) {
+          const { phones: savedPhones, emails: savedEmails, ...restFormData } = selectedForm.formData;
+
+          setFormData(prev => ({
+            ...prev,
+            ...restFormData,
+          }));
+
+          if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
+            setPhones(savedPhones);
+          }
+          if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
+            setEmails(savedEmails);
+          }
+        }
+
+        setIsLoadingJob(false);
+        return;
+      }
+
+      // Regular job number load (original logic)
       setAddress(result.address);
       setFolderUrl(result.folderUrl || '');
       setIsFolderLinkCopied(false);

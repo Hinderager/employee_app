@@ -270,7 +270,7 @@ export async function POST(request: NextRequest) {
     });
     }
 
-    // Priority 2: If only phone number is provided, search Supabase
+    // Priority 2: If only phone number is provided, search both Workiz and Supabase
     if (phoneNumber && phoneNumber.trim()) {
       console.log(`[move-wt/load-job] Searching by phone number: ${phoneNumber}`);
 
@@ -278,7 +278,43 @@ export async function POST(request: NextRequest) {
       const normalizedPhone = normalizePhoneNumber(phoneNumber);
       console.log(`[move-wt/load-job] Normalized phone: ${normalizedPhone}`);
 
-      // Query Supabase for form data matching this phone number
+      // Search Workiz for customer info
+      const workizResponse = await fetch(WORKIZ_API_URL, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      let customerInfo = null;
+      if (workizResponse.ok) {
+        const workizData = await workizResponse.json();
+        const jobs = workizData.data || [];
+
+        // Find job with matching phone number
+        const job = jobs.find((j: any) => {
+          const jobPhone = normalizePhoneNumber(j.Phone || '');
+          return jobPhone === normalizedPhone;
+        });
+
+        if (job) {
+          console.log(`[move-wt/load-job] Found customer in Workiz:`, job.FirstName, job.LastName);
+          const zipCode = job.Zip || job.ZipCode || job.PostalCode || job.Zipcode || '';
+          customerInfo = {
+            firstName: job.FirstName || '',
+            lastName: job.LastName || '',
+            phone: job.Phone || '',
+            email: job.Email || '',
+            pickupAddress: job.Address || '',
+            pickupUnit: '',
+            pickupCity: job.City || '',
+            pickupState: job.State || '',
+            pickupZip: zipCode,
+          };
+        }
+      }
+
+      // Query Supabase for ALL form data matching this phone number
       const { data: formRecords, error: queryError } = await supabase
         .from('move_walkthrough_forms')
         .select('*')
@@ -293,25 +329,22 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      if (!formRecords || formRecords.length === 0) {
-        console.log(`[move-wt/load-job] No records found for phone: ${normalizedPhone}`);
-        return NextResponse.json(
-          { error: 'No walk-through forms found for this phone number' },
-          { status: 404 }
-        );
-      }
+      console.log(`[move-wt/load-job] Found ${formRecords?.length || 0} saved form(s)`);
 
-      // Return the most recent record
-      const mostRecentRecord = formRecords[0];
-      console.log(`[move-wt/load-job] Found ${formRecords.length} record(s), returning most recent`);
+      // Format forms for selection
+      const forms = (formRecords || []).map((record: any) => ({
+        jobNumber: record.job_number || '',
+        address: record.address || 'No address',
+        updatedAt: record.updated_at || '',
+        formData: record.form_data || null,
+      }));
 
+      // Return customer info and all forms
       return NextResponse.json({
         success: true,
-        job_number: mostRecentRecord.job_number || '',
-        address: mostRecentRecord.address || '',
-        customerInfo: null, // We don't have Workiz data for phone-only searches
-        folderUrl: null,
-        existingFormData: mostRecentRecord.form_data || null,
+        customerInfo: customerInfo,
+        forms: forms,
+        multiple: forms.length > 1,
       });
     }
 
