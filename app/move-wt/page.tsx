@@ -1,26 +1,97 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import Script from "next/script";
 
 export default function MoveWalkthrough() {
   const router = useRouter();
   const [jobNumber, setJobNumber] = useState("");
+  const [searchPhone, setSearchPhone] = useState("");
   const [address, setAddress] = useState("");
   const [folderUrl, setFolderUrl] = useState("");
   const [isLoadingJob, setIsLoadingJob] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
+
+  // Dynamic phone and email arrays
+  const [phones, setPhones] = useState<Array<{ number: string; name: string }>>([{ number: "", name: "" }]);
+  const [emails, setEmails] = useState<Array<{ email: string; name: string }>>([{ email: "", name: "" }]);
+
+  // Track if folder link was copied
+  const [isFolderLinkCopied, setIsFolderLinkCopied] = useState(false);
+
+  // Track if form is saved
+  const [isFormSaved, setIsFormSaved] = useState(true);
+
+  // Custom styles for invisible slider
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.textContent = `
+      input[type="range"][name="houseQuality"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 0;
+        height: 0;
+        opacity: 0;
+      }
+      input[type="range"][name="houseQuality"]::-moz-range-thumb {
+        width: 0;
+        height: 0;
+        opacity: 0;
+        border: none;
+        background: transparent;
+      }
+      input[type="range"][name="houseQuality"]::-webkit-slider-runnable-track {
+        background: transparent;
+        height: 0;
+      }
+      input[type="range"][name="houseQuality"]::-moz-range-track {
+        background: transparent;
+        height: 0;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => document.head.removeChild(style);
+  }, []);
+
+  // Refs for autocomplete inputs
+  const pickupAddressRef = useRef<HTMLInputElement>(null);
+  const deliveryAddressRef = useRef<HTMLInputElement>(null);
+  const additionalStopAddressRef = useRef<HTMLInputElement>(null);
+  const [quote, setQuote] = useState({
+    baseRate: 0,
+    items: [] as Array<{
+      description: string;
+      amount: number;
+      discount?: string;
+      subItems?: Array<{ description: string; amount: number }>;
+    }>,
+    total: 0
+  });
+  const [distanceData, setDistanceData] = useState<{
+    toPickup: { miles: number; minutes: number; charge: number };
+    pickupToDelivery: { miles: number; minutes: number };
+    fromDelivery: { miles: number; minutes: number; charge: number };
+    totalCharge: number;
+  } | null>(null);
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
 
   const [formData, setFormData] = useState({
     // Service Type
     serviceType: "truck",
+    travelBilling: "local",
+    travelCost: "",
 
     // Customer Information
     firstName: "",
     lastName: "",
+    company: "",
     phone: "",
+    phoneName: "",
     email: "",
+    emailName: "",
 
     // Addresses - Pickup
     pickupAddress: "",
@@ -31,7 +102,11 @@ export default function MoveWalkthrough() {
     pickupLocationType: "house",
     pickupLocationOther: "",
     pickupHouseSquareFeet: "",
+    pickupZestimate: "",
+    pickupHowFurnished: 80,
+    pickupApartmentSquareFeet: "",
     pickupApartmentBedBath: "",
+    pickupApartmentHowFurnished: 80,
     pickupStorageUnitQuantity: 1,
     pickupStorageUnitSizes: [""],
     pickupStorageUnitHowFull: [""],
@@ -45,12 +120,16 @@ export default function MoveWalkthrough() {
     deliveryLocationType: "house",
     deliveryLocationOther: "",
     deliveryHouseSquareFeet: "",
+    deliveryZestimate: "",
+    deliveryApartmentSquareFeet: "",
     deliveryApartmentBedBath: "",
+    deliveryApartmentHowFurnished: 80,
     deliveryStorageUnitQuantity: 1,
     deliveryStorageUnitSizes: [""],
     deliveryPODQuantity: 1,
     deliveryPODSize: "",
     deliveryTruckLength: "",
+    deliveryAddressUnknown: false,
 
     // Addresses - Additional Stop
     hasAdditionalStop: false,
@@ -62,6 +141,8 @@ export default function MoveWalkthrough() {
     additionalStopLocationType: "house",
     additionalStopLocationOther: "",
     additionalStopHouseSquareFeet: "",
+    additionalStopZestimate: "",
+    additionalStopHowFurnished: 80,
     additionalStopApartmentBedBath: "",
     additionalStopStorageUnitQuantity: 1,
     additionalStopStorageUnitSizes: [""],
@@ -126,6 +207,9 @@ export default function MoveWalkthrough() {
     sauna: false,
     saunaQty: 1,
     saunaDetails: "",
+    playsets: false,
+    playsetsQty: 1,
+    playsetsDetails: "",
     specialDisassemblyOther: false,
     specialDisassemblyOtherDetails: "",
 
@@ -150,8 +234,10 @@ export default function MoveWalkthrough() {
 
     // Timing
     preferredDate: "",
+    moveDateUnknown: false,
     timeFlexible: false,
     readyToSchedule: false,
+    timingNotes: "",
 
     // Estimates
     estimatedCrewSize: "",
@@ -159,33 +245,298 @@ export default function MoveWalkthrough() {
 
     // Special Notes
     specialRequests: "",
+
+    // House Quality Rating
+    houseQuality: 3, // 1-5 scale, default to middle
+
+    // Tools Needed
+    hd4Wheel: false,
+    airSled: false,
+    applianceDolly: false,
+    socketWrenches: false,
+    safeDolly: false,
+    toolCustom1: "",
+    toolCustom2: "",
+    toolCustom3: "",
   });
+
+  // Format number with commas
+  const formatNumberWithCommas = (value: string): string => {
+    if (!value) return '';
+    // Remove any existing commas
+    const numericValue = value.replace(/,/g, '');
+    // Return original if not a valid number
+    if (!/^\d+$/.test(numericValue)) return value;
+    // Add commas
+    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  };
+
+  // Get text for how much is getting moved slider
+  const getHowFurnishedText = (percentage: number): string => {
+    switch (percentage) {
+      case 0: return 'Barely anything';
+      case 20: return 'A couple rooms';
+      case 40: return 'Half the house';
+      case 60: return 'Most of the house';
+      case 80: return 'Whole house';
+      case 100: return "It's Loaded!";
+      default: return `${percentage}% of the house`;
+    }
+  };
+
+  // Get text for additional stop slider (added or dropped off)
+  const getAdditionalStopText = (percentage: number): string => {
+    switch (percentage) {
+      case 0: return 'Barely anything';
+      case 20: return 'Couple rooms';
+      case 40: return 'Half the house';
+      case 60: return 'Nearly everything';
+      case 80: return 'Nearly everything';
+      case 100: return 'Nearly everything';
+      default: return `${percentage}%`;
+    }
+  };
+
+  // Format minutes into "Xhr Ymin" format
+  const formatDuration = (minutes: number): string => {
+    if (minutes < 60) {
+      return `${minutes} min`;
+    }
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    if (mins === 0) {
+      return `${hours}hr`;
+    }
+    return `${hours}hr ${mins}min`;
+  };
+
+  // Phone number normalization - strips all non-numeric characters
+  const normalizePhoneNumber = (phone: string): string => {
+    return phone.replace(/\D/g, '');
+  };
+
+  // Phone number formatting - formats to (XXX) XXX-XXXX
+  const formatPhoneNumber = (phone: string): string => {
+    const normalized = normalizePhoneNumber(phone);
+
+    // Handle different lengths
+    if (normalized.length === 0) return '';
+    if (normalized.length <= 3) return normalized;
+    if (normalized.length <= 6) return `(${normalized.slice(0, 3)}) ${normalized.slice(3)}`;
+    if (normalized.length <= 10) {
+      return `(${normalized.slice(0, 3)}) ${normalized.slice(3, 6)}-${normalized.slice(6)}`;
+    }
+    // Limit to 10 digits
+    return `(${normalized.slice(0, 3)}) ${normalized.slice(3, 6)}-${normalized.slice(6, 10)}`;
+  };
+
+  // Auto-save functionality
+  const isInitialMount = useRef(true);
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Extract save logic into a reusable function
+  const saveFormData = async (showSuccessMessage: boolean = false) => {
+    if (!jobNumber || !address) {
+      return; // Don't save if no job is loaded
+    }
+
+    try {
+      // Normalize phone numbers before saving and include arrays
+      const normalizedFormData = {
+        ...formData,
+        phone: normalizePhoneNumber(formData.phone),
+        phones: phones.map(p => ({ ...p, number: normalizePhoneNumber(p.number) })),
+        emails: emails
+      };
+
+      const response = await fetch('/api/move-wt/save-form', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobNumber: jobNumber.trim(),
+          address: address,
+          formData: normalizedFormData,
+          folderUrl: folderUrl,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to save form');
+      }
+
+      console.log("Form auto-saved:", new Date().toLocaleTimeString());
+
+      // Mark form as saved
+      setIsFormSaved(true);
+
+      if (showSuccessMessage) {
+        alert("Walk-through completed! Data saved successfully.");
+      }
+    } catch (error) {
+      console.error('Auto-save error:', error);
+      // Only show error alerts for manual saves, not auto-saves
+      if (showSuccessMessage) {
+        alert(error instanceof Error ? error.message : 'Failed to save form. Please try again.');
+      }
+    }
+  };
+
+  // Auto-save effect - triggers whenever formData changes
+  useEffect(() => {
+    // Skip auto-save on initial mount
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    // Skip if no job is loaded
+    if (!jobNumber || !address) {
+      return;
+    }
+
+    // Mark form as unsaved when changes are detected
+    setIsFormSaved(false);
+
+    // Clear existing timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    // Debounce: wait 1 second after last change before saving
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      saveFormData(false);
+    }, 1000);
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [formData, jobNumber, address, folderUrl, phones, emails]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
 
+    // List of fields that should have comma formatting
+    const numberFields = [
+      'pickupHouseSquareFeet', 'pickupZestimate',
+      'deliveryHouseSquareFeet', 'deliveryZestimate',
+      'additionalStopHouseSquareFeet', 'additionalStopZestimate'
+    ];
+
+    // For number fields, strip commas before storing
+    let processedValue = value;
+    if (numberFields.includes(name)) {
+      processedValue = value.replace(/,/g, '');
+    }
+
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'checkbox' ? checked : value
+      [name]: type === 'checkbox' ? checked : processedValue
     }));
   };
 
+  // Handle phone number input with auto-formatting
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const formatted = formatPhoneNumber(value);
+    setFormData(prev => ({
+      ...prev,
+      [name]: formatted
+    }));
+  };
+
+  // Handle search phone input with auto-formatting
+  const handleSearchPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setSearchPhone(formatted);
+  };
+
+  // Handlers for dynamic phone entries
+  const handlePhoneNumberChange = (index: number, value: string) => {
+    const formatted = formatPhoneNumber(value);
+    setPhones(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], number: formatted };
+      return updated;
+    });
+  };
+
+  const handlePhoneNameChange = (index: number, value: string) => {
+    setPhones(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], name: value };
+      return updated;
+    });
+  };
+
+  const handleAddPhone = () => {
+    setPhones(prev => [...prev, { number: "", name: "" }]);
+  };
+
+  const handleRemovePhone = (index: number) => {
+    if (phones.length > 1) {
+      setPhones(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
+  // Handlers for dynamic email entries
+  const handleEmailChange = (index: number, value: string) => {
+    setEmails(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], email: value };
+      return updated;
+    });
+  };
+
+  const handleEmailNameChange = (index: number, value: string) => {
+    setEmails(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], name: value };
+      return updated;
+    });
+  };
+
+  const handleAddEmail = () => {
+    setEmails(prev => [...prev, { email: "", name: "" }]);
+  };
+
+  const handleRemoveEmail = (index: number) => {
+    if (emails.length > 1) {
+      setEmails(prev => prev.filter((_, i) => i !== index));
+    }
+  };
+
   const handleLoadJob = async () => {
-    if (!jobNumber.trim()) {
-      alert('Please enter a job number');
+    if (!jobNumber.trim() && !searchPhone.trim()) {
+      alert('Please enter a job number or phone number');
       return;
     }
 
     setIsLoadingJob(true);
 
     try {
+      const requestBody: any = {};
+      if (jobNumber.trim()) {
+        requestBody.jobNumber = jobNumber.trim();
+      }
+      if (searchPhone.trim()) {
+        // Normalize phone number before sending (strip formatting)
+        requestBody.phoneNumber = normalizePhoneNumber(searchPhone);
+      }
+
       const response = await fetch('/api/move-wt/load-job', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ jobNumber: jobNumber.trim() }),
+        body: JSON.stringify(requestBody),
       });
 
       const result = await response.json();
@@ -196,6 +547,8 @@ export default function MoveWalkthrough() {
 
       setAddress(result.address);
       setFolderUrl(result.folderUrl || '');
+      setIsFolderLinkCopied(false);
+      setIsFormSaved(true);
 
       // Populate customer information
       if (result.customerInfo) {
@@ -215,11 +568,20 @@ export default function MoveWalkthrough() {
 
       // Populate existing form data if available
       if (result.existingFormData) {
+        const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
+
         setFormData(prev => ({
           ...prev,
-          ...result.existingFormData,
+          ...restFormData,
         }));
-        alert('Previous form data loaded for this address!');
+
+        // Restore phones and emails arrays if they exist
+        if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
+          setPhones(savedPhones);
+        }
+        if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
+          setEmails(savedEmails);
+        }
       }
     } catch (error) {
       console.error('Load job error:', error);
@@ -229,20 +591,233 @@ export default function MoveWalkthrough() {
     }
   };
 
+  const handleMakePictureFolder = async () => {
+    if (!formData.pickupAddress.trim()) {
+      alert('Please enter a street address first');
+      return;
+    }
+
+    setIsLoadingJob(true);
+
+    try {
+      // Build full address from pickup fields
+      const addressParts = [];
+      if (formData.pickupAddress) addressParts.push(formData.pickupAddress);
+      if (formData.pickupCity) addressParts.push(formData.pickupCity);
+      if (formData.pickupState) addressParts.push(formData.pickupState);
+      if (formData.pickupZip) addressParts.push(formData.pickupZip);
+
+      const fullAddress = addressParts.join(', ').trim();
+
+      if (!fullAddress) {
+        alert('Please enter a complete address');
+        return;
+      }
+
+      const response = await fetch('/api/move-wt/create-folder', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          address: fullAddress,
+          jobNumber: jobNumber.trim() || null,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create folder');
+      }
+
+      setFolderUrl(result.folderUrl || '');
+      setIsFolderLinkCopied(false);
+      setAddress(fullAddress);
+      alert(`Picture folder created successfully!\n${result.folderUrl}`);
+    } catch (error) {
+      console.error('Create folder error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to create folder. Please try again.');
+    } finally {
+      setIsLoadingJob(false);
+    }
+  };
+
+  const handleFindCustomer = async () => {
+    if (!formData.firstName.trim() || !formData.lastName.trim()) {
+      alert('Please enter first name and last name to search for a customer');
+      return;
+    }
+
+    setIsLoadingJob(true);
+
+    try {
+      const response = await fetch('/api/move-wt/find-customer', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          firstName: formData.firstName.trim(),
+          lastName: formData.lastName.trim(),
+        }),
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success && result.jobs) {
+        // If multiple jobs found, show selection popup
+        if (result.multiple && result.jobs.length > 1) {
+          // Build selection message
+          let message = `Found ${result.jobs.length} jobs for ${formData.firstName} ${formData.lastName}:\n\n`;
+          result.jobs.forEach((job: any, index: number) => {
+            message += `${index + 1}. Job #${job.jobNumber} - ${job.address}\n`;
+          });
+          message += '\nEnter the number of the job you want to load (1-' + result.jobs.length + '):';
+
+          const selection = prompt(message);
+
+          if (selection === null) {
+            // User cancelled
+            setIsLoadingJob(false);
+            return;
+          }
+
+          const selectedIndex = parseInt(selection) - 1;
+
+          if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= result.jobs.length) {
+            alert('Invalid selection. Please try again.');
+            setIsLoadingJob(false);
+            return;
+          }
+
+          // Load the selected job
+          const selectedJob = result.jobs[selectedIndex];
+          setJobNumber(selectedJob.jobNumber);
+
+          // Trigger handleLoadJob by calling it directly
+          await handleLoadJobInternal(selectedJob.jobNumber);
+        } else {
+          // Only one job found, load it automatically
+          const job = result.jobs[0];
+          setJobNumber(job.jobNumber);
+          await handleLoadJobInternal(job.jobNumber);
+        }
+      } else {
+        alert(result.error || 'No jobs found for this customer.');
+        setIsLoadingJob(false);
+      }
+    } catch (error) {
+      console.error('Find customer error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to find customer. Please try again.');
+      setIsLoadingJob(false);
+    }
+  };
+
+  // Internal function to load job by job number (extracted from handleLoadJob)
+  const handleLoadJobInternal = async (jobNumberToLoad: string) => {
+    try {
+      const response = await fetch('/api/move-wt/load-job', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          jobNumber: jobNumberToLoad,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load job');
+      }
+
+      setAddress(result.address);
+      setFolderUrl(result.folderUrl || '');
+      setIsFolderLinkCopied(false);
+      setIsFormSaved(true);
+
+      // Populate customer information
+      if (result.customerInfo) {
+        setFormData(prev => ({
+          ...prev,
+          firstName: result.customerInfo.firstName || prev.firstName,
+          lastName: result.customerInfo.lastName || prev.lastName,
+          phone: result.customerInfo.phone || '',
+          phoneName: '',
+          email: result.customerInfo.email || '',
+          emailName: '',
+          company: result.customerInfo.company || '',
+          pickupAddress: result.customerInfo.pickupAddress || '',
+          pickupUnit: result.customerInfo.pickupUnit || '',
+          pickupCity: result.customerInfo.pickupCity || '',
+          pickupState: result.customerInfo.pickupState || '',
+          pickupZip: result.customerInfo.pickupZip || '',
+        }));
+      }
+
+      // Load existing form data if it exists
+      if (result.existingFormData) {
+        const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
+
+        setFormData(prev => ({
+          ...prev,
+          ...restFormData,
+        }));
+
+        // Restore phones and emails arrays if they exist
+        if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
+          setPhones(savedPhones);
+        }
+        if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
+          setEmails(savedEmails);
+        }
+      }
+
+      alert(`Job #${jobNumberToLoad} loaded successfully!`);
+    } catch (error) {
+      console.error('Load job error:', error);
+      throw error;
+    } finally {
+      setIsLoadingJob(false);
+    }
+  };
+
+  const handleCopyFolderLink = async () => {
+    if (!folderUrl) return;
+    try {
+      await navigator.clipboard.writeText(folderUrl);
+      setIsFolderLinkCopied(true);
+    } catch (error) {
+      console.error('Failed to copy:', error);
+    }
+  };
+
   const handleClear = () => {
     setJobNumber("");
+    setSearchPhone("");
     setAddress("");
     setFolderUrl("");
+    setPhones([{ number: "", name: "" }]);
+    setEmails([{ email: "", name: "" }]);
+    setIsFolderLinkCopied(false);
+    setIsFormSaved(true);
     // Reset form to initial state
     setFormData({
       // Service Type
       serviceType: "truck",
+      travelBilling: "local",
+      travelCost: "",
 
       // Customer Information
       firstName: "",
       lastName: "",
+      company: "",
       phone: "",
+      phoneName: "",
       email: "",
+      emailName: "",
 
       // Addresses - Pickup
       pickupAddress: "",
@@ -253,7 +828,11 @@ export default function MoveWalkthrough() {
       pickupLocationType: "house",
       pickupLocationOther: "",
       pickupHouseSquareFeet: "",
+      pickupZestimate: "",
+      pickupHowFurnished: 80,
+      pickupApartmentSquareFeet: "",
       pickupApartmentBedBath: "",
+      pickupApartmentHowFurnished: 80,
       pickupStorageUnitQuantity: 1,
       pickupStorageUnitSizes: [""],
       pickupStorageUnitHowFull: [""],
@@ -267,12 +846,16 @@ export default function MoveWalkthrough() {
       deliveryLocationType: "house",
       deliveryLocationOther: "",
       deliveryHouseSquareFeet: "",
+      deliveryZestimate: "",
+      deliveryApartmentSquareFeet: "",
       deliveryApartmentBedBath: "",
+      deliveryApartmentHowFurnished: 80,
       deliveryStorageUnitQuantity: 1,
       deliveryStorageUnitSizes: [""],
       deliveryPODQuantity: 1,
       deliveryPODSize: "",
       deliveryTruckLength: "",
+      deliveryAddressUnknown: false,
 
       // Addresses - Additional Stop
       hasAdditionalStop: false,
@@ -284,6 +867,8 @@ export default function MoveWalkthrough() {
       additionalStopLocationType: "house",
       additionalStopLocationOther: "",
       additionalStopHouseSquareFeet: "",
+      additionalStopZestimate: "",
+      additionalStopHowFurnished: 80,
       additionalStopApartmentBedBath: "",
       additionalStopStorageUnitQuantity: 1,
       additionalStopStorageUnitSizes: [""],
@@ -348,6 +933,9 @@ export default function MoveWalkthrough() {
       sauna: false,
       saunaQty: 1,
       saunaDetails: "",
+      playsets: false,
+      playsetsQty: 1,
+      playsetsDetails: "",
       specialDisassemblyOther: false,
       specialDisassemblyOtherDetails: "",
 
@@ -372,8 +960,10 @@ export default function MoveWalkthrough() {
 
       // Timing
       preferredDate: "",
+      moveDateUnknown: false,
       timeFlexible: false,
       readyToSchedule: false,
+      timingNotes: "",
 
       // Estimates
       estimatedCrewSize: "",
@@ -381,7 +971,765 @@ export default function MoveWalkthrough() {
 
       // Special Notes
       specialRequests: "",
+
+      // House Quality Rating
+      houseQuality: 3, // 1-5 scale, default to middle
+
+      // Tools Needed
+      hd4Wheel: false,
+      airSled: false,
+      applianceDolly: false,
+      socketWrenches: false,
+      safeDolly: false,
+      toolCustom1: "",
+      toolCustom2: "",
+      toolCustom3: "",
     });
+  };
+
+  // Initialize Google Places Autocomplete
+  const initializeAutocomplete = () => {
+    if (!isGoogleLoaded || typeof google === 'undefined') return;
+
+    const options = {
+      componentRestrictions: { country: 'us' },
+      fields: ['address_components', 'formatted_address'],
+      types: ['address']
+    };
+
+    // Helper function to parse address components
+    const parseAddressComponents = (place: google.maps.places.PlaceResult, fieldPrefix: 'pickup' | 'delivery' | 'additionalStop') => {
+      if (!place.address_components) return;
+
+      const addressData: any = {};
+
+      place.address_components.forEach((component) => {
+        const types = component.types;
+
+        if (types.includes('street_number')) {
+          addressData.streetNumber = component.long_name;
+        }
+        if (types.includes('route')) {
+          addressData.route = component.long_name;
+        }
+        if (types.includes('locality')) {
+          addressData.city = component.long_name;
+        }
+        if (types.includes('administrative_area_level_1')) {
+          addressData.state = component.short_name;
+        }
+        if (types.includes('postal_code')) {
+          addressData.zip = component.long_name;
+        }
+      });
+
+      // Build street address
+      const streetAddress = [addressData.streetNumber, addressData.route].filter(Boolean).join(' ');
+
+      // Update form data
+      setFormData(prev => ({
+        ...prev,
+        [`${fieldPrefix}Address`]: streetAddress || '',
+        [`${fieldPrefix}City`]: addressData.city || '',
+        [`${fieldPrefix}State`]: addressData.state || '',
+        [`${fieldPrefix}Zip`]: addressData.zip || ''
+      }));
+    };
+
+    // Start Address Autocomplete
+    if (pickupAddressRef.current) {
+      const pickupAutocomplete = new google.maps.places.Autocomplete(pickupAddressRef.current, options);
+      pickupAutocomplete.addListener('place_changed', () => {
+        const place = pickupAutocomplete.getPlace();
+        parseAddressComponents(place, 'pickup');
+      });
+    }
+
+    // Delivery Address Autocomplete
+    if (deliveryAddressRef.current) {
+      const deliveryAutocomplete = new google.maps.places.Autocomplete(deliveryAddressRef.current, options);
+      deliveryAutocomplete.addListener('place_changed', () => {
+        const place = deliveryAutocomplete.getPlace();
+        parseAddressComponents(place, 'delivery');
+      });
+    }
+
+    // Additional Stop Address Autocomplete
+    if (additionalStopAddressRef.current) {
+      const additionalStopAutocomplete = new google.maps.places.Autocomplete(additionalStopAddressRef.current, options);
+      additionalStopAutocomplete.addListener('place_changed', () => {
+        const place = additionalStopAutocomplete.getPlace();
+        parseAddressComponents(place, 'additionalStop');
+      });
+    }
+  };
+
+  // Initialize autocomplete when Google is loaded or when additional stop is toggled
+  useEffect(() => {
+    if (isGoogleLoaded) {
+      initializeAutocomplete();
+    }
+  }, [isGoogleLoaded, formData.hasAdditionalStop]);
+
+  // Calculate Distance
+  const calculateDistance = async () => {
+    // Determine price per mile based on service type
+    const pricePerMile = formData.serviceType === 'labor-only' ? 1 : 2;
+
+    // Build full addresses
+    const pickupFullAddress = [
+      formData.pickupAddress,
+      formData.pickupUnit,
+      formData.pickupCity,
+      formData.pickupState,
+      formData.pickupZip
+    ].filter(Boolean).join(', ');
+
+    const deliveryFullAddress = [
+      formData.deliveryAddress,
+      formData.deliveryUnit,
+      formData.deliveryCity,
+      formData.deliveryState,
+      formData.deliveryZip
+    ].filter(Boolean).join(', ');
+
+    // Build additional stop address if present
+    const additionalStopFullAddress = formData.hasAdditionalStop ? [
+      formData.additionalStopAddress,
+      formData.additionalStopUnit,
+      formData.additionalStopCity,
+      formData.additionalStopState,
+      formData.additionalStopZip
+    ].filter(Boolean).join(', ') : null;
+
+    // Only calculate if we have both complete addresses
+    if (!formData.pickupCity || !formData.pickupState || !formData.deliveryCity || !formData.deliveryState) {
+      setDistanceData(null);
+      return;
+    }
+
+    // If additional stop is enabled, check if it has city and state
+    if (formData.hasAdditionalStop && (!formData.additionalStopCity || !formData.additionalStopState)) {
+      setDistanceData(null);
+      return;
+    }
+
+    setIsCalculatingDistance(true);
+
+    try {
+      const requestBody: any = {
+        pickupAddress: pickupFullAddress,
+        deliveryAddress: deliveryFullAddress
+      };
+
+      if (additionalStopFullAddress) {
+        requestBody.additionalStopAddress = additionalStopFullAddress;
+      }
+
+      const response = await fetch('/api/move-wt/calculate-distance', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        console.error('Distance calculation error:', result.error);
+        setDistanceData(null);
+        return;
+      }
+
+      console.log('[Move WT] Distance calculation result:', result);
+
+      // Parse crew size (handle ranges like "4-6")
+      let crewSize = 2; // default
+      if (formData.estimatedCrewSize) {
+        const crewStr = formData.estimatedCrewSize.toString().trim();
+        if (crewStr.includes('-')) {
+          // Range like "4-6", use smaller number
+          crewSize = parseInt(crewStr.split('-')[0]);
+        } else {
+          crewSize = parseInt(crewStr) || 2;
+        }
+      }
+
+      // Calculate travel charge for each leg (first 30 miles free)
+      const FREE_MILES = 30;
+
+      // Deduct free miles sequentially: Travel to Start -> Move Travel -> Return Travel
+      let toPickupBillableMiles = result.toPickup.miles;
+      let pickupToDeliveryBillableMiles = result.pickupToDelivery.miles;
+      let fromDeliveryBillableMiles = result.fromDelivery.miles;
+      let remainingFreeMiles = FREE_MILES;
+
+      // 1. Deduct from Travel to Start first
+      if (toPickupBillableMiles >= remainingFreeMiles) {
+        toPickupBillableMiles -= remainingFreeMiles;
+        remainingFreeMiles = 0;
+      } else {
+        remainingFreeMiles -= toPickupBillableMiles;
+        toPickupBillableMiles = 0;
+      }
+
+      // 2. Deduct from Move Travel if there are remaining free miles
+      if (remainingFreeMiles > 0) {
+        if (pickupToDeliveryBillableMiles >= remainingFreeMiles) {
+          pickupToDeliveryBillableMiles -= remainingFreeMiles;
+          remainingFreeMiles = 0;
+        } else {
+          remainingFreeMiles -= pickupToDeliveryBillableMiles;
+          pickupToDeliveryBillableMiles = 0;
+        }
+      }
+
+      // 3. Deduct from Return Travel if there are still remaining free miles
+      if (remainingFreeMiles > 0) {
+        if (fromDeliveryBillableMiles >= remainingFreeMiles) {
+          fromDeliveryBillableMiles -= remainingFreeMiles;
+          remainingFreeMiles = 0;
+        } else {
+          remainingFreeMiles -= fromDeliveryBillableMiles;
+          fromDeliveryBillableMiles = 0;
+        }
+      }
+
+      // To Pickup charges (billable miles + time)
+      const toPickupDistanceCharge = toPickupBillableMiles * pricePerMile;
+      const toPickupTimeCharge = (result.toPickup.minutes / 60) * 85 * crewSize;
+      const toPickupTotalCharge = toPickupDistanceCharge + toPickupTimeCharge;
+
+      // Pickup to Delivery (Move Travel) charges (billable miles + time)
+      const pickupToDeliveryDistanceCharge = pickupToDeliveryBillableMiles * pricePerMile;
+      const pickupToDeliveryTimeCharge = (result.pickupToDelivery.minutes / 60) * 85 * crewSize;
+      const pickupToDeliveryTotalCharge = pickupToDeliveryDistanceCharge + pickupToDeliveryTimeCharge;
+
+      // From Delivery charges (billable miles + time)
+      const fromDeliveryDistanceCharge = fromDeliveryBillableMiles * pricePerMile;
+      const fromDeliveryTimeCharge = (result.fromDelivery.minutes / 60) * 85 * crewSize;
+      const fromDeliveryTotalCharge = fromDeliveryDistanceCharge + fromDeliveryTimeCharge;
+
+      const totalCharge = toPickupTotalCharge + pickupToDeliveryTotalCharge + fromDeliveryTotalCharge;
+
+      setDistanceData({
+        toPickup: {
+          miles: result.toPickup.miles,
+          minutes: result.toPickup.minutes,
+          charge: parseFloat(toPickupTotalCharge.toFixed(2))
+        },
+        pickupToDelivery: {
+          miles: result.pickupToDelivery.miles,
+          minutes: result.pickupToDelivery.minutes,
+          charge: parseFloat(pickupToDeliveryTotalCharge.toFixed(2))
+        },
+        fromDelivery: {
+          miles: result.fromDelivery.miles,
+          minutes: result.fromDelivery.minutes,
+          charge: parseFloat(fromDeliveryTotalCharge.toFixed(2))
+        },
+        totalCharge: parseFloat(totalCharge.toFixed(2))
+      });
+
+    } catch (error) {
+      console.error('Distance calculation error:', error);
+      setDistanceData(null);
+    } finally {
+      setIsCalculatingDistance(false);
+    }
+  };
+
+  // Trigger distance calculation when addresses change
+  useEffect(() => {
+    calculateDistance();
+  }, [
+    formData.pickupAddress,
+    formData.pickupCity,
+    formData.pickupState,
+    formData.pickupZip,
+    formData.deliveryAddress,
+    formData.deliveryCity,
+    formData.deliveryState,
+    formData.deliveryZip,
+    formData.hasAdditionalStop,
+    formData.additionalStopAddress,
+    formData.additionalStopCity,
+    formData.additionalStopState,
+    formData.additionalStopZip,
+    formData.estimatedCrewSize
+  ]);
+
+  // Quote Calculation
+  const calculateQuote = () => {
+    const items: Array<{
+      description: string;
+      amount: number;
+      subItems?: Array<{ description: string; amount: number }>;
+    }> = [];
+    let baseRate = 0;
+
+    // Moving Labor - calculate based on square footage and how much is getting moved
+    // Get pickup location square footage
+    let pickupSquareFeet = 0;
+    if (formData.pickupLocationType === 'house' && formData.pickupHouseSquareFeet) {
+      pickupSquareFeet = parseInt(formData.pickupHouseSquareFeet.replace(/,/g, ''));
+    } else if (formData.pickupLocationType === 'apartment' && formData.pickupApartmentSquareFeet) {
+      pickupSquareFeet = parseInt(formData.pickupApartmentSquareFeet.replace(/,/g, ''));
+    }
+
+    if (pickupSquareFeet > 0) {
+      // Get "how much is getting moved" slider value
+      let sliderValue = 0;
+      if (formData.pickupLocationType === 'house') {
+        sliderValue = formData.pickupHowFurnished || 80;
+      } else if (formData.pickupLocationType === 'apartment') {
+        sliderValue = formData.pickupApartmentHowFurnished || 80;
+      }
+
+      // Convert slider value to calculation percentage
+      // Slider at 80% ("Whole house") = 100% for calculation
+      // Slider at 100% ("It's Loaded!") = 120% for calculation
+      let calculationPercentage = 0;
+      if (sliderValue <= 80) {
+        calculationPercentage = sliderValue * 1.25;
+      } else {
+        calculationPercentage = 100 + (sliderValue - 80);
+      }
+
+      // Formula: square_footage × calculation_percentage × 0.8
+      let movingLabor = pickupSquareFeet * (calculationPercentage / 100) * 0.8;
+
+      // Apply parking distance factor
+      // close (0-50ft) = 1.0, medium = 1.1, long/far = 1.2
+      let parkingFactor = 1.0;
+
+      // Pickup parking distance
+      if (formData.pickupParkingDistance === 'medium') {
+        parkingFactor += 0.1;
+      } else if (formData.pickupParkingDistance === 'far') {
+        parkingFactor += 0.2;
+      }
+
+      // Delivery parking distance
+      if (formData.deliveryParkingDistance === 'medium') {
+        parkingFactor += 0.1;
+      } else if (formData.deliveryParkingDistance === 'far') {
+        parkingFactor += 0.2;
+      }
+
+      movingLabor = movingLabor * parkingFactor;
+
+      if (movingLabor > 0) {
+        const materialsCharge = movingLabor * 0.05; // 5% of labor
+        const totalMovingCharge = movingLabor + materialsCharge;
+
+        items.push({
+          description: 'Moving',
+          amount: parseFloat(totalMovingCharge.toFixed(2)),
+          subItems: [
+            {
+              description: 'Labor',
+              amount: parseFloat(movingLabor.toFixed(2))
+            },
+            {
+              description: 'Materials and Supplies',
+              amount: parseFloat(materialsCharge.toFixed(2))
+            }
+          ]
+        });
+      }
+    }
+
+    // Travel billing - use calculated distance data
+    if (distanceData && distanceData.totalCharge > 0) {
+      const FREE_MILES = 15; // Total free miles to distribute across all legs
+      let remainingFreeMiles = FREE_MILES;
+
+      // Get crew size for labor calculations
+      let crewSize = 2; // default
+      if (formData.estimatedCrewSize) {
+        const crewStr = formData.estimatedCrewSize.toString().trim();
+        if (crewStr.includes('-')) {
+          crewSize = parseInt(crewStr.split('-')[0]);
+        } else {
+          crewSize = parseInt(crewStr) || 2;
+        }
+      }
+
+      // Determine price per mile based on service type
+      const pricePerMile = formData.serviceType === 'labor-only' ? 1 : 2;
+
+      // Apply free miles sequentially: Travel to Start -> Move Travel -> Return Travel
+
+      // 1. Travel to Start (distance + time)
+      let toStartBillableMiles = distanceData.toPickup.miles;
+      if (toStartBillableMiles >= remainingFreeMiles) {
+        toStartBillableMiles -= remainingFreeMiles;
+        remainingFreeMiles = 0;
+      } else {
+        remainingFreeMiles -= toStartBillableMiles;
+        toStartBillableMiles = 0;
+      }
+      const toStartDistanceCharge = toStartBillableMiles * pricePerMile;
+      const toStartTimeCharge = (distanceData.toPickup.minutes / 60) * 85 * crewSize;
+      const toStartCharge = toStartDistanceCharge + toStartTimeCharge;
+
+      // 2. Move Travel (distance + time)
+      let moveTravelBillableMiles = 0;
+      let moveTravelCharge = 0;
+      if (distanceData.pickupToDelivery) {
+        moveTravelBillableMiles = distanceData.pickupToDelivery.miles;
+
+        if (remainingFreeMiles > 0) {
+          if (moveTravelBillableMiles >= remainingFreeMiles) {
+            moveTravelBillableMiles -= remainingFreeMiles;
+            remainingFreeMiles = 0;
+          } else {
+            remainingFreeMiles -= moveTravelBillableMiles;
+            moveTravelBillableMiles = 0;
+          }
+        }
+
+        const moveTravelDistanceCharge = moveTravelBillableMiles * pricePerMile;
+        const moveTravelTimeCharge = (distanceData.pickupToDelivery.minutes / 60) * 85 * crewSize;
+        moveTravelCharge = moveTravelDistanceCharge + moveTravelTimeCharge;
+      }
+
+      // 3. Return Travel (distance + time)
+      let returnTravelBillableMiles = distanceData.fromDelivery.miles;
+      if (remainingFreeMiles > 0) {
+        if (returnTravelBillableMiles >= remainingFreeMiles) {
+          returnTravelBillableMiles -= remainingFreeMiles;
+          remainingFreeMiles = 0;
+        } else {
+          remainingFreeMiles -= returnTravelBillableMiles;
+          returnTravelBillableMiles = 0;
+        }
+      }
+      const returnTravelDistanceCharge = returnTravelBillableMiles * pricePerMile;
+      const returnTravelTimeCharge = (distanceData.fromDelivery.minutes / 60) * 85 * crewSize;
+      const returnTravelCharge = returnTravelDistanceCharge + returnTravelTimeCharge;
+
+      const totalTravelCharge = toStartCharge + moveTravelCharge + returnTravelCharge;
+
+      if (totalTravelCharge < 100) {
+        // Flat travel charge if less than $100
+        items.push({
+          description: 'Travel',
+          amount: 100
+        });
+      } else {
+        // Show breakdown if $100 or more
+        const subItems = [
+          {
+            description: `Travel to Start (${distanceData.toPickup.miles.toFixed(1)} mi, ${formatDuration(distanceData.toPickup.minutes)})`,
+            amount: parseFloat(toStartCharge.toFixed(2))
+          }
+        ];
+
+        // Add Move Travel if present
+        if (distanceData.pickupToDelivery && distanceData.pickupToDelivery.miles > 0) {
+          subItems.push({
+            description: `Move Travel (${distanceData.pickupToDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.pickupToDelivery.minutes)})`,
+            amount: parseFloat(moveTravelCharge.toFixed(2))
+          });
+        }
+
+        subItems.push({
+          description: `Return Travel (${distanceData.fromDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.fromDelivery.minutes)})`,
+          amount: parseFloat(returnTravelCharge.toFixed(2))
+        });
+
+        items.push({
+          description: 'Travel (first 15 miles included)',
+          amount: parseFloat(totalTravelCharge.toFixed(2)),
+          subItems: subItems
+        });
+      }
+    }
+
+    // Pickup location factors
+    if (formData.pickupStairs > 1) {
+      const stairFee = (formData.pickupStairs - 1) * 25;
+      items.push({ description: `Pickup Stairs (${formData.pickupStairs} flights)`, amount: stairFee });
+    }
+
+    if (formData.pickupParkingDistance === 'far') {
+      items.push({ description: 'Pickup Long Carry', amount: 50 });
+    }
+
+    // Delivery location factors
+    if (formData.deliveryStairs > 1) {
+      const stairFee = (formData.deliveryStairs - 1) * 25;
+      items.push({ description: `Delivery Stairs (${formData.deliveryStairs} flights)`, amount: stairFee });
+    }
+
+    if (formData.deliveryParkingDistance === 'far') {
+      items.push({ description: 'Delivery Long Carry', amount: 50 });
+    }
+
+    // Heavy/Special Items
+    const heavyItems: Array<{ description: string; amount: number }> = [];
+
+    if (formData.pianos) {
+      const pianoCount = formData.pianosQty || 1;
+      const pianoCharge = 100 * pianoCount;
+      heavyItems.push({ description: `Piano${pianoCount > 1 ? ` (${pianoCount})` : ''}`, amount: pianoCharge });
+    }
+
+    if (formData.gunSafes) {
+      const gunSafeCount = formData.gunSafesQty || 1;
+      const gunSafeCharge = 100 * gunSafeCount;
+      heavyItems.push({ description: `Gun Safe${gunSafeCount > 1 ? ` (${gunSafeCount})` : ''}`, amount: gunSafeCharge });
+    }
+
+    if (formData.largeTVs) {
+      const tvCount = formData.largeTVsQty || 1;
+      const tvCharge = 60 * tvCount;
+      heavyItems.push({ description: `TV${tvCount > 1 ? `s (${tvCount})` : ''}`, amount: tvCharge });
+    }
+
+    if (heavyItems.length > 0) {
+      const totalHeavyItems = heavyItems.reduce((sum, item) => sum + item.amount, 0);
+      items.push({
+        description: 'Heavy/Special Items',
+        amount: totalHeavyItems,
+        subItems: heavyItems
+      });
+    }
+
+    // Junk Removal
+    if (formData.junkRemovalNeeded && formData.junkRemovalAmount) {
+      let junkRemovalCharge = 0;
+      const amount = formData.junkRemovalAmount;
+
+      if (amount === 'up to 1/4') {
+        junkRemovalCharge = 100;
+      } else if (amount === '1/4-1/2') {
+        junkRemovalCharge = 200;
+      } else if (amount === '1/2-3/4') {
+        junkRemovalCharge = 300;
+      } else if (amount === '3/4-full' || amount === 'full+') {
+        junkRemovalCharge = 400;
+      }
+
+      // Apply 20% discount for booking with move
+      const discountedCharge = junkRemovalCharge * 0.8;
+
+      if (junkRemovalCharge > 0) {
+        items.push({
+          description: 'Junk Removal',
+          amount: discountedCharge,
+          discount: '*20% off w/move',
+          subItems: [
+            {
+              description: amount,
+              amount: discountedCharge
+            }
+          ]
+        });
+      }
+    }
+
+    // Packing and Boxing
+    if (formData.needsPacking) {
+      const packingStatus = formData.packingStatus;
+      let packingLaborCharge = 0;
+      let packingLevel = '';
+
+      if (packingStatus === 'a few') {
+        // Flat $50 for "a few"
+        packingLaborCharge = 50;
+        packingLevel = 'A Few';
+      } else {
+        // For moderate, quite a bit, and lots - use formula
+        // Get packing factor based on selection
+        let packingFactor = 0;
+
+        if (packingStatus === 'moderate') {
+          packingFactor = 0.25;
+          packingLevel = 'Moderate';
+        } else if (packingStatus === 'quite a bit') {
+          packingFactor = 0.60;
+          packingLevel = 'Quite a Bit';
+        } else if (packingStatus === 'lots') {
+          packingFactor = 1.0;
+          packingLevel = 'Everything!';
+        }
+
+        if (packingFactor > 0) {
+          // Get start address square feet
+          let startSquareFeet = 0;
+          if (formData.pickupLocationType === 'house' && formData.pickupHouseSquareFeet) {
+            startSquareFeet = parseInt(formData.pickupHouseSquareFeet.replace(/,/g, ''));
+          } else if (formData.pickupLocationType === 'apartment' && formData.pickupApartmentSquareFeet) {
+            startSquareFeet = parseInt(formData.pickupApartmentSquareFeet.replace(/,/g, ''));
+          }
+
+          if (startSquareFeet > 0) {
+            // Get "how much is getting moved" slider value and convert to percentage
+            let sliderValue = 0;
+            if (formData.pickupLocationType === 'house') {
+              sliderValue = formData.pickupHowFurnished || 80;
+            } else if (formData.pickupLocationType === 'apartment') {
+              sliderValue = formData.pickupApartmentHowFurnished || 80;
+            }
+
+            // Convert slider value to calculation percentage
+            // Slider at 80% ("Whole house") = 100% for calculation
+            // Slider at 100% ("It's Loaded!") = 120% for calculation
+            let calculationPercentage = 0;
+            if (sliderValue <= 80) {
+              calculationPercentage = sliderValue * 1.25;
+            } else {
+              calculationPercentage = 100 + (sliderValue - 80);
+            }
+
+            // Formula: packing_factor × square_feet × 0.5 × calculation_percentage
+            packingLaborCharge = packingFactor * startSquareFeet * 0.5 * (calculationPercentage / 100);
+          }
+        }
+      }
+
+      // Add Packing and Boxing as a header with sub-items
+      if (packingLaborCharge > 0) {
+        const materialsCharge = packingLaborCharge * 0.20;
+        const totalPackingCharge = packingLaborCharge + materialsCharge;
+
+        items.push({
+          description: `Packing and Boxing (${packingLevel})`,
+          amount: parseFloat(totalPackingCharge.toFixed(2)),
+          subItems: [
+            {
+              description: 'Labor',
+              amount: parseFloat(packingLaborCharge.toFixed(2))
+            },
+            {
+              description: 'Materials and Supplies',
+              amount: parseFloat(materialsCharge.toFixed(2))
+            }
+          ]
+        });
+      }
+    }
+
+    // Calculate total
+    const total = items.reduce((sum, item) => sum + item.amount, 0);
+
+    setQuote({
+      baseRate,
+      items,
+      total
+    });
+  };
+
+  // Recalculate quote when form data or distance data changes
+  useEffect(() => {
+    calculateQuote();
+  }, [formData, distanceData]);
+
+  // Manual property data fetch functions
+  const fetchPickupPropertyData = async () => {
+    if (!formData.pickupAddress || !formData.pickupCity || !formData.pickupState || !formData.pickupZip) {
+      alert('Please enter a complete pickup address first');
+      return;
+    }
+
+    const fullAddress = `${formData.pickupAddress}, ${formData.pickupCity}, ${formData.pickupState} ${formData.pickupZip}`;
+
+    try {
+      const response = await fetch('/api/move-wt/get-property-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: fullAddress }),
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        // Format bed/bath as "X bed / Y bath" if available
+        const bedBath = (result.data.bedrooms && result.data.bathrooms)
+          ? `${result.data.bedrooms} bed / ${result.data.bathrooms} bath`
+          : '';
+
+        // Validate square feet (must be between 500 and 8000)
+        const squareFeet = result.data.squareFeet;
+        const validSquareFeet = (squareFeet && squareFeet >= 500 && squareFeet <= 8000)
+          ? squareFeet.toString()
+          : '';
+
+        // Validate estimated value (must be between $50,000 and $5,000,000)
+        const estimatedValue = result.data.estimatedValue;
+        const validEstimatedValue = (estimatedValue && estimatedValue >= 50000 && estimatedValue <= 5000000)
+          ? estimatedValue.toString()
+          : '';
+
+        setFormData(prev => ({
+          ...prev,
+          pickupHouseSquareFeet: validSquareFeet || prev.pickupHouseSquareFeet,
+          pickupZestimate: validEstimatedValue || prev.pickupZestimate,
+          pickupApartmentSquareFeet: validSquareFeet || prev.pickupApartmentSquareFeet,
+          pickupApartmentBedBath: bedBath || prev.pickupApartmentBedBath,
+        }));
+      } else {
+        alert(result.message || 'Could not fetch property data');
+      }
+    } catch (error) {
+      console.error('[Manual Fetch Pickup] Error:', error);
+      alert('Failed to fetch property data');
+    }
+  };
+
+  const fetchDeliveryPropertyData = async () => {
+    if (!formData.deliveryAddress || !formData.deliveryCity || !formData.deliveryState || !formData.deliveryZip) {
+      alert('Please enter a complete delivery address first');
+      return;
+    }
+
+    const fullAddress = `${formData.deliveryAddress}, ${formData.deliveryCity}, ${formData.deliveryState} ${formData.deliveryZip}`;
+
+    try {
+      const response = await fetch('/api/move-wt/get-property-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: fullAddress }),
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.data) {
+        // Format bed/bath as "X bed / Y bath" if available
+        const bedBath = (result.data.bedrooms && result.data.bathrooms)
+          ? `${result.data.bedrooms} bed / ${result.data.bathrooms} bath`
+          : '';
+
+        // Validate square feet (must be between 500 and 8000)
+        const squareFeet = result.data.squareFeet;
+        const validSquareFeet = (squareFeet && squareFeet >= 500 && squareFeet <= 8000)
+          ? squareFeet.toString()
+          : '';
+
+        // Validate estimated value (must be between $50,000 and $5,000,000)
+        const estimatedValue = result.data.estimatedValue;
+        const validEstimatedValue = (estimatedValue && estimatedValue >= 50000 && estimatedValue <= 5000000)
+          ? estimatedValue.toString()
+          : '';
+
+        setFormData(prev => ({
+          ...prev,
+          deliveryHouseSquareFeet: validSquareFeet || prev.deliveryHouseSquareFeet,
+          deliveryZestimate: validEstimatedValue || prev.deliveryZestimate,
+          deliveryApartmentSquareFeet: validSquareFeet || prev.deliveryApartmentSquareFeet,
+          deliveryApartmentBedBath: bedBath || prev.deliveryApartmentBedBath,
+        }));
+      } else {
+        alert(result.message || 'Could not fetch property data');
+      }
+    } catch (error) {
+      console.error('[Manual Fetch Delivery] Error:', error);
+      alert('Failed to fetch property data');
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -395,43 +1743,27 @@ export default function MoveWalkthrough() {
     setIsSaving(true);
 
     try {
-      const response = await fetch('/api/move-wt/save-form', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jobNumber: jobNumber.trim(),
-          address: address,
-          formData: formData,
-          folderUrl: folderUrl,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to save form');
-      }
-
+      await saveFormData(true); // true = show success message
       console.log("Form submitted:", formData);
-
-      let message = "Walk-through completed! Data saved successfully.";
-      if (result.pdf_url) {
-        message += `\n\nPDF Cut Sheet generated: ${result.pdf_url}`;
-      }
-
-      alert(message);
     } catch (error) {
       console.error('Save form error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to save form. Please try again.');
     } finally {
       setIsSaving(false);
     }
   };
 
+  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
   return (
-    <main className="min-h-screen bg-gray-50 pb-20">
+    <>
+      {googleMapsApiKey && (
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
+          strategy="afterInteractive"
+          onLoad={() => setIsGoogleLoaded(true)}
+        />
+      )}
+      <main className="min-h-screen bg-gray-50 pb-20">
       {/* Header */}
       <header className="shadow-sm sticky top-0 z-10" style={{ backgroundColor: '#06649b' }}>
         <div className="px-4 py-4 flex items-center">
@@ -458,32 +1790,43 @@ export default function MoveWalkthrough() {
       </header>
 
       <div className="px-6 py-8 space-y-6">
-        {/* Job Number Section */}
+        {/* Search Section */}
         <div className="bg-white rounded-2xl shadow-md p-4">
-          <div className="flex items-center justify-center gap-4">
-            <input
-              id="jobNumber"
-              type="text"
-              value={jobNumber}
-              onChange={(e) => setJobNumber(e.target.value)}
-              placeholder="Job #"
-              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button
-              type="button"
-              onClick={handleLoadJob}
-              disabled={isLoadingJob}
-              className="px-6 py-2 bg-blue-600 rounded-lg font-semibold text-white transition-colors disabled:bg-gray-400"
-            >
-              {isLoadingJob ? 'Loading...' : 'Load'}
-            </button>
-            <button
-              type="button"
-              onClick={handleClear}
-              className="px-6 py-2 bg-gray-500 rounded-lg font-semibold text-white transition-colors"
-            >
-              Clear
-            </button>
+          <div className="space-y-3">
+            <div className="flex items-center justify-center gap-3">
+              <input
+                id="jobNumber"
+                type="text"
+                value={jobNumber}
+                onChange={(e) => setJobNumber(e.target.value)}
+                placeholder="Job #"
+                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <span className="text-gray-500 font-medium">or</span>
+              <input
+                id="searchPhone"
+                type="tel"
+                value={searchPhone}
+                onChange={handleSearchPhoneChange}
+                placeholder="(208) 866-2339"
+                className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                type="button"
+                onClick={handleLoadJob}
+                disabled={isLoadingJob || (!jobNumber && !searchPhone)}
+                className="px-6 py-2 bg-blue-600 rounded-lg font-semibold text-white transition-colors disabled:bg-gray-400"
+              >
+                {isLoadingJob ? 'Loading...' : 'Load'}
+              </button>
+              <button
+                type="button"
+                onClick={handleClear}
+                className="px-6 py-2 bg-gray-500 rounded-lg font-semibold text-white transition-colors"
+              >
+                Clear
+              </button>
+            </div>
           </div>
           {address && (
             <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -492,30 +1835,52 @@ export default function MoveWalkthrough() {
             </div>
           )}
         </div>
+
+        {/* Upload to Google Drive Button */}
+        <div className="bg-white rounded-2xl shadow-md p-4">
+          <a
+            href={folderUrl || '#'}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex items-center justify-center gap-2 py-2.5 px-5 rounded-lg font-semibold text-white transition-all text-sm ${
+              folderUrl && !isLoadingJob
+                ? 'bg-green-500 hover:bg-green-600 active:scale-95 cursor-pointer'
+                : 'bg-gray-400 cursor-not-allowed pointer-events-none'
+            }`}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+            </svg>
+            <span>
+              {isLoadingJob ? 'Loading...' : folderUrl ? 'Upload Walk-Through Pictures and Videos' : 'Upload Walk-Through Pictures and Videos'}
+            </span>
+          </a>
+          {folderUrl && !isLoadingJob && (
+            <div className="flex flex-col items-center mt-2 gap-1">
+              <p className="text-xs text-center text-gray-500">
+                Opens Google Drive folder
+              </p>
+              <button
+                type="button"
+                onClick={handleCopyFolderLink}
+                className={`text-sm font-bold cursor-pointer transition-colors ${
+                  isFolderLinkCopied
+                    ? 'text-gray-400'
+                    : 'text-blue-600 hover:text-blue-800'
+                }`}
+              >
+                Copy Folder Link
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 space-y-6">
 
-        {/* Pics and Videos */}
-        {folderUrl && (
-          <section className="bg-white rounded-lg shadow p-4">
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Pics and Videos</h2>
-            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-              <a
-                href={folderUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-sm font-medium text-blue-600 hover:text-blue-800 underline"
-              >
-                View Google Drive Folder for this job →
-              </a>
-            </div>
-          </section>
-        )}
-
         {/* Service Type */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Service Type</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500">
+          <h2 className="text-xl font-bold text-indigo-900 mb-4">Service Type</h2>
 
           <div className="flex gap-6">
             <div className="flex items-center">
@@ -551,8 +1916,18 @@ export default function MoveWalkthrough() {
         </section>
 
         {/* Customer Information */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Customer Information</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-cyan-500">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-cyan-900">Customer Information</h2>
+            <button
+              type="button"
+              onClick={handleFindCustomer}
+              disabled={!formData.firstName.trim() || !formData.lastName.trim() || isLoadingJob}
+              className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+            >
+              {isLoadingJob ? 'Searching...' : 'Find Customer'}
+            </button>
+          </div>
 
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-2">
@@ -584,77 +1959,264 @@ export default function MoveWalkthrough() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Phone Number
+                Company
               </label>
               <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
+                type="text"
+                name="company"
+                value={formData.company}
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+            {/* Dynamic Phone Entries */}
+            <div className="space-y-2">
+              {phones.map((phone, index) => (
+                <div key={index} className="flex items-end gap-2">
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone
+                      </label>
+                      <input
+                        type="tel"
+                        value={phone.number}
+                        onChange={(e) => handlePhoneNumberChange(index, e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Name
+                      </label>
+                      <input
+                        type="text"
+                        value={phone.name}
+                        onChange={(e) => handlePhoneNameChange(index, e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                  {index > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemovePhone(index)}
+                      className="px-3 py-2 text-red-600 hover:text-red-800 transition-colors"
+                      title="Remove phone"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={handleAddPhone}
+                className="text-sm text-blue-600 hover:text-blue-800 cursor-pointer transition-colors"
+              >
+                +Phone
+              </button>
+            </div>
+
+            {/* Dynamic Email Entries */}
+            <div className="space-y-2">
+              {emails.map((email, index) => (
+                <div key={index} className="flex items-end gap-2">
+                  <div className="flex-1 grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={email.email}
+                        onChange={(e) => handleEmailChange(index, e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Name
+                      </label>
+                      <input
+                        type="text"
+                        value={email.name}
+                        onChange={(e) => handleEmailNameChange(index, e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                  {index > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveEmail(index)}
+                      className="px-3 py-2 text-red-600 hover:text-red-800 transition-colors"
+                      title="Remove email"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={handleAddEmail}
+                className="text-sm text-blue-600 hover:text-blue-800 cursor-pointer transition-colors"
+              >
+                +Email
+              </button>
             </div>
           </div>
         </section>
 
         {/* Addresses */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Addresses</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-slate-500">
+          <h2 className="text-xl font-bold text-slate-900 mb-4">Addresses</h2>
 
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-md font-semibold text-gray-800 mb-2">Pickup Address</h3>
+          <div className="space-y-6">
+            {/* Start Address Section */}
+            <div className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded-r-lg">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold text-blue-900">Start Address</h3>
+                <button
+                  type="button"
+                  onClick={handleMakePictureFolder}
+                  disabled={!formData.pickupAddress.trim() || isLoadingJob}
+                  className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isLoadingJob ? 'Creating...' : 'Make Picture Folder'}
+                </button>
+              </div>
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <select
                     name="pickupLocationType"
                     value={formData.pickupLocationType}
                     onChange={handleInputChange}
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formData.pickupLocationType === 'house' ? 'flex-1' : 'flex-1'
+                    }`}
                   >
-                    <option value="">Location Type</option>
                     <option value="house">House</option>
                     <option value="apartment">Apartment</option>
                     <option value="storage-unit">Storage Unit</option>
+                    <option value="truck">Truck</option>
+                    <option value="pod">POD</option>
                     <option value="other">Other</option>
                   </select>
 
                   {formData.pickupLocationType === 'house' && (
-                    <input
-                      type="text"
-                      name="pickupHouseSquareFeet"
-                      value={formData.pickupHouseSquareFeet}
-                      onChange={handleInputChange}
-                      placeholder="Square Feet"
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    <>
+                      <input
+                        type="text"
+                        name="pickupHouseSquareFeet"
+                        value={formatNumberWithCommas(formData.pickupHouseSquareFeet)}
+                        onChange={handleInputChange}
+                        placeholder="Square Feet"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <div className="flex-1 flex gap-1 min-w-0">
+                        <input
+                          type="text"
+                          name="pickupZestimate"
+                          value={formatNumberWithCommas(formData.pickupZestimate)}
+                          onChange={handleInputChange}
+                          placeholder="Value"
+                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={fetchPickupPropertyData}
+                          className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                          title="Fetch property data from Zillow"
+                        >
+                          $
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   {formData.pickupLocationType === 'apartment' && (
-                    <input
-                      type="text"
-                      name="pickupApartmentBedBath"
-                      value={formData.pickupApartmentBedBath}
-                      onChange={handleInputChange}
-                      placeholder="Bed/Bath"
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    <>
+                      <input
+                        type="text"
+                        name="pickupApartmentSquareFeet"
+                        value={formatNumberWithCommas(formData.pickupApartmentSquareFeet)}
+                        onChange={handleInputChange}
+                        placeholder="Square Feet"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <div className="flex-1 flex gap-1 min-w-0">
+                        <input
+                          type="text"
+                          name="pickupApartmentBedBath"
+                          value={formData.pickupApartmentBedBath}
+                          onChange={handleInputChange}
+                          placeholder="Bed/Bath"
+                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={fetchPickupPropertyData}
+                          className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                          title="Fetch property data from Zillow"
+                        >
+                          sf
+                        </button>
+                      </div>
+                    </>
                   )}
 
                 </div>
+
+                {/* How Much is Getting Moved Slider - For House */}
+                {formData.pickupLocationType === 'house' && (
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      How much is getting moved?
+                    </label>
+                    <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
+                      <input
+                        type="range"
+                        name="pickupHowFurnished"
+                        min="0"
+                        max="100"
+                        step="20"
+                        value={formData.pickupHowFurnished}
+                        onChange={handleInputChange}
+                        className="flex-1"
+                      />
+                      <span className="text-sm font-medium text-blue-700 min-w-[140px]">
+                        {getHowFurnishedText(Number(formData.pickupHowFurnished))}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* How Much is Getting Moved Slider - For Apartment */}
+                {formData.pickupLocationType === 'apartment' && (
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      How much is getting moved?
+                    </label>
+                    <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
+                      <input
+                        type="range"
+                        name="pickupApartmentHowFurnished"
+                        min="0"
+                        max="100"
+                        step="20"
+                        value={formData.pickupApartmentHowFurnished}
+                        onChange={handleInputChange}
+                        className="flex-1"
+                      />
+                      <span className="text-sm font-medium text-blue-700 min-w-[140px]">
+                        {getHowFurnishedText(Number(formData.pickupApartmentHowFurnished)).replace('Whole house', 'Whole apartment')}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {formData.pickupLocationType === 'storage-unit' && (
                   <div className="space-y-2">
@@ -742,6 +2304,7 @@ export default function MoveWalkthrough() {
                       Street Address
                     </label>
                     <input
+                      ref={pickupAddressRef}
                       type="text"
                       name="pickupAddress"
                       value={formData.pickupAddress}
@@ -806,17 +2369,32 @@ export default function MoveWalkthrough() {
               </div>
             </div>
 
-            <div>
-              <h3 className="text-md font-semibold text-gray-800 mb-2">Delivery Address</h3>
+            {/* Delivery Address Section */}
+            {formData.serviceType !== 'labor-only' && (
+            <div className="border-l-4 border-green-500 bg-green-50 p-4 rounded-r-lg">
+              <div className="flex items-center gap-3 mb-3">
+                <h3 className="text-lg font-semibold text-green-900">Delivery Address</h3>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="deliveryAddressUnknown"
+                    checked={formData.deliveryAddressUnknown}
+                    onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddressUnknown: e.target.checked }))}
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span className="text-sm text-gray-700">Unknown</span>
+                </label>
+              </div>
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <select
                     name="deliveryLocationType"
                     value={formData.deliveryLocationType}
                     onChange={handleInputChange}
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className={`px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                      formData.deliveryLocationType === 'house' ? 'flex-1' : 'flex-1'
+                    }`}
                   >
-                    <option value="">Location Type</option>
                     <option value="house">House</option>
                     <option value="apartment">Apartment</option>
                     <option value="storage-unit">Storage Unit</option>
@@ -826,25 +2404,65 @@ export default function MoveWalkthrough() {
                   </select>
 
                   {formData.deliveryLocationType === 'house' && (
-                    <input
-                      type="text"
-                      name="deliveryHouseSquareFeet"
-                      value={formData.deliveryHouseSquareFeet}
-                      onChange={handleInputChange}
-                      placeholder="Square Feet"
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    <>
+                      <input
+                        type="text"
+                        name="deliveryHouseSquareFeet"
+                        value={formatNumberWithCommas(formData.deliveryHouseSquareFeet)}
+                        onChange={handleInputChange}
+                        placeholder="Square Feet"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <div className="flex-1 flex gap-1 min-w-0">
+                        <input
+                          type="text"
+                          name="deliveryZestimate"
+                          value={formatNumberWithCommas(formData.deliveryZestimate)}
+                          onChange={handleInputChange}
+                          placeholder="Value"
+                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={fetchDeliveryPropertyData}
+                          className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                          title="Fetch property data from Zillow"
+                        >
+                          $
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   {formData.deliveryLocationType === 'apartment' && (
-                    <input
-                      type="text"
-                      name="deliveryApartmentBedBath"
-                      value={formData.deliveryApartmentBedBath}
-                      onChange={handleInputChange}
-                      placeholder="Bed/Bath"
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                    <>
+                      <input
+                        type="text"
+                        name="deliveryApartmentSquareFeet"
+                        value={formatNumberWithCommas(formData.deliveryApartmentSquareFeet)}
+                        onChange={handleInputChange}
+                        placeholder="Square Feet"
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <div className="flex-1 flex gap-1 min-w-0">
+                        <input
+                          type="text"
+                          name="deliveryApartmentBedBath"
+                          value={formData.deliveryApartmentBedBath}
+                          onChange={handleInputChange}
+                          placeholder="Bed/Bath"
+                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={fetchDeliveryPropertyData}
+                          className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                          title="Fetch property data from Zillow"
+                        >
+                          sf
+                        </button>
+                      </div>
+                    </>
                   )}
 
                   {formData.deliveryLocationType === 'truck' && (
@@ -858,6 +2476,30 @@ export default function MoveWalkthrough() {
                     />
                   )}
                 </div>
+
+                {/* How Much is Getting Moved Slider - For Apartment */}
+                {formData.deliveryLocationType === 'apartment' && (
+                  <div className="space-y-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      How much is getting moved?
+                    </label>
+                    <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
+                      <input
+                        type="range"
+                        name="deliveryApartmentHowFurnished"
+                        min="0"
+                        max="100"
+                        step="20"
+                        value={formData.deliveryApartmentHowFurnished}
+                        onChange={handleInputChange}
+                        className="flex-1"
+                      />
+                      <span className="text-sm font-medium text-green-700 min-w-[140px]">
+                        {getHowFurnishedText(Number(formData.deliveryApartmentHowFurnished)).replace('Whole house', 'Whole apartment')}
+                      </span>
+                    </div>
+                  </div>
+                )}
 
                 {formData.deliveryLocationType === 'storage-unit' && (
                   <div className="space-y-2">
@@ -966,86 +2608,94 @@ export default function MoveWalkthrough() {
                   </div>
                 )}
 
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Street Address
-                    </label>
-                    <input
-                      type="text"
-                      name="deliveryAddress"
-                      value={formData.deliveryAddress}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Unit/Apt #
-                    </label>
-                    <input
-                      type="text"
-                      name="deliveryUnit"
-                      value={formData.deliveryUnit}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
+                {!formData.deliveryAddressUnknown && (
+                  <>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Street Address
+                        </label>
+                        <input
+                          ref={deliveryAddressRef}
+                          type="text"
+                          name="deliveryAddress"
+                          value={formData.deliveryAddress}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Unit/Apt #
+                        </label>
+                        <input
+                          type="text"
+                          name="deliveryUnit"
+                          value={formData.deliveryUnit}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      City
-                    </label>
-                    <input
-                      type="text"
-                      name="deliveryCity"
-                      value={formData.deliveryCity}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      State
-                    </label>
-                    <input
-                      type="text"
-                      name="deliveryState"
-                      value={formData.deliveryState}
-                      onChange={handleInputChange}
-                      maxLength={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          City
+                        </label>
+                        <input
+                          type="text"
+                          name="deliveryCity"
+                          value={formData.deliveryCity}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          State
+                        </label>
+                        <input
+                          type="text"
+                          name="deliveryState"
+                          value={formData.deliveryState}
+                          onChange={handleInputChange}
+                          maxLength={2}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ZIP Code
-                  </label>
-                  <input
-                    type="text"
-                    name="deliveryZip"
-                    value={formData.deliveryZip}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        ZIP Code
+                      </label>
+                      <input
+                        type="text"
+                        name="deliveryZip"
+                        value={formData.deliveryZip}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
+            )}
 
-            <div>
+            {/* Additional Stop Section */}
+            {formData.serviceType !== 'labor-only' && (
+            <div className="border-l-4 border-purple-500 bg-purple-50 p-4 rounded-r-lg">
               <div className="flex items-center mb-3">
                 <input
                   type="checkbox"
                   name="hasAdditionalStop"
                   checked={formData.hasAdditionalStop}
                   onChange={handleInputChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                 />
-                <label className="ml-2 text-md font-semibold text-gray-800">
+                <label className="ml-2 text-lg font-semibold text-purple-900">
                   Additional Stop
                 </label>
               </div>
@@ -1057,25 +2707,18 @@ export default function MoveWalkthrough() {
                       name="additionalStopLocationType"
                       value={formData.additionalStopLocationType}
                       onChange={handleInputChange}
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className={`px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                        formData.additionalStopLocationType === 'house' ? 'flex-1' : 'flex-1'
+                      }`}
                     >
-                      <option value="">Location Type</option>
                       <option value="house">House</option>
                       <option value="apartment">Apartment</option>
                       <option value="storage-unit">Storage Unit</option>
+                      <option value="truck">Truck</option>
+                      <option value="pod">POD</option>
                       <option value="other">Other</option>
                     </select>
 
-                    {formData.additionalStopLocationType === 'house' && (
-                      <input
-                        type="text"
-                        name="additionalStopHouseSquareFeet"
-                        value={formData.additionalStopHouseSquareFeet}
-                        onChange={handleInputChange}
-                        placeholder="Square Feet"
-                        className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    )}
 
                     {formData.additionalStopLocationType === 'apartment' && (
                       <input
@@ -1089,6 +2732,30 @@ export default function MoveWalkthrough() {
                     )}
 
                   </div>
+
+                  {/* How Much is Getting Added or Dropped Off Slider - Only for House */}
+                  {formData.additionalStopLocationType === 'house' && (
+                    <div className="space-y-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        How much is getting added or dropped off?
+                      </label>
+                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
+                        <input
+                          type="range"
+                          name="additionalStopHowFurnished"
+                          min="0"
+                          max="100"
+                          step="20"
+                          value={formData.additionalStopHowFurnished}
+                          onChange={handleInputChange}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium text-purple-700 min-w-[140px]">
+                          {getAdditionalStopText(Number(formData.additionalStopHowFurnished))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {formData.additionalStopLocationType === 'storage-unit' && (
                     <div className="space-y-2">
@@ -1159,6 +2826,7 @@ export default function MoveWalkthrough() {
                         Street Address
                       </label>
                       <input
+                        ref={additionalStopAddressRef}
                         type="text"
                         name="additionalStopAddress"
                         value={formData.additionalStopAddress}
@@ -1236,12 +2904,14 @@ export default function MoveWalkthrough() {
                 </div>
               )}
             </div>
+            )}
           </div>
         </section>
 
         {/* Pickup Location Access */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Pickup Location Access</h2>
+        {formData.serviceType !== 'labor-only' && (
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
+          <h2 className="text-xl font-bold text-amber-900 mb-4">Pickup Location Access</h2>
 
           <div className="space-y-3">
             <div>
@@ -1331,10 +3001,12 @@ export default function MoveWalkthrough() {
             </div>
           </div>
         </section>
+        )}
 
         {/* Delivery Location Access */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Delivery Location Access</h2>
+        {formData.serviceType !== 'labor-only' && (
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-lime-500">
+          <h2 className="text-xl font-bold text-lime-900 mb-4">Delivery Location Access</h2>
 
           <div className="space-y-3">
             <div>
@@ -1424,10 +3096,11 @@ export default function MoveWalkthrough() {
             </div>
           </div>
         </section>
+        )}
 
         {/* Heavy/Special Items */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Heavy/Special Items</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-rose-500">
+          <h2 className="text-xl font-bold text-rose-900 mb-4">Heavy/Special Items</h2>
 
           <div className="space-y-3">
             <div className="flex items-center">
@@ -1452,7 +3125,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       gunSafesQty: Math.max(1, prev.gunSafesQty - 1)
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     -
                   </button>
@@ -1463,7 +3136,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       gunSafesQty: prev.gunSafesQty + 1
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     +
                   </button>
@@ -1473,7 +3146,7 @@ export default function MoveWalkthrough() {
                   name="gunSafesDetails"
                   value={formData.gunSafesDetails}
                   onChange={handleInputChange}
-                  placeholder="Details (e.g., approximate size, 6ft tall)"
+                  placeholder="Details"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -1501,7 +3174,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       pianosQty: Math.max(1, prev.pianosQty - 1)
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     -
                   </button>
@@ -1512,7 +3185,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       pianosQty: prev.pianosQty + 1
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     +
                   </button>
@@ -1522,7 +3195,7 @@ export default function MoveWalkthrough() {
                   name="pianosDetails"
                   value={formData.pianosDetails}
                   onChange={handleInputChange}
-                  placeholder="Details (e.g., upright, grand, baby grand)"
+                  placeholder="Details"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -1548,7 +3221,7 @@ export default function MoveWalkthrough() {
                   name="purpleGreenMattressDetails"
                   value={formData.purpleGreenMattressDetails}
                   onChange={handleInputChange}
-                  placeholder="Quantity & sizes (e.g., 1 King, 2 Queen)"
+                  placeholder="Details"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -1576,7 +3249,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       largeTVsQty: Math.max(1, prev.largeTVsQty - 1)
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     -
                   </button>
@@ -1587,7 +3260,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       largeTVsQty: prev.largeTVsQty + 1
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     +
                   </button>
@@ -1597,7 +3270,7 @@ export default function MoveWalkthrough() {
                   name="largeTVsDetails"
                   value={formData.largeTVsDetails}
                   onChange={handleInputChange}
-                  placeholder="Details (e.g., sizes: 65 inch, 55 inch)"
+                  placeholder="Details"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -1623,7 +3296,7 @@ export default function MoveWalkthrough() {
                   name="treadmillsDetails"
                   value={formData.treadmillsDetails}
                   onChange={handleInputChange}
-                  placeholder="List items"
+                  placeholder="Details"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
               </div>
@@ -1663,7 +3336,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceFridgeQty: Math.max(1, prev.applianceFridgeQty - 1)
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         -
                       </button>
@@ -1674,7 +3347,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceFridgeQty: prev.applianceFridgeQty + 1
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         +
                       </button>
@@ -1701,7 +3374,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceWasherQty: Math.max(1, prev.applianceWasherQty - 1)
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         -
                       </button>
@@ -1712,7 +3385,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceWasherQty: prev.applianceWasherQty + 1
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         +
                       </button>
@@ -1739,7 +3412,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceDryerQty: Math.max(1, prev.applianceDryerQty - 1)
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         -
                       </button>
@@ -1750,7 +3423,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceDryerQty: prev.applianceDryerQty + 1
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         +
                       </button>
@@ -1777,7 +3450,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceOvenQty: Math.max(1, prev.applianceOvenQty - 1)
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         -
                       </button>
@@ -1788,7 +3461,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceOvenQty: prev.applianceOvenQty + 1
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         +
                       </button>
@@ -1815,7 +3488,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceDishwasherQty: Math.max(1, prev.applianceDishwasherQty - 1)
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         -
                       </button>
@@ -1826,7 +3499,7 @@ export default function MoveWalkthrough() {
                           ...prev,
                           applianceDishwasherQty: prev.applianceDishwasherQty + 1
                         }))}
-                        className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
                         +
                       </button>
@@ -1898,7 +3571,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       tableSawQty: Math.max(1, prev.tableSawQty - 1)
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     -
                   </button>
@@ -1909,7 +3582,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       tableSawQty: prev.tableSawQty + 1
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     +
                   </button>
@@ -1954,8 +3627,8 @@ export default function MoveWalkthrough() {
         </section>
 
         {/* Special Disassembly */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Special Disassembly</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-orange-500">
+          <h2 className="text-xl font-bold text-orange-900 mb-4">Special Disassembly</h2>
 
           <div className="space-y-3">
             <div className="flex items-center">
@@ -1980,7 +3653,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       trampolineQty: Math.max(1, prev.trampolineQty - 1)
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     -
                   </button>
@@ -1991,7 +3664,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       trampolineQty: prev.trampolineQty + 1
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     +
                   </button>
@@ -2029,7 +3702,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       bunkBedsQty: Math.max(1, prev.bunkBedsQty - 1)
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     -
                   </button>
@@ -2040,7 +3713,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       bunkBedsQty: prev.bunkBedsQty + 1
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     +
                   </button>
@@ -2078,7 +3751,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       gymEquipmentQty: Math.max(1, prev.gymEquipmentQty - 1)
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     -
                   </button>
@@ -2089,7 +3762,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       gymEquipmentQty: prev.gymEquipmentQty + 1
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     +
                   </button>
@@ -2127,7 +3800,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       saunaQty: Math.max(1, prev.saunaQty - 1)
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     -
                   </button>
@@ -2138,7 +3811,7 @@ export default function MoveWalkthrough() {
                       ...prev,
                       saunaQty: prev.saunaQty + 1
                     }))}
-                    className="px-2 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                   >
                     +
                   </button>
@@ -2147,6 +3820,55 @@ export default function MoveWalkthrough() {
                   type="text"
                   name="saunaDetails"
                   value={formData.saunaDetails}
+                  onChange={handleInputChange}
+                  placeholder="Details"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                name="playsets"
+                checked={formData.playsets}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label className="ml-2 text-sm text-gray-700">
+                Playset
+              </label>
+            </div>
+
+            {formData.playsets && (
+              <div className="ml-6 flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      playsetsQty: Math.max(1, prev.playsetsQty - 1)
+                    }))}
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                  >
+                    -
+                  </button>
+                  <span className="w-8 text-center text-sm font-semibold">{formData.playsetsQty}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      playsetsQty: prev.playsetsQty + 1
+                    }))}
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                  >
+                    +
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  name="playsetsDetails"
+                  value={formData.playsetsDetails}
                   onChange={handleInputChange}
                   placeholder="Details"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
@@ -2183,8 +3905,8 @@ export default function MoveWalkthrough() {
         </section>
 
         {/* Pets */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Pets</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
+          <h2 className="text-xl font-bold text-yellow-900 mb-4">Pets</h2>
 
           <div className="flex items-center">
             <input
@@ -2201,8 +3923,8 @@ export default function MoveWalkthrough() {
         </section>
 
         {/* Other Services */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Other Services</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-teal-500">
+          <h2 className="text-xl font-bold text-teal-900 mb-4">Other Services</h2>
 
           <div className="space-y-3">
             <div className="flex items-center">
@@ -2233,7 +3955,7 @@ export default function MoveWalkthrough() {
                     <option value="a few">A Few</option>
                     <option value="moderate">Moderate</option>
                     <option value="quite a bit">Quite a Bit</option>
-                    <option value="lots">Lots!</option>
+                    <option value="lots">Everything!</option>
                   </select>
                 </div>
 
@@ -2356,45 +4078,9 @@ export default function MoveWalkthrough() {
           </div>
         </section>
 
-        {/* Insurance */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Insurance</h2>
-
-          <div className="space-y-3">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="needsInsurance"
-                checked={formData.needsInsurance}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Customer Needs/Wants Insurance
-              </label>
-            </div>
-
-            {formData.needsInsurance && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Estimated Value of Items
-                </label>
-                <input
-                  type="text"
-                  name="estimatedValue"
-                  value={formData.estimatedValue}
-                  onChange={handleInputChange}
-                  placeholder="e.g., $50,000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-          </div>
-        </section>
-
         {/* Timing & Scheduling */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Timing & Scheduling</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-pink-500">
+          <h2 className="text-xl font-bold text-pink-900 mb-4">Timing & Scheduling</h2>
 
           <div className="space-y-3">
             <div>
@@ -2413,34 +4099,48 @@ export default function MoveWalkthrough() {
             <div className="flex items-center">
               <input
                 type="checkbox"
-                name="timeFlexible"
-                checked={formData.timeFlexible}
+                name="moveDateUnknown"
+                checked={formData.moveDateUnknown}
                 onChange={handleInputChange}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label className="ml-2 text-sm text-gray-700">
-                Customer is Flexible on Dates
+                Move date is unknown
               </label>
             </div>
 
             <div className="flex items-center">
               <input
                 type="checkbox"
-                name="readyToSchedule"
-                checked={formData.readyToSchedule}
+                name="timeFlexible"
+                checked={formData.timeFlexible}
                 onChange={handleInputChange}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label className="ml-2 text-sm text-gray-700">
-                Customer is Ready to Schedule
+                Move date is flexible
               </label>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Additional Notes
+              </label>
+              <textarea
+                name="timingNotes"
+                value={formData.timingNotes}
+                onChange={handleInputChange}
+                rows={3}
+                placeholder="Additional notes about timing and scheduling"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
             </div>
           </div>
         </section>
 
         {/* Recommended Crew Size */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Recommended Crew Size</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-violet-500">
+          <h2 className="text-xl font-bold text-violet-900 mb-4">Recommended Crew Size</h2>
 
           <div className="space-y-3">
             <div>
@@ -2461,7 +4161,7 @@ export default function MoveWalkthrough() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Notes
+                Additional Notes
               </label>
               <textarea
                 name="crewSizeNotes"
@@ -2476,8 +4176,8 @@ export default function MoveWalkthrough() {
         </section>
 
         {/* Special Requests/Notes */}
-        <section className="bg-white rounded-lg shadow p-4">
-          <h2 className="text-xl font-bold text-gray-900 mb-4">Special Requests & Notes</h2>
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-fuchsia-500">
+          <h2 className="text-xl font-bold text-fuchsia-900 mb-4">Special Requests & Notes</h2>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -2494,18 +4194,211 @@ export default function MoveWalkthrough() {
           </div>
         </section>
 
+        {/* Tools Needed */}
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-emerald-500">
+          <h2 className="text-xl font-bold text-emerald-900 mb-4">Tools Needed</h2>
+
+          <div className="space-y-3">
+            {/* Predefined Tools */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="hd4Wheel"
+                  checked={formData.hd4Wheel}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-sm text-gray-700">
+                  HD 4-Wheel
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="airSled"
+                  checked={formData.airSled}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-sm text-gray-700">
+                  Air Sled
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="applianceDolly"
+                  checked={formData.applianceDolly}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-sm text-gray-700">
+                  Appliance Dolly
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="socketWrenches"
+                  checked={formData.socketWrenches}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-sm text-gray-700">
+                  Socket Wrenches
+                </label>
+              </div>
+
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  name="safeDolly"
+                  checked={formData.safeDolly}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-sm text-gray-700">
+                  Safe Dolly
+                </label>
+              </div>
+            </div>
+
+            {/* Custom Tool Fields */}
+            <div className="mt-4 space-y-2">
+              <label className="block text-sm font-medium text-gray-700">
+                Additional Tools
+              </label>
+              <input
+                type="text"
+                name="toolCustom1"
+                value={formData.toolCustom1}
+                onChange={handleInputChange}
+                placeholder="Other tool needed..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                name="toolCustom2"
+                value={formData.toolCustom2}
+                onChange={handleInputChange}
+                placeholder="Other tool needed..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+              <input
+                type="text"
+                name="toolCustom3"
+                value={formData.toolCustom3}
+                onChange={handleInputChange}
+                placeholder="Other tool needed..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+        </section>
+
+        {/* Quote Display */}
+        {quote.total > 0 && (
+          <section className="bg-gradient-to-br from-green-50 to-blue-50 rounded-lg shadow-lg p-6 border-2 border-green-300">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">
+              Active Estimate
+            </h2>
+
+            <div className="space-y-2 mb-4">
+              {quote.items.map((item, index) => {
+                // Split description to make parenthetical text italic
+                const descParts = item.description.match(/^(.+?)(\s*\([^)]+\))?$/);
+                const mainDesc = descParts?.[1] || item.description;
+                const italicDesc = descParts?.[2]?.trim();
+
+                return (
+                  <div key={index}>
+                    <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                      <span className="text-gray-700 font-medium">
+                        {mainDesc}
+                        {italicDesc && <span className="italic text-gray-600"> {italicDesc}</span>}
+                      </span>
+                      <span className="font-semibold text-gray-900">${Math.round(item.amount).toLocaleString()}</span>
+                    </div>
+                    {item.discount && (
+                      <div className="pl-6 py-0.5">
+                        <span className="text-xs italic text-gray-500">{item.discount}</span>
+                      </div>
+                    )}
+                    {item.subItems && item.subItems.map((subItem, subIndex) => (
+                      <div key={`${index}-${subIndex}`} className="flex justify-between items-center py-1 pl-6 text-sm">
+                        <span className="text-gray-600">{subItem.description}</span>
+                        <span className="text-gray-700">${Math.round(subItem.amount).toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="pt-4 border-t-2 border-green-400">
+              <div className="flex justify-between items-center">
+                <span className="text-xl font-bold text-gray-900">Estimated Total:</span>
+                <span className="text-3xl font-bold text-green-600">${Math.round(quote.total).toLocaleString()}</span>
+              </div>
+              <p className="text-xs text-gray-600 mt-2 text-right italic">
+                *Estimate based on provided information. Final price may vary.
+              </p>
+            </div>
+          </section>
+        )}
+
+        {/* House Quality Rating */}
+        <div className="bg-white p-4 rounded-lg shadow flex items-center justify-center">
+          <div className="w-full">
+            <div className="relative px-2">
+              {/* Hidden slider for accessibility */}
+              <input
+                type="range"
+                name="houseQuality"
+                min="1"
+                max="5"
+                step="1"
+                value={formData.houseQuality}
+                onChange={handleInputChange}
+                className="sr-only"
+              />
+              {/* Clickable dot markers */}
+              <div className="flex justify-between px-2" style={{ paddingTop: '2px' }}>
+                {[1, 2, 3, 4, 5].map((value) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setFormData(prev => ({ ...prev, houseQuality: value }))}
+                    className={`w-4 h-4 rounded-full border-2 transition-all cursor-pointer ${
+                      formData.houseQuality === value
+                        ? 'bg-gray-300 border-gray-400 scale-125'
+                        : 'bg-white border-gray-400 hover:bg-gray-100'
+                    }`}
+                    aria-label={`Quality level ${value}`}
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Submit Button */}
         <div className="sticky bottom-0 bg-white p-4 shadow-lg rounded-lg">
           <button
             type="submit"
-            disabled={isSaving || !jobNumber || !address}
+            disabled={isSaving || !jobNumber || !address || isFormSaved}
             className="w-full py-3 px-4 text-white font-bold rounded-lg shadow-md transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
-            style={{ backgroundColor: isSaving || !jobNumber || !address ? '#9CA3AF' : '#06649b' }}
+            style={{ backgroundColor: isSaving || !jobNumber || !address || isFormSaved ? '#9CA3AF' : '#06649b' }}
           >
-            {isSaving ? 'Saving...' : 'Complete Walk-Through'}
+            {isSaving ? 'Saving...' : (isFormSaved ? 'Saved' : 'Save')}
           </button>
         </div>
       </form>
     </main>
+    </>
   );
 }

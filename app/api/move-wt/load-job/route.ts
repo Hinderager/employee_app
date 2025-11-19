@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { google } from 'googleapis';
 
 // Initialize Supabase client (server-side) for Employee App
 const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
@@ -10,19 +11,130 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const WORKIZ_API_KEY = process.env.WORKIZ_API_KEY || 'api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw';
 const WORKIZ_API_URL = `https://app.workiz.com/api/v1/${WORKIZ_API_KEY}/job/all/`;
 
+// Helper function to normalize phone numbers (strips non-numeric characters)
+const normalizePhoneNumber = (phone: string): string => {
+  return phone.replace(/\D/g, '');
+};
+
+// Initialize OAuth client
+function getOAuthClient() {
+  return new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.NODE_ENV === 'production'
+      ? process.env.GOOGLE_REDIRECT_URI
+      : 'http://localhost:3001/api/auth/google/callback'
+  );
+}
+
+// Get Drive client with OAuth tokens from environment variables (server-side)
+async function getDriveClient() {
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+  if (!refreshToken) {
+    throw new Error('Server not configured with Google Drive credentials');
+  }
+
+  const oauth2Client = getOAuthClient();
+  oauth2Client.setCredentials({
+    refresh_token: refreshToken,
+  });
+
+  // Refresh the access token automatically
+  await oauth2Client.getAccessToken();
+
+  return google.drive({ version: 'v3', auth: oauth2Client });
+}
+
+// Sanitize address string for use as folder name
+function sanitizeAddressForFolderName(address: string): string {
+  const sanitized = address
+    .replace(/[/\\:*?"<>|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .substring(0, 200);
+
+  if (!sanitized) {
+    return 'Untitled Folder';
+  }
+  return sanitized;
+}
+
+// Find or create Google Drive folder for job address
+// Folders are stored in: My Drive\Pictures\from employee app\by address\
+async function findOrCreateAddressFolder(drive: any, address: string): Promise<string> {
+  // Hardcoded parent folder ID for "by address" folder
+  const byAddressFolderId = '1cDg6cjZR1ZaQL1EhxAi99e-wRNy-kL74';
+
+  console.log('[move-wt/load-job] Searching for address folder:', address);
+
+  const targetFolderName = sanitizeAddressForFolderName(address);
+  console.log('[move-wt/load-job] Sanitized folder name:', targetFolderName);
+
+  // Escape single quotes in folder name for Google Drive query (single quotes must be escaped with backslash)
+  const escapedFolderName = targetFolderName.replace(/'/g, "\\'");
+
+  // Search for existing folder with this address name in the "by address" folder
+  const folderSearchResponse = await drive.files.list({
+    q: `name='${escapedFolderName}' and '${byAddressFolderId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: 'files(id, name, parents)',
+    pageSize: 100, // Increased to check more folders
+  });
+
+  console.log('[move-wt/load-job] Search returned', folderSearchResponse.data.files?.length || 0, 'folders');
+
+  // If folder exists, use it
+  if (folderSearchResponse.data.files && folderSearchResponse.data.files.length > 0) {
+    // Check for exact match (case-insensitive)
+    const exactMatch = folderSearchResponse.data.files.find(
+      (file: any) => file.name.toLowerCase() === targetFolderName.toLowerCase()
+    );
+
+    if (exactMatch) {
+      console.log('[move-wt/load-job] Found existing address folder:', exactMatch.id, '- Name:', exactMatch.name);
+      return exactMatch.id!;
+    }
+
+    // If no exact match but files were returned, log warning
+    console.log('[move-wt/load-job] WARNING: Found folders but no exact match. Using first folder:', folderSearchResponse.data.files[0].name);
+    return folderSearchResponse.data.files[0].id!;
+  }
+
+  // Folder doesn't exist - create it in the "by address" folder
+  console.log('[move-wt/load-job] Address folder not found, creating new one in "by address" folder...');
+  console.log('[move-wt/load-job] Creating folder with name:', targetFolderName);
+
+  const folderMetadata = {
+    name: targetFolderName,
+    mimeType: 'application/vnd.google-apps.folder',
+    parents: [byAddressFolderId],
+  };
+
+  const folder = await drive.files.create({
+    requestBody: folderMetadata,
+    fields: 'id, name',
+  });
+
+  console.log('[move-wt/load-job] Created new address folder:', folder.data.id, '- Name:', folder.data.name);
+  return folder.data.id!;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { jobNumber } = body;
+    const { jobNumber, phoneNumber } = body;
 
-    if (!jobNumber || !jobNumber.trim()) {
+    // Require at least one parameter
+    if ((!jobNumber || !jobNumber.trim()) && (!phoneNumber || !phoneNumber.trim())) {
       return NextResponse.json(
-        { error: 'Job number is required' },
+        { error: 'Either job number or phone number is required' },
         { status: 400 }
       );
     }
 
-    console.log(`[move-wt/load-job] Fetching job details for: ${jobNumber}`);
+    // Priority 1: If job number is provided, use it to fetch from Workiz
+    if (jobNumber && jobNumber.trim()) {
+      console.log(`[move-wt/load-job] Fetching job details for job number: ${jobNumber}`);
 
     // Call Workiz API to get all jobs
     const workizResponse = await fetch(WORKIZ_API_URL, {
@@ -99,14 +211,42 @@ export async function POST(request: NextRequest) {
       pickupZip: zipCode,
     };
 
-    // Get Google Drive folder URL from jobs_from_pictures table
-    const { data: picturesData } = await supabase
-      .from('jobs_from_pictures')
-      .select('google_drive_folder_url')
-      .eq('job_number', jobNumber)
-      .single();
+    // Initialize Google Drive and find/create address folder
+    let folderId: string;
+    let folderUrl: string;
 
-    const folderUrl = picturesData?.google_drive_folder_url || null;
+    try {
+      const drive = await getDriveClient();
+      folderId = await findOrCreateAddressFolder(drive, address);
+      folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+      console.log(`[move-wt/load-job] Found/created folder: ${folderUrl}`);
+    } catch (driveError) {
+      console.error('[move-wt/load-job] Google Drive error:', driveError);
+      return NextResponse.json(
+        { error: 'Failed to find/create Google Drive folder', details: driveError instanceof Error ? driveError.message : 'Unknown error' },
+        { status: 500 }
+      );
+    }
+
+    // Store job number, address, and folder URL in Supabase (upsert)
+    const { error: picturesError } = await supabase
+      .from('jobs_from_pictures')
+      .upsert(
+        {
+          job_number: jobNumber,
+          address: address,
+          google_drive_folder_url: folderUrl,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'job_number',
+        }
+      );
+
+    if (picturesError) {
+      console.error('[move-wt/load-job] Failed to store folder info in Supabase:', picturesError);
+      // Continue anyway - we still have the folderUrl to return
+    }
 
     // Check if there's existing form data for this address
     const { data: existingFormData } = await supabase
@@ -128,6 +268,52 @@ export async function POST(request: NextRequest) {
       folderUrl: folderUrl,
       existingFormData: existingFormData?.form_data || null,
     });
+    }
+
+    // Priority 2: If only phone number is provided, search Supabase
+    if (phoneNumber && phoneNumber.trim()) {
+      console.log(`[move-wt/load-job] Searching by phone number: ${phoneNumber}`);
+
+      // Normalize the phone number for search
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+      console.log(`[move-wt/load-job] Normalized phone: ${normalizedPhone}`);
+
+      // Query Supabase for form data matching this phone number
+      const { data: formRecords, error: queryError } = await supabase
+        .from('move_walkthrough_forms')
+        .select('*')
+        .eq('phone_number', normalizedPhone)
+        .order('updated_at', { ascending: false });
+
+      if (queryError) {
+        console.error('[move-wt/load-job] Supabase query error:', queryError);
+        return NextResponse.json(
+          { error: 'Failed to search for phone number' },
+          { status: 500 }
+        );
+      }
+
+      if (!formRecords || formRecords.length === 0) {
+        console.log(`[move-wt/load-job] No records found for phone: ${normalizedPhone}`);
+        return NextResponse.json(
+          { error: 'No walk-through forms found for this phone number' },
+          { status: 404 }
+        );
+      }
+
+      // Return the most recent record
+      const mostRecentRecord = formRecords[0];
+      console.log(`[move-wt/load-job] Found ${formRecords.length} record(s), returning most recent`);
+
+      return NextResponse.json({
+        success: true,
+        job_number: mostRecentRecord.job_number || '',
+        address: mostRecentRecord.address || '',
+        customerInfo: null, // We don't have Workiz data for phone-only searches
+        folderUrl: null,
+        existingFormData: mostRecentRecord.form_data || null,
+      });
+    }
 
   } catch (error) {
     console.error('[move-wt/load-job] Unexpected error:', error);

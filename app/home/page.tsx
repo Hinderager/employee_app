@@ -55,7 +55,7 @@ const menuItems = [
     color: "bg-green-500",
   },
   {
-    title: "Move WT",
+    title: "Move Quote",
     description: "Move work tracking",
     href: "/move-wt",
     icon: TruckIcon,
