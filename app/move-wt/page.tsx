@@ -2196,65 +2196,7 @@ export default function MoveWalkthrough() {
                   <option value="other">Other</option>
                 </select>
 
-                {formData.pickupLocationType === 'house' && (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      name="pickupHouseSquareFeet"
-                      value={formatNumberWithCommas(formData.pickupHouseSquareFeet)}
-                      onChange={handleInputChange}
-                      placeholder="Square Feet"
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <input
-                      type="text"
-                      name="pickupZestimate"
-                      value={formatNumberWithCommas(formData.pickupZestimate)}
-                      onChange={handleInputChange}
-                      placeholder="Value"
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={fetchPickupPropertyData}
-                      className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
-                      title="Fetch property data from Zillow"
-                    >
-                      $
-                    </button>
-                  </div>
-                )}
 
-                {formData.pickupLocationType === 'apartment' && (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      name="pickupApartmentSquareFeet"
-                      value={formatNumberWithCommas(formData.pickupApartmentSquareFeet)}
-                      onChange={handleInputChange}
-                      placeholder="Square Feet"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <div className="flex-1 flex gap-1 min-w-0">
-                      <input
-                        type="text"
-                        name="pickupApartmentBedBath"
-                        value={formData.pickupApartmentBedBath}
-                        onChange={handleInputChange}
-                        placeholder="Bed/Bath"
-                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={fetchPickupPropertyData}
-                        className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
-                        title="Fetch property data from Zillow"
-                      >
-                        sf
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 {/* How Much is Getting Moved Slider - For House */}
                 {formData.pickupLocationType === 'house' && (
@@ -2452,6 +2394,66 @@ export default function MoveWalkthrough() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
+
+                {formData.pickupLocationType === 'house' && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      name="pickupHouseSquareFeet"
+                      value={formatNumberWithCommas(formData.pickupHouseSquareFeet)}
+                      onChange={handleInputChange}
+                      placeholder="Square Feet"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <input
+                      type="text"
+                      name="pickupZestimate"
+                      value={formatNumberWithCommas(formData.pickupZestimate)}
+                      onChange={handleInputChange}
+                      placeholder="Value"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={fetchPickupPropertyData}
+                      className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                      title="Fetch property data from Zillow"
+                    >
+                      $
+                    </button>
+                  </div>
+                )}
+
+                {formData.pickupLocationType === 'apartment' && (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      name="pickupApartmentSquareFeet"
+                      value={formatNumberWithCommas(formData.pickupApartmentSquareFeet)}
+                      onChange={handleInputChange}
+                      placeholder="Square Feet"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <div className="flex-1 flex gap-1 min-w-0">
+                      <input
+                        type="text"
+                        name="pickupApartmentBedBath"
+                        value={formData.pickupApartmentBedBath}
+                        onChange={handleInputChange}
+                        placeholder="Bed/Bath"
+                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={fetchPickupPropertyData}
+                        className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                        title="Fetch property data from Zillow"
+                      >
+                        sf
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2486,65 +2488,7 @@ export default function MoveWalkthrough() {
                   <option value="other">Other</option>
                 </select>
 
-                {formData.deliveryLocationType === 'house' && (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      name="deliveryHouseSquareFeet"
-                      value={formatNumberWithCommas(formData.deliveryHouseSquareFeet)}
-                      onChange={handleInputChange}
-                      placeholder="Square Feet"
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <input
-                      type="text"
-                      name="deliveryZestimate"
-                      value={formatNumberWithCommas(formData.deliveryZestimate)}
-                      onChange={handleInputChange}
-                      placeholder="Value"
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={fetchDeliveryPropertyData}
-                      className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
-                      title="Fetch property data from Zillow"
-                    >
-                      $
-                    </button>
-                  </div>
-                )}
 
-                {formData.deliveryLocationType === 'apartment' && (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      name="deliveryApartmentSquareFeet"
-                      value={formatNumberWithCommas(formData.deliveryApartmentSquareFeet)}
-                      onChange={handleInputChange}
-                      placeholder="Square Feet"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <div className="flex-1 flex gap-1 min-w-0">
-                      <input
-                        type="text"
-                        name="deliveryApartmentBedBath"
-                        value={formData.deliveryApartmentBedBath}
-                        onChange={handleInputChange}
-                        placeholder="Bed/Bath"
-                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={fetchDeliveryPropertyData}
-                        className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
-                        title="Fetch property data from Zillow"
-                      >
-                        sf
-                      </button>
-                    </div>
-                  </div>
-                )}
 
                 {formData.deliveryLocationType === 'truck' && (
                   <input
