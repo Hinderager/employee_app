@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   MapPinIcon,
   ShoppingCartIcon,
@@ -64,6 +65,13 @@ const menuItems = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+
+  // Prefetch page on hover for faster navigation
+  const handleMouseEnter = (href: string) => {
+    router.prefetch(href);
+  };
+
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 safe-bottom">
       {/* Header */}
@@ -80,6 +88,8 @@ export default function Home() {
             <Link
               key={item.href}
               href={item.href}
+              prefetch={false}
+              onMouseEnter={() => handleMouseEnter(item.href)}
               className="block group"
             >
               <div className="bg-white rounded-2xl shadow-md hover:shadow-xl transition-all duration-200 p-6 border border-gray-200 active:scale-98">
