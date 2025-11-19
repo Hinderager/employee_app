@@ -2204,7 +2204,7 @@ export default function MoveWalkthrough() {
                       value={formatNumberWithCommas(formData.pickupHouseSquareFeet)}
                       onChange={handleInputChange}
                       placeholder="Square Feet"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <input
                       type="text"
@@ -2212,7 +2212,7 @@ export default function MoveWalkthrough() {
                       value={formatNumberWithCommas(formData.pickupZestimate)}
                       onChange={handleInputChange}
                       placeholder="Value"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <button
                       type="button"
@@ -2494,7 +2494,7 @@ export default function MoveWalkthrough() {
                       value={formatNumberWithCommas(formData.deliveryHouseSquareFeet)}
                       onChange={handleInputChange}
                       placeholder="Square Feet"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <input
                       type="text"
@@ -2502,7 +2502,7 @@ export default function MoveWalkthrough() {
                       value={formatNumberWithCommas(formData.deliveryZestimate)}
                       onChange={handleInputChange}
                       placeholder="Value"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                     <button
                       type="button"
@@ -4168,7 +4168,7 @@ export default function MoveWalkthrough() {
                 name="preferredDate"
                 value={formData.preferredDate}
                 onChange={handleInputChange}
-                className="w-full bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="max-w-sm bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
