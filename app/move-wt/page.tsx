@@ -1805,7 +1805,6 @@ export default function MoveWalkthrough() {
                 placeholder="Job #"
                 className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <span className="text-gray-500 font-medium">or</span>
               <input
                 id="searchPhone"
                 type="tel"
@@ -1814,6 +1813,8 @@ export default function MoveWalkthrough() {
                 placeholder="(208) 866-2339"
                 className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+            </div>
+            <div className="flex items-center justify-center gap-3">
               <button
                 type="button"
                 onClick={handleLoadJob}
