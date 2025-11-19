@@ -341,11 +341,27 @@ export default function MoveWalkthrough() {
 
   // Extract save logic into a reusable function
   const saveFormData = async (showSuccessMessage: boolean = false) => {
-    if (!jobNumber || !address) {
-      return; // Don't save if no job is loaded
+    // Require at least phone number and pickup address
+    const phoneNumber = formData?.phone;
+    const pickupAddress = formData?.pickupAddress;
+
+    if (!phoneNumber || phoneNumber.trim() === '') {
+      return; // Need phone number to save
     }
 
     try {
+      // Generate temporary job number if real one doesn't exist
+      let effectiveJobNumber = jobNumber;
+      let effectiveAddress = address;
+
+      if (!effectiveJobNumber || effectiveJobNumber.trim() === '') {
+        // Create temp job number from phone + pickup address
+        const normalizedPhone = normalizePhoneNumber(phoneNumber);
+        const addressHash = pickupAddress ? pickupAddress.substring(0, 20).replace(/\s+/g, '-') : 'draft';
+        effectiveJobNumber = `TEMP-${normalizedPhone}-${addressHash}`;
+        effectiveAddress = pickupAddress || 'Work in Progress';
+      }
+
       // Normalize phone numbers before saving and include arrays
       const normalizedFormData = {
         ...formData,
@@ -360,10 +376,11 @@ export default function MoveWalkthrough() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          jobNumber: jobNumber.trim(),
-          address: address,
+          jobNumber: effectiveJobNumber,
+          address: effectiveAddress,
           formData: normalizedFormData,
           folderUrl: folderUrl,
+          isTemporary: !jobNumber || jobNumber.trim() === '',
         }),
       });
 
@@ -398,8 +415,9 @@ export default function MoveWalkthrough() {
       return;
     }
 
-    // Skip if no job is loaded
-    if (!jobNumber || !address) {
+    // Skip if no phone number is entered
+    const phoneNumber = formData?.phone;
+    if (!phoneNumber || phoneNumber.trim() === '') {
       return;
     }
 
