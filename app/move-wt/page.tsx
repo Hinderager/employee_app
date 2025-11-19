@@ -1899,7 +1899,7 @@ export default function MoveWalkthrough() {
                 type="tel"
                 value={searchPhone}
                 onChange={handleSearchPhoneChange}
-                placeholder="(208) 866-2339"
+                placeholder="Phone #"
                 className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
@@ -2206,24 +2206,22 @@ export default function MoveWalkthrough() {
                       placeholder="Square Feet"
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
-                    <div className="flex-1 flex gap-1 min-w-0">
-                      <input
-                        type="text"
-                        name="pickupZestimate"
-                        value={formatNumberWithCommas(formData.pickupZestimate)}
-                        onChange={handleInputChange}
-                        placeholder="Value"
-                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={fetchPickupPropertyData}
-                        className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
-                        title="Fetch property data from Zillow"
-                      >
-                        $
-                      </button>
-                    </div>
+                    <input
+                      type="text"
+                      name="pickupZestimate"
+                      value={formatNumberWithCommas(formData.pickupZestimate)}
+                      onChange={handleInputChange}
+                      placeholder="Value"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={fetchPickupPropertyData}
+                      className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                      title="Fetch property data from Zillow"
+                    >
+                      $
+                    </button>
                   </div>
                 )}
 
@@ -2498,24 +2496,22 @@ export default function MoveWalkthrough() {
                       placeholder="Square Feet"
                       className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
-                    <div className="flex-1 flex gap-1 min-w-0">
-                      <input
-                        type="text"
-                        name="deliveryZestimate"
-                        value={formatNumberWithCommas(formData.deliveryZestimate)}
-                        onChange={handleInputChange}
-                        placeholder="Value"
-                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={fetchDeliveryPropertyData}
-                        className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
-                        title="Fetch property data from Zillow"
-                      >
-                        $
-                      </button>
-                    </div>
+                    <input
+                      type="text"
+                      name="deliveryZestimate"
+                      value={formatNumberWithCommas(formData.deliveryZestimate)}
+                      onChange={handleInputChange}
+                      placeholder="Value"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                    <button
+                      type="button"
+                      onClick={fetchDeliveryPropertyData}
+                      className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                      title="Fetch property data from Zillow"
+                    >
+                      $
+                    </button>
                   </div>
                 )}
 
@@ -4172,7 +4168,7 @@ export default function MoveWalkthrough() {
                 name="preferredDate"
                 value={formData.preferredDate}
                 onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
 
