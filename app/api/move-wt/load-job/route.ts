@@ -335,26 +335,58 @@ export async function POST(request: NextRequest) {
       // If only 1 record found, auto-load it directly
       if (formRecords && formRecords.length === 1) {
         const record = formRecords[0];
-        console.log(`[move-wt/load-job] Auto-loading single record for address: ${record.address || record.customer_home_address}`);
+        const address = record.address || record.customer_home_address || '';
+        console.log(`[move-wt/load-job] Auto-loading single record for address: ${address}`);
+
+        // Try to find folder URL from jobs_from_pictures
+        let folderUrl = '';
+        const { data: pictureData } = await supabase
+          .from('jobs_from_pictures')
+          .select('google_drive_folder_url')
+          .eq('address', address)
+          .maybeSingle();
+
+        if (pictureData) {
+          folderUrl = pictureData.google_drive_folder_url || '';
+        }
 
         return NextResponse.json({
           success: true,
           job_number: record.job_number || '',
-          address: record.address || record.customer_home_address || '',
+          address: address,
           customerInfo: customerInfo,
           existingFormData: record.form_data || null,
           quoteNumber: record.quote_number || null,
+          folderUrl: folderUrl,
         });
       }
 
       // If multiple records found, return for selection
       if (formRecords && formRecords.length > 1) {
-        const forms = formRecords.map((record: any) => ({
-          jobNumber: record.job_number || '',
-          address: record.address || record.customer_home_address || 'No address',
-          updatedAt: record.updated_at || '',
-          formData: record.form_data || null,
-          quoteNumber: record.quote_number || null,
+        // Look up folder URLs for each form from jobs_from_pictures table
+        const forms = await Promise.all(formRecords.map(async (record: any) => {
+          const address = record.address || record.customer_home_address || 'No address';
+
+          // Try to find folder URL from jobs_from_pictures
+          let folderUrl = '';
+          const { data: pictureData } = await supabase
+            .from('jobs_from_pictures')
+            .select('google_drive_folder_url')
+            .eq('address', address)
+            .maybeSingle();
+
+          if (pictureData) {
+            folderUrl = pictureData.google_drive_folder_url || '';
+          }
+
+          return {
+            jobNumber: record.job_number || '',
+            address: address,
+            updatedAt: record.updated_at || '',
+            formData: record.form_data || null,
+            quoteNumber: record.quote_number || null,
+            folderUrl: folderUrl,
+          };
         }));
 
         return NextResponse.json({

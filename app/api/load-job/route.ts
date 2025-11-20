@@ -11,6 +11,11 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const WORKIZ_API_KEY = process.env.WORKIZ_API_KEY || 'api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw';
 const WORKIZ_API_URL = `https://app.workiz.com/api/v1/${WORKIZ_API_KEY}/job/all/`;
 
+// Helper function to normalize phone numbers (strips non-numeric characters)
+const normalizePhoneNumber = (phone: string): string => {
+  return phone.replace(/\D/g, '');
+};
+
 // Initialize OAuth client
 function getOAuthClient() {
   return new google.auth.OAuth2(
@@ -99,16 +104,19 @@ async function findOrCreateAddressFolder(drive: any, address: string): Promise<s
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { jobNumber } = body;
+    const { jobNumber, phoneNumber, includeCompletedJobs } = body;
 
-    if (!jobNumber || !jobNumber.trim()) {
+    // Require at least one parameter
+    if ((!jobNumber || !jobNumber.trim()) && (!phoneNumber || !phoneNumber.trim())) {
       return NextResponse.json(
-        { error: 'Job number is required' },
+        { error: 'Either job number or phone number is required' },
         { status: 400 }
       );
     }
 
-    console.log(`[load-job] Fetching address for job: ${jobNumber}`);
+    // Priority 1: If job number is provided, use it to fetch from Workiz
+    if (jobNumber && jobNumber.trim()) {
+      console.log(`[load-job] Fetching address for job: ${jobNumber}`);
 
     // Call Workiz API directly to get all jobs
     const workizResponse = await fetch(WORKIZ_API_URL, {
@@ -129,8 +137,19 @@ export async function POST(request: NextRequest) {
 
     const workizData = await workizResponse.json();
 
+    // Filter jobs by status if needed
+    let jobs = workizData.data || [];
+
+    // If not including completed jobs, filter out Done, Canceled, and Done pending approval statuses
+    if (!includeCompletedJobs) {
+      const excludedStatuses = ['Done', 'Canceled', 'Done pending approval'];
+      jobs = jobs.filter((j: any) => !excludedStatuses.includes(j.Status));
+      console.log(`[load-job] Filtered to ${jobs.length} active jobs (excluding Done, Canceled, Done pending approval)`);
+    } else {
+      console.log(`[load-job] Including all ${jobs.length} jobs (all statuses)`);
+    }
+
     // Find the job with matching SerialId
-    const jobs = workizData.data || [];
     const job = jobs.find((j: any) => String(j.SerialId) === String(jobNumber));
 
     if (!job) {
@@ -210,6 +229,168 @@ export async function POST(request: NextRequest) {
       folderUrl: folderUrl,
       folderId: folderId,
     });
+    }
+
+    // Priority 2: If only phone number is provided, search Workiz and Supabase
+    if (phoneNumber && phoneNumber.trim()) {
+      console.log(`[load-job] Searching by phone number: ${phoneNumber}`);
+
+      // Normalize the phone number for search
+      const normalizedPhone = normalizePhoneNumber(phoneNumber);
+      console.log(`[load-job] Normalized phone: ${normalizedPhone}`);
+
+      // Search Workiz for jobs with this phone number
+      const workizResponse = await fetch(WORKIZ_API_URL, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!workizResponse.ok) {
+        const errorText = await workizResponse.text();
+        console.error('[load-job] Workiz API error:', errorText);
+        return NextResponse.json(
+          { error: 'Failed to fetch job details from Workiz' },
+          { status: 500 }
+        );
+      }
+
+      const workizData = await workizResponse.json();
+
+      // Filter jobs by status if needed
+      let jobs = workizData.data || [];
+
+      // If not including completed jobs, filter out Done, Canceled, and Done pending approval statuses
+      if (!includeCompletedJobs) {
+        const excludedStatuses = ['Done', 'Canceled', 'Done pending approval'];
+        jobs = jobs.filter((j: any) => !excludedStatuses.includes(j.Status));
+        console.log(`[load-job] Filtered to ${jobs.length} active jobs (excluding Done, Canceled, Done pending approval)`);
+      } else {
+        console.log(`[load-job] Including all ${jobs.length} jobs (all statuses)`);
+      }
+
+      // Find all jobs with matching phone number
+      const matchingJobs = jobs.filter((j: any) => {
+        const jobPhone = normalizePhoneNumber(j.Phone || '');
+        return jobPhone === normalizedPhone;
+      });
+
+      if (matchingJobs.length === 0) {
+        console.log(`[load-job] No jobs found for phone number ${phoneNumber}`);
+        return NextResponse.json(
+          { error: 'No jobs found for this phone number' },
+          { status: 404 }
+        );
+      }
+
+      console.log(`[load-job] Found ${matchingJobs.length} job(s) for phone number`);
+
+      // If only one job found, load it directly
+      if (matchingJobs.length === 1) {
+        const job = matchingJobs[0];
+
+        // Extract address from Workiz job data
+        const addressParts = [];
+        if (job.Address) addressParts.push(job.Address);
+        if (job.City) addressParts.push(job.City);
+        if (job.State) addressParts.push(job.State);
+        if (job.Zip) addressParts.push(job.Zip);
+
+        const address = addressParts.join(', ').trim() || job.FullAddress || '';
+
+        if (!address) {
+          console.error(`[load-job] No address found for job ${job.SerialId}`);
+          return NextResponse.json(
+            { error: 'Address not found for this job' },
+            { status: 404 }
+          );
+        }
+
+        console.log(`[load-job] Found address: ${address}`);
+
+        // Initialize Google Drive and find/create address folder
+        let folderId: string;
+        let folderUrl: string;
+
+        try {
+          const drive = await getDriveClient();
+          folderId = await findOrCreateAddressFolder(drive, address);
+          folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+          console.log(`[load-job] Found/created folder: ${folderUrl}`);
+        } catch (driveError) {
+          console.error('[load-job] Google Drive error:', driveError);
+          return NextResponse.json(
+            { error: 'Failed to find/create Google Drive folder', details: driveError instanceof Error ? driveError.message : 'Unknown error' },
+            { status: 500 }
+          );
+        }
+
+        // Store job number, address, and folder URL in Supabase (upsert)
+        const { error: picturesError } = await supabase
+          .from('jobs_from_pictures')
+          .upsert(
+            {
+              job_number: job.SerialId,
+              address: address,
+              google_drive_folder_url: folderUrl,
+              updated_at: new Date().toISOString(),
+            },
+            {
+              onConflict: 'job_number',
+            }
+          );
+
+        if (picturesError) {
+          console.error('[load-job] Failed to store folder info in Supabase:', picturesError);
+          // Continue anyway - we still have the folderUrl to return
+        }
+
+        return NextResponse.json({
+          success: true,
+          job_number: job.SerialId,
+          address: address,
+          folderUrl: folderUrl,
+          folderId: folderId,
+        });
+      }
+
+      // Multiple jobs found - return them for user selection
+      const forms = await Promise.all(matchingJobs.map(async (job: any) => {
+        const addressParts = [];
+        if (job.Address) addressParts.push(job.Address);
+        if (job.City) addressParts.push(job.City);
+        if (job.State) addressParts.push(job.State);
+        if (job.Zip) addressParts.push(job.Zip);
+
+        const address = addressParts.join(', ').trim() || job.FullAddress || 'No address';
+
+        // Try to find folder URL from jobs_from_pictures
+        let folderUrl = '';
+        const { data: pictureData } = await supabase
+          .from('jobs_from_pictures')
+          .select('google_drive_folder_url')
+          .eq('job_number', job.SerialId)
+          .maybeSingle();
+
+        if (pictureData) {
+          folderUrl = pictureData.google_drive_folder_url || '';
+        }
+
+        return {
+          jobNumber: job.SerialId || '',
+          address: address,
+          updatedAt: job.UpdatedDate || new Date().toISOString(),
+          folderUrl: folderUrl,
+        };
+      }));
+
+      return NextResponse.json({
+        success: true,
+        forms: forms,
+        multiple: true,
+      });
+    }
 
   } catch (error) {
     console.error('[load-job] Unexpected error:', error);

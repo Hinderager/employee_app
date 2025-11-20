@@ -13,6 +13,8 @@ interface MediaFile {
 
 export default function PicturesPage() {
   const [jobNumber, setJobNumber] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [includeCompletedJobs, setIncludeCompletedJobs] = useState(false);
   const [loadNumber, setLoadNumber] = useState("");
   const [address, setAddress] = useState("");
   const [folderUrl, setFolderUrl] = useState("");
@@ -20,17 +22,21 @@ export default function PicturesPage() {
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [multipleForms, setMultipleForms] = useState<any[]>([]);
+  const [showFormSelection, setShowFormSelection] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const handleLoadJob = async () => {
-    if (!jobNumber.trim()) {
-      alert('Please enter a job number');
+    // Require at least one parameter
+    if ((!jobNumber || !jobNumber.trim()) && (!phoneNumber || !phoneNumber.trim())) {
+      alert('Please enter a job number or phone number');
       return;
     }
 
     setIsLoadingJob(true);
     setIsCreatingFolder(true);
+    setShowFormSelection(false);
 
     try {
       const response = await fetch('/api/load-job', {
@@ -38,7 +44,11 @@ export default function PicturesPage() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ jobNumber: jobNumber.trim() }),
+        body: JSON.stringify({
+          jobNumber: jobNumber.trim(),
+          phoneNumber: phoneNumber.trim(),
+          includeCompletedJobs: includeCompletedJobs
+        }),
       });
 
       const result = await response.json();
@@ -47,7 +57,20 @@ export default function PicturesPage() {
         throw new Error(result.error || 'Failed to load job');
       }
 
+      // Handle multiple forms found
+      if (result.multiple && result.forms && result.forms.length > 1) {
+        setMultipleForms(result.forms);
+        setShowFormSelection(true);
+        setIsCreatingFolder(false);
+        setIsLoadingJob(false);
+        return;
+      }
+
+      // Single result - load it directly
       setAddress(result.address);
+      if (result.job_number) {
+        setJobNumber(result.job_number);
+      }
 
       // Folder is now always created by the API
       if (result.folderUrl) {
@@ -60,6 +83,17 @@ export default function PicturesPage() {
       setIsLoadingJob(false);
       setIsCreatingFolder(false);
     }
+  };
+
+  const handleSelectForm = (selectedIndex: number) => {
+    const selectedForm = multipleForms[selectedIndex];
+
+    // Load the selected form
+    setAddress(selectedForm.address);
+    setJobNumber(selectedForm.jobNumber);
+    setFolderUrl(selectedForm.folderUrl || '');
+    setShowFormSelection(false);
+    setMultipleForms([]);
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -167,37 +201,67 @@ export default function PicturesPage() {
       </header>
 
       <div className="px-6 py-8 space-y-6">
-        {/* Job Number Section */}
+        {/* Job Number and Phone Number Section */}
         <div className="bg-white rounded-2xl shadow-md p-4">
-          <div className="flex items-center gap-4">
-            <input
-              id="jobNumber"
-              type="text"
-              value={jobNumber}
-              onChange={(e) => setJobNumber(e.target.value)}
-              placeholder="Job #"
-              className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-topshelf-yellow"
-            />
-            <button
-              onClick={handleLoadJob}
-              disabled={isLoadingJob}
-              className="px-6 py-2 bg-topshelf-blue rounded-lg font-semibold text-white transition-colors disabled:bg-gray-400"
-            >
-              {isLoadingJob ? 'Loading...' : 'Load'}
-            </button>
-            <button
-              onClick={() => {
-                setJobNumber("");
-                setAddress("");
-                setFolderUrl("");
-                setIsCreatingFolder(false);
-                mediaFiles.forEach(f => URL.revokeObjectURL(f.preview));
-                setMediaFiles([]);
-              }}
-              className="px-6 py-2 bg-gray-500 rounded-lg font-semibold text-white transition-colors"
-            >
-              Clear
-            </button>
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <input
+                id="jobNumber"
+                type="text"
+                value={jobNumber}
+                onChange={(e) => setJobNumber(e.target.value)}
+                placeholder="Job #"
+                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-topshelf-yellow"
+              />
+              <span className="text-gray-500 font-semibold">OR</span>
+              <input
+                id="phoneNumber"
+                type="tel"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                placeholder="Phone Number"
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-topshelf-yellow"
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                id="includeCompletedJobs"
+                type="checkbox"
+                checked={includeCompletedJobs}
+                onChange={(e) => setIncludeCompletedJobs(e.target.checked)}
+                className="h-4 w-4 text-topshelf-blue focus:ring-topshelf-yellow border-gray-300 rounded"
+              />
+              <label htmlFor="includeCompletedJobs" className="text-sm text-gray-700">
+                Include Completed Jobs
+              </label>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <button
+                onClick={handleLoadJob}
+                disabled={isLoadingJob}
+                className="px-6 py-2 bg-topshelf-blue rounded-lg font-semibold text-white transition-colors disabled:bg-gray-400"
+              >
+                {isLoadingJob ? 'Loading...' : 'Load'}
+              </button>
+              <button
+                onClick={() => {
+                  setJobNumber("");
+                  setPhoneNumber("");
+                  setAddress("");
+                  setFolderUrl("");
+                  setIsCreatingFolder(false);
+                  setShowFormSelection(false);
+                  setMultipleForms([]);
+                  mediaFiles.forEach(f => URL.revokeObjectURL(f.preview));
+                  setMediaFiles([]);
+                }}
+                className="px-6 py-2 bg-gray-500 rounded-lg font-semibold text-white transition-colors"
+              >
+                Clear
+              </button>
+            </div>
           </div>
           {address && (
             <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
@@ -214,6 +278,32 @@ export default function PicturesPage() {
             </div>
           )}
         </div>
+
+        {/* Multiple Forms Selection */}
+        {showFormSelection && multipleForms.length > 1 && (
+          <div className="bg-white rounded-2xl shadow-md p-6">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">
+              Multiple jobs found. Please select one:
+            </h2>
+            <div className="space-y-2">
+              {multipleForms.map((form, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleSelectForm(index)}
+                  className="w-full text-left p-4 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-colors"
+                >
+                  <div className="font-semibold text-gray-900">{form.address}</div>
+                  {form.jobNumber && (
+                    <div className="text-sm text-gray-600">Job #{form.jobNumber}</div>
+                  )}
+                  <div className="text-xs text-gray-500">
+                    Updated: {new Date(form.updatedAt).toLocaleDateString()}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Camera and Upload Buttons */}
         {folderUrl || isCreatingFolder ? (
