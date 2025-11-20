@@ -90,7 +90,7 @@ export default function MoveWalkthrough() {
     totalCharge: number;
   } | null>(null);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
-  const [selectedBudgetCrew, setSelectedBudgetCrew] = useState<{ crewSize: number; hours: number; laborCost: number; materialsCost: number } | null>(null);
+  const [isBudgetInsufficient, setIsBudgetInsufficient] = useState(false);
 
   const [formData, setFormData] = useState({
     // Service Type
@@ -537,11 +537,6 @@ export default function MoveWalkthrough() {
       processedValue = value.replace(/,/g, '');
     }
 
-    // Clear selected budget crew when fixed budget checkbox is toggled or budget amount changes
-    if (name === 'fixedBudgetRequested' || name === 'desiredBudget') {
-      setSelectedBudgetCrew(null);
-    }
-
     // Clear all additional stop fields when clicking the additional stop checkbox
     if (name === 'hasAdditionalStop' && type === 'checkbox') {
       setFormData(prev => ({
@@ -568,17 +563,6 @@ export default function MoveWalkthrough() {
         [name]: type === 'checkbox' ? checked : processedValue
       }));
     }
-  };
-
-  // Handle selecting a budget crew option
-  const handleSelectBudgetCrew = (option: { crewSize: number; hours: number; totalHours: number; laborCost: number; totalCost: number }) => {
-    const materialsCost = option.laborCost * 0.05;
-    setSelectedBudgetCrew({
-      crewSize: option.crewSize,
-      hours: option.hours,
-      laborCost: option.laborCost,
-      materialsCost: materialsCost
-    });
   };
 
   // Handle phone number input with auto-formatting
@@ -1607,11 +1591,6 @@ export default function MoveWalkthrough() {
 
       movingLabor = movingLabor * parkingFactor;
 
-      // If a budget crew option is selected, use its labor cost instead
-      if (selectedBudgetCrew) {
-        movingLabor = selectedBudgetCrew.laborCost;
-      }
-
       if (movingLabor > 0) {
         const materialsCharge = movingLabor * 0.05; // 5% of labor
         const totalMovingCharge = movingLabor + materialsCharge;
@@ -1905,6 +1884,61 @@ export default function MoveWalkthrough() {
           ]
         });
       }
+    }
+
+    // If Fixed Budget Requested, adjust Moving labor to match desired budget
+    if (formData.fixedBudgetRequested && formData.desiredBudget) {
+      const desiredBudget = parseFloat(formData.desiredBudget.replace(/,/g, ''));
+
+      if (!isNaN(desiredBudget) && desiredBudget > 0) {
+        // Calculate fixed costs (everything except Moving)
+        let fixedCosts = 0;
+        items.forEach(item => {
+          if (item.description !== 'Moving') {
+            fixedCosts += item.amount;
+          }
+        });
+
+        // Calculate required moving labor to hit desired budget
+        // Formula: desiredBudget = fixedCosts + movingLabor + (movingLabor * 0.05)
+        // Solving: movingLabor = (desiredBudget - fixedCosts) / 1.05
+        const availableForMoving = desiredBudget - fixedCosts;
+        const requiredMovingLabor = availableForMoving / 1.05;
+
+        // Minimum is 2 movers for 1 hour = $170
+        const minimumMovingLabor = 170;
+
+        if (requiredMovingLabor < minimumMovingLabor) {
+          // Budget is insufficient
+          setIsBudgetInsufficient(true);
+        } else {
+          setIsBudgetInsufficient(false);
+
+          // Update Moving item with new labor amount
+          const movingItemIndex = items.findIndex(item => item.description === 'Moving');
+          if (movingItemIndex !== -1) {
+            const materialsCharge = requiredMovingLabor * 0.05;
+            const totalMovingCharge = requiredMovingLabor + materialsCharge;
+
+            items[movingItemIndex] = {
+              description: 'Moving',
+              amount: Math.round(totalMovingCharge),
+              subItems: [
+                {
+                  description: 'Labor',
+                  amount: Math.round(requiredMovingLabor)
+                },
+                {
+                  description: 'Materials and Supplies',
+                  amount: Math.round(materialsCharge)
+                }
+              ]
+            };
+          }
+        }
+      }
+    } else {
+      setIsBudgetInsufficient(false);
     }
 
     // Calculate total
@@ -4638,93 +4672,76 @@ export default function MoveWalkthrough() {
             </div>
 
             {/* Budget Input Field */}
-            {formData.fixedBudgetRequested && (
-              <div>
-                <label htmlFor="desiredBudget" className="block text-sm font-medium text-gray-700 mb-1">
-                  Desired Budget
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-gray-500">$</span>
-                  <input
-                    type="number"
-                    id="desiredBudget"
-                    name="desiredBudget"
-                    value={formData.desiredBudget}
-                    onChange={handleInputChange}
-                    placeholder="Enter budget amount"
-                    min="0"
-                    step="1"
-                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
+            {formData.fixedBudgetRequested && (() => {
+              // Calculate minimum budget for placeholder
+              let fixedCosts = 0;
+              quote.items.forEach(item => {
+                if (item.description !== 'Moving') {
+                  fixedCosts += item.amount;
+                }
+              });
+              const minimumMovingLabor = 170; // 2 movers * 1 hour * $85
+              const minimumBudget = Math.ceil(fixedCosts + (minimumMovingLabor * 1.05));
 
-                {/* Budget Crew Options */}
-                {budgetCrewOptions && (
-                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                    {budgetCrewOptions.viable ? (
-                      <div>
-                        <div className="mb-3">
-                          <p className="text-sm font-medium text-gray-700 mb-1">
-                            Budget Breakdown:
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Desired Budget: <span className="font-semibold">${budgetCrewOptions.desiredBudget.toLocaleString()}</span>
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Fixed Costs (Travel, Packing, Stairs, etc.): <span className="font-semibold">${Math.round(budgetCrewOptions.fixedCosts).toLocaleString()}</span>
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Available for Moving Labor: <span className="font-semibold text-green-600">${Math.round(budgetCrewOptions.movingLaborBudget).toLocaleString()}</span>
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Moving Materials (5%): <span className="font-semibold">${Math.round(budgetCrewOptions.movingMaterialsBudget).toLocaleString()}</span>
-                          </p>
-                        </div>
-
-                        <p className="text-sm font-medium text-gray-700 mb-2">
-                          Viable Crew Configurations - Click to select:
-                        </p>
-                        <div className="space-y-2">
-                          {budgetCrewOptions.options.map((option, index) => {
-                            const isSelected = selectedBudgetCrew?.crewSize === option.crewSize && selectedBudgetCrew?.hours === option.hours;
-                            return (
-                              <button
-                                key={index}
-                                onClick={() => handleSelectBudgetCrew(option)}
-                                className={`w-full text-left p-3 rounded border transition-all ${
-                                  isSelected
-                                    ? 'bg-green-50 border-green-500 ring-2 ring-green-500'
-                                    : 'bg-white border-blue-300 hover:border-blue-500 hover:bg-blue-50'
-                                }`}
-                              >
-                                <div className="flex justify-between items-center">
-                                  <span className="font-semibold text-gray-900">
-                                    {option.crewSize} {option.crewSize === 1 ? 'mover' : 'movers'} for {formatHoursMinutes(option.hours)}
-                                    {isSelected && <span className="ml-2 text-green-600">✓ Selected</span>}
-                                  </span>
-                                  <span className="text-sm text-gray-600">
-                                    ${Math.round(option.totalCost).toLocaleString()}
-                                  </span>
-                                </div>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Total combined hours: {option.totalHours.toFixed(1)} • Labor: ${Math.round(option.laborCost).toLocaleString()} + Materials: ${Math.round(option.laborCost * 0.05).toLocaleString()}
-                                </p>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-center p-4">
-                        <p className="text-red-600 font-semibold">
-                          {budgetCrewOptions.message}
-                        </p>
-                      </div>
-                    )}
+              return (
+                <div>
+                  <label htmlFor="desiredBudget" className="block text-sm font-medium text-gray-700 mb-1">
+                    Desired Budget
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2 text-gray-500">$</span>
+                    <input
+                      type="number"
+                      id="desiredBudget"
+                      name="desiredBudget"
+                      value={formData.desiredBudget}
+                      onChange={handleInputChange}
+                      placeholder={`Minimum: $${minimumBudget.toLocaleString()}`}
+                      min="0"
+                      step="1"
+                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
                   </div>
-                )}
-              </div>
-            )}
+
+                  {/* Budget Crew Options */}
+                  {budgetCrewOptions && (
+                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                      {budgetCrewOptions.viable ? (
+                        <div>
+                          <div className="mb-3">
+                            <p className="text-sm font-medium text-gray-700 mb-1">
+                              Budget Breakdown:
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Desired Budget: <span className="font-semibold">${budgetCrewOptions.desiredBudget.toLocaleString()}</span>
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Fixed Costs (Travel, Packing, Stairs, etc.): <span className="font-semibold">${Math.round(budgetCrewOptions.fixedCosts).toLocaleString()}</span>
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Available for Moving Labor: <span className="font-semibold text-green-600">${Math.round(budgetCrewOptions.movingLaborBudget).toLocaleString()}</span>
+                            </p>
+                            <p className="text-sm text-gray-600">
+                              Moving Materials (5%): <span className="font-semibold">${Math.round(budgetCrewOptions.movingMaterialsBudget).toLocaleString()}</span>
+                            </p>
+                          </div>
+
+                          <p className="text-sm text-gray-700 italic mt-3">
+                            Crew configuration will be determined based on availability
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="text-center p-4">
+                          <p className="text-red-600 font-semibold">
+                            {budgetCrewOptions.message}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             {/* Additional Notes */}
             <div>
@@ -4851,7 +4868,11 @@ export default function MoveWalkthrough() {
 
         {/* Quote Display */}
         {quote.total > 0 && (
-          <section className="bg-gradient-to-br from-green-50 to-blue-50 rounded-lg shadow-lg p-6 border-2 border-green-300">
+          <section className={`rounded-lg shadow-lg p-6 border-2 ${
+            isBudgetInsufficient
+              ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-300'
+              : 'bg-gradient-to-br from-green-50 to-blue-50 border-green-300'
+          }`}>
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
               Active Estimate
             </h2>
