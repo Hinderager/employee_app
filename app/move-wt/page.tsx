@@ -14,6 +14,7 @@ export default function MoveWalkthrough() {
   const [isLoadingJob, setIsLoadingJob] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
+  const [tempJobNumber, setTempJobNumber] = useState<string>("");
 
   // Dynamic phone and email arrays
   const [phones, setPhones] = useState<Array<{ number: string; name: string }>>([{ number: "", name: "" }]);
@@ -355,17 +356,23 @@ export default function MoveWalkthrough() {
       let effectiveAddress = address;
 
       if (!effectiveJobNumber || effectiveJobNumber.trim() === '') {
-        // Create temp job number from phone + pickup address
-        const normalizedPhone = normalizePhoneNumber(phoneNumber);
-        const addressHash = pickupAddress ? pickupAddress.substring(0, 20).replace(/\s+/g, '-') : 'draft';
-        effectiveJobNumber = `TEMP-${normalizedPhone}-${addressHash}`;
-        effectiveAddress = pickupAddress || 'Work in Progress';
+        // Use existing temp job number if we have one, otherwise create new one
+        if (tempJobNumber) {
+          effectiveJobNumber = tempJobNumber;
+          effectiveAddress = pickupAddress || 'Work in Progress';
+        } else {
+          // Create temp job number from phone only (don't include address so it doesn't change)
+          const normalizedPhone = normalizePhoneNumber(phoneNumber);
+          effectiveJobNumber = `TEMP-${normalizedPhone}`;
+          effectiveAddress = pickupAddress || 'Work in Progress';
+          setTempJobNumber(effectiveJobNumber); // Store it so it doesn't change
+        }
       }
 
       // Normalize phone numbers before saving and include arrays
       const normalizedFormData = {
         ...formData,
-        phone: normalizePhoneNumber(formData.phone),
+        phone: normalizePhoneNumber(phoneNumber),
         phones: phones.map(p => ({ ...p, number: normalizePhoneNumber(p.number) })),
         emails: emails
       };
