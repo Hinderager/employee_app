@@ -241,7 +241,7 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
               marginBottom: "24px"
             }}>
               <h2 style={{ fontSize: "24px", fontWeight: "700", color: colors.dark, marginBottom: "20px" }}>
-                Active Estimate
+                Move Estimate
               </h2>
 
               {/* Quote Items */}

@@ -1439,19 +1439,19 @@ export default function MoveWalkthrough() {
         toPickup: {
           miles: result.toPickup.miles,
           minutes: result.toPickup.minutes,
-          charge: parseFloat(toPickupTotalCharge.toFixed(2))
+          charge: Math.round(toPickupTotalCharge)
         },
         pickupToDelivery: {
           miles: result.pickupToDelivery.miles,
           minutes: result.pickupToDelivery.minutes,
-          charge: parseFloat(pickupToDeliveryTotalCharge.toFixed(2))
+          charge: Math.round(pickupToDeliveryTotalCharge)
         },
         fromDelivery: {
           miles: result.fromDelivery.miles,
           minutes: result.fromDelivery.minutes,
-          charge: parseFloat(fromDeliveryTotalCharge.toFixed(2))
+          charge: Math.round(fromDeliveryTotalCharge)
         },
-        totalCharge: parseFloat(totalCharge.toFixed(2))
+        totalCharge: Math.round(totalCharge)
       });
 
     } catch (error) {
@@ -1549,15 +1549,15 @@ export default function MoveWalkthrough() {
 
         items.push({
           description: 'Moving',
-          amount: parseFloat(totalMovingCharge.toFixed(2)),
+          amount: Math.round(totalMovingCharge),
           subItems: [
             {
               description: 'Labor',
-              amount: parseFloat(movingLabor.toFixed(2))
+              amount: Math.round(movingLabor)
             },
             {
               description: 'Materials and Supplies',
-              amount: parseFloat(materialsCharge.toFixed(2))
+              amount: Math.round(materialsCharge)
             }
           ]
         });
@@ -1647,7 +1647,7 @@ export default function MoveWalkthrough() {
         const subItems = [
           {
             description: `Travel to Start (${distanceData.toPickup.miles.toFixed(1)} mi, ${formatDuration(distanceData.toPickup.minutes)})`,
-            amount: parseFloat(toStartCharge.toFixed(2))
+            amount: Math.round(toStartCharge)
           }
         ];
 
@@ -1655,18 +1655,18 @@ export default function MoveWalkthrough() {
         if (distanceData.pickupToDelivery && distanceData.pickupToDelivery.miles > 0) {
           subItems.push({
             description: `Move Travel (${distanceData.pickupToDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.pickupToDelivery.minutes)})`,
-            amount: parseFloat(moveTravelCharge.toFixed(2))
+            amount: Math.round(moveTravelCharge)
           });
         }
 
         subItems.push({
           description: `Return Travel (${distanceData.fromDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.fromDelivery.minutes)})`,
-          amount: parseFloat(returnTravelCharge.toFixed(2))
+          amount: Math.round(returnTravelCharge)
         });
 
         items.push({
           description: 'Travel (first 15 miles included)',
-          amount: parseFloat(totalTravelCharge.toFixed(2)),
+          amount: Math.round(totalTravelCharge),
           subItems: subItems
         });
       }
@@ -1814,15 +1814,15 @@ export default function MoveWalkthrough() {
 
         items.push({
           description: `Packing and Boxing (${packingLevel})`,
-          amount: parseFloat(totalPackingCharge.toFixed(2)),
+          amount: Math.round(totalPackingCharge),
           subItems: [
             {
               description: 'Labor',
-              amount: parseFloat(packingLaborCharge.toFixed(2))
+              amount: Math.round(packingLaborCharge)
             },
             {
               description: 'Materials and Supplies',
-              amount: parseFloat(materialsCharge.toFixed(2))
+              amount: Math.round(materialsCharge)
             }
           ]
         });

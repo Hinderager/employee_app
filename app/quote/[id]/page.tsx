@@ -223,7 +223,7 @@ export default async function QuotePage({ params }: QuotePageProps) {
               marginBottom: "24px"
             }}>
               <h2 style={{ fontSize: "24px", fontWeight: "700", color: colors.dark, marginBottom: "20px" }}>
-                Active Estimate
+                Move Estimate
               </h2>
 
               {/* Quote Items */}
