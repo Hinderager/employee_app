@@ -45,7 +45,15 @@ async function findGHLContact(phone: string) {
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to search GHL contacts: ${response.statusText}`);
+    const errorBody = await response.text();
+    console.error('[send-quote] GHL API error:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorBody,
+      apiKey: GHL_API_KEY ? `${GHL_API_KEY.substring(0, 10)}...` : 'MISSING',
+      locationId: GHL_LOCATION_ID,
+    });
+    throw new Error(`Failed to search GHL contacts: ${response.statusText} - ${errorBody}`);
   }
 
   const data = await response.json();
@@ -64,18 +72,22 @@ async function upsertGHLContact(contactData: {
   // First, search for existing contact
   const existingContact = await findGHLContact(contactData.phone);
 
-  const payload = {
+  const payload: any = {
     firstName: contactData.firstName,
     lastName: contactData.lastName,
     phone: normalizePhoneNumber(contactData.phone),
-    email: contactData.email,
     address1: contactData.address,
     companyName: contactData.company || '',
-    locationId: GHL_LOCATION_ID,
   };
+
+  // Only include email if it's provided and valid
+  if (contactData.email && contactData.email.includes('@')) {
+    payload.email = contactData.email;
+  }
 
   if (existingContact) {
     // Update existing contact
+    console.log('[send-quote] Updating contact:', existingContact.id, 'with payload:', payload);
     const response = await fetch(
       `${GHL_API_BASE}/contacts/${existingContact.id}`,
       {
@@ -90,12 +102,20 @@ async function upsertGHLContact(contactData: {
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to update GHL contact: ${response.statusText}`);
+      const errorBody = await response.text();
+      console.error('[send-quote] Update contact error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorBody,
+        payload: payload,
+      });
+      throw new Error(`Failed to update GHL contact: ${response.statusText} - ${errorBody}`);
     }
 
     return await response.json();
   } else {
     // Create new contact
+    console.log('[send-quote] Creating new contact with payload:', payload);
     const response = await fetch(
       `${GHL_API_BASE}/contacts/`,
       {
@@ -110,7 +130,14 @@ async function upsertGHLContact(contactData: {
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to create GHL contact: ${response.statusText}`);
+      const errorBody = await response.text();
+      console.error('[send-quote] Create contact error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorBody,
+        payload: payload,
+      });
+      throw new Error(`Failed to create GHL contact: ${response.statusText} - ${errorBody}`);
     }
 
     return await response.json();
@@ -119,6 +146,18 @@ async function upsertGHLContact(contactData: {
 
 // Create GHL opportunity
 async function createGHLOpportunity(contactId: string, quoteNumber: string, quoteTotal: number) {
+  const payload = {
+    pipelineId: GHL_PIPELINE_ID,
+    locationId: GHL_LOCATION_ID,
+    name: `Moving Quote ${quoteNumber}`,
+    pipelineStageId: GHL_QUOTE_SENT_STAGE_ID,
+    status: 'open',
+    contactId: contactId,
+    monetaryValue: Math.round(quoteTotal),
+  };
+
+  console.log('[send-quote] Creating opportunity with payload:', payload);
+
   const response = await fetch(
     `${GHL_API_BASE}/opportunities/`,
     {
@@ -128,20 +167,22 @@ async function createGHLOpportunity(contactId: string, quoteNumber: string, quot
         'Version': '2021-07-28',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        pipelineId: GHL_PIPELINE_ID,
-        locationId: GHL_LOCATION_ID,
-        name: `Moving Quote ${quoteNumber}`,
-        pipelineStageId: GHL_QUOTE_SENT_STAGE_ID,
-        status: 'open',
-        contactId: contactId,
-        monetaryValue: Math.round(quoteTotal),
-      }),
+      body: JSON.stringify(payload),
     }
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to create GHL opportunity: ${response.statusText}`);
+    const errorBody = await response.text();
+    console.error('[send-quote] Create opportunity error:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorBody,
+      payload: payload,
+      pipelineId: GHL_PIPELINE_ID,
+      locationId: GHL_LOCATION_ID,
+      stageId: GHL_QUOTE_SENT_STAGE_ID,
+    });
+    throw new Error(`Failed to create GHL opportunity: ${response.statusText} - ${errorBody}`);
   }
 
   return await response.json();
@@ -252,10 +293,17 @@ export async function POST(request: NextRequest) {
     if (!quoteUrl) {
       quoteUrl = generateQuoteUrl();
 
-      // Update quote with the URL
+      // Calculate expiration date (2 months from now)
+      const expiresAt = new Date();
+      expiresAt.setMonth(expiresAt.getMonth() + 2);
+
+      // Update quote with the URL and expiration
       const { error: updateError } = await supabase
         .from('move_quote')
-        .update({ quote_url: quoteUrl })
+        .update({
+          quote_url: quoteUrl,
+          quote_url_expires_at: expiresAt.toISOString()
+        })
         .eq('quote_number', quoteNumber);
 
       if (updateError) {
