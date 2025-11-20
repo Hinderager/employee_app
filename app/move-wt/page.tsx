@@ -944,6 +944,7 @@ export default function MoveWalkthrough() {
       phoneName: "",
       email: "",
       emailName: "",
+      customerHomeAddressType: "",
 
       // Addresses - Pickup
       pickupAddress: "",
