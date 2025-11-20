@@ -332,21 +332,45 @@ export async function POST(request: NextRequest) {
 
       console.log(`[move-wt/load-job] Found ${formRecords?.length || 0} saved form(s)`);
 
-      // Format forms for selection
-      const forms = (formRecords || []).map((record: any) => ({
-        jobNumber: record.job_number || '',
-        address: record.address || 'No address',
-        updatedAt: record.updated_at || '',
-        formData: record.form_data || null,
-        quoteNumber: record.quote_number || null,
-      }));
+      // If only 1 record found, auto-load it directly
+      if (formRecords && formRecords.length === 1) {
+        const record = formRecords[0];
+        console.log(`[move-wt/load-job] Auto-loading single record for address: ${record.address || record.customer_home_address}`);
 
-      // Return customer info and all forms
+        return NextResponse.json({
+          success: true,
+          job_number: record.job_number || '',
+          address: record.address || record.customer_home_address || '',
+          customerInfo: customerInfo,
+          existingFormData: record.form_data || null,
+          quoteNumber: record.quote_number || null,
+        });
+      }
+
+      // If multiple records found, return for selection
+      if (formRecords && formRecords.length > 1) {
+        const forms = formRecords.map((record: any) => ({
+          jobNumber: record.job_number || '',
+          address: record.address || record.customer_home_address || 'No address',
+          updatedAt: record.updated_at || '',
+          formData: record.form_data || null,
+          quoteNumber: record.quote_number || null,
+        }));
+
+        return NextResponse.json({
+          success: true,
+          customerInfo: customerInfo,
+          forms: forms,
+          multiple: true,
+        });
+      }
+
+      // No records found - return just customer info
       return NextResponse.json({
         success: true,
         customerInfo: customerInfo,
-        forms: forms,
-        multiple: forms.length > 1,
+        forms: [],
+        multiple: false,
       });
     }
 
