@@ -30,6 +30,7 @@ export default function MoveWalkthrough() {
   // Track if form is saved
   const [isFormSaved, setIsFormSaved] = useState(true);
   const [showQuotePreview, setShowQuotePreview] = useState(false);
+  const [quoteSent, setQuoteSent] = useState(false);
 
   // Custom styles for invisible slider
   useEffect(() => {
@@ -4608,19 +4609,25 @@ export default function MoveWalkthrough() {
                     }
 
                     console.log(`Quote sent successfully to ${formData.firstName}. URL: ${result.quoteUrl}`);
+
+                    // Show "Sent" for 5 seconds
+                    setQuoteSent(true);
+                    setTimeout(() => {
+                      setQuoteSent(false);
+                    }, 5000);
                   } catch (error) {
                     console.error('Send quote error:', error);
                     alert(error instanceof Error ? error.message : 'Failed to send quote. Please try again.');
                   }
                 }}
-                disabled={!quoteNumber || !formData.firstName || !formData.phone}
+                disabled={!quoteNumber || !formData.firstName || !formData.phone || quoteSent}
                 className="py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   background: 'linear-gradient(135deg, #10B981, #0072BC)',
                   boxShadow: '0 4px 12px rgba(0,114,188,0.3)'
                 }}
               >
-                Send to Customer
+                {quoteSent ? 'Sent' : 'Send to Customer'}
               </button>
             </div>
           </section>
