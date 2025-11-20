@@ -4539,7 +4539,7 @@ export default function MoveWalkthrough() {
                 boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
               }}
             >
-              👁️ Preview Customer Quote
+              Preview Customer Quote
             </button>
           </section>
         )}
