@@ -1646,7 +1646,8 @@ export default function MoveWalkthrough() {
         // Show breakdown if $100 or more
         const subItems = [
           {
-            description: `Travel to Start (${distanceData.toPickup.miles.toFixed(1)} mi, ${formatDuration(distanceData.toPickup.minutes)})`,
+            description: 'Travel to Start',
+            details: `(${distanceData.toPickup.miles.toFixed(1)} mi, ${formatDuration(distanceData.toPickup.minutes)})`,
             amount: Math.round(toStartCharge)
           }
         ];
@@ -1654,13 +1655,15 @@ export default function MoveWalkthrough() {
         // Add Move Travel if present
         if (distanceData.pickupToDelivery && distanceData.pickupToDelivery.miles > 0) {
           subItems.push({
-            description: `Move Travel (${distanceData.pickupToDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.pickupToDelivery.minutes)})`,
+            description: 'Move Travel',
+            details: `(${distanceData.pickupToDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.pickupToDelivery.minutes)})`,
             amount: Math.round(moveTravelCharge)
           });
         }
 
         subItems.push({
-          description: `Return Travel (${distanceData.fromDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.fromDelivery.minutes)})`,
+          description: 'Return Travel',
+          details: `(${distanceData.fromDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.fromDelivery.minutes)})`,
           amount: Math.round(returnTravelCharge)
         });
 

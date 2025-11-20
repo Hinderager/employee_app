@@ -257,27 +257,35 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
                     </span>
                   </div>
 
-                  {/* Sub Items - only show if different from category */}
-                  {section.items.length > 1 && (
-                    <div style={{ paddingLeft: "20px" }}>
-                      {section.items.map((item: any, itemIndex: number) => (
-                        <div key={itemIndex} style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", gap: "20px" }}>
-                          <span style={{ fontSize: "13px", color: colors.gray, flex: 1 }}>
-                            {item.description}
-                          </span>
-                          <span style={{ fontSize: "13px", color: colors.primary, fontWeight: "600", minWidth: "80px", textAlign: "right" }}>
-                            {formatCurrency(item.amount)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
+                  {/* Discount - show before sub-items */}
                   {section.discount && (
-                    <div style={{ marginTop: "6px", paddingLeft: "20px" }}>
+                    <div style={{ marginBottom: "6px", paddingLeft: "20px" }}>
                       <span style={{ fontSize: "11px", color: colors.success, fontStyle: "italic" }}>
                         {section.discount}
                       </span>
+                    </div>
+                  )}
+
+                  {/* Sub Items - only show if different from category */}
+                  {(section.items.length > 1 || (section.items.length === 1 && section.items[0].description !== section.category)) && (
+                    <div style={{ paddingLeft: "20px" }}>
+                      {section.items.map((item: any, itemIndex: number) => (
+                        <div key={itemIndex} style={{ marginBottom: item.details ? "10px" : "6px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", gap: "20px" }}>
+                            <span style={{ fontSize: "13px", color: colors.gray, flex: 1 }}>
+                              {item.description}
+                            </span>
+                            <span style={{ fontSize: "13px", color: colors.primary, fontWeight: "600", minWidth: "80px", textAlign: "right" }}>
+                              {formatCurrency(item.amount)}
+                            </span>
+                          </div>
+                          {item.details && (
+                            <div style={{ fontSize: "11px", color: colors.gray, fontStyle: "italic", marginTop: "2px" }}>
+                              {item.details}
+                            </div>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -298,7 +306,7 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
 
               {/* Disclaimer */}
               <p style={{ fontSize: "11px", color: colors.gray, fontStyle: "italic", textAlign: "center", margin: 0 }}>
-                *Estimate based on provided information. Final price may vary.
+                *Quoted rates are estimates. Final charges reflect actual hours worked, including drive time and additional labor if required.
               </p>
             </div>
           ) : (
