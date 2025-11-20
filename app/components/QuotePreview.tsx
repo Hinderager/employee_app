@@ -164,7 +164,8 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
               />
               <div style={{ color: colors.gray, fontSize: "12px", lineHeight: "1.6" }}>
                 <p style={{ margin: "2px 0", fontWeight: "500", color: colors.dark }}>Top Shelf Moving and Junk Removal</p>
-                <p style={{ margin: "2px 0" }}>1755 N Westgate Dr Suite 110 Boise ID 83704</p>
+                <p style={{ margin: "2px 0" }}>1755 N Westgate Dr, Suite 110</p>
+                <p style={{ margin: "2px 0" }}>Boise, ID 83704</p>
                 <p style={{ margin: "2px 0" }}>info@topshelfpros.com</p>
                 <p style={{ margin: "2px 0", color: colors.primary, fontWeight: "600" }}>(208) 593-2877</p>
               </div>
@@ -195,7 +196,7 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
           </div>
 
           {/* Customer Info Section */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "30px", marginBottom: "30px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "30px" }}>
             {/* Prepared For */}
             <div style={{ padding: "16px", background: colors.lightGreen, borderLeft: `4px solid ${colors.success}`, borderRadius: "4px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
@@ -204,19 +205,47 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
               <div style={{ fontSize: "12px", color: colors.gray, lineHeight: "1.5" }}>
                 <p style={{ margin: "3px 0", fontWeight: "600", color: colors.dark }}>{customerName}</p>
                 {formData.company && <p style={{ margin: "3px 0" }}>{formData.company}</p>}
-                <p style={{ margin: "3px 0" }}>{formData.pickupAddress || "Address TBD"}</p>
-                <p style={{ margin: "3px 0" }}>
-                  {formData.pickupCity && formData.pickupState ? `${formData.pickupCity}, ${formData.pickupState} ${formData.pickupZip || ''}` : ''}
-                </p>
                 {customerPhone && <p style={{ margin: "3px 0", color: colors.primary }}>{formatPhone(customerPhone)}</p>}
                 {customerEmail && <p style={{ margin: "3px 0", color: colors.primary }}>{customerEmail}</p>}
               </div>
             </div>
 
-            {/* Service Location */}
+            {/* Primary Pickup */}
             <div style={{ padding: "16px", background: "#EFF6FF", borderLeft: `4px solid ${colors.primary}`, borderRadius: "4px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
-                Service Location:
+                Primary Pickup:
+              </h3>
+              <div style={{ fontSize: "12px", color: colors.gray, lineHeight: "1.5" }}>
+                <p style={{ margin: "3px 0", fontWeight: "600", color: colors.dark }}>
+                  {formData.pickupAddress || "Address TBD"}
+                </p>
+                <p style={{ margin: "3px 0" }}>
+                  {formData.pickupCity && formData.pickupState ? `${formData.pickupCity}, ${formData.pickupState} ${formData.pickupZip || ''}` : ''}
+                </p>
+              </div>
+            </div>
+
+            {/* Additional Stop - only show if delivery address exists and is different */}
+            {formData.deliveryAddress && formData.deliveryAddress !== formData.pickupAddress && (
+              <div style={{ padding: "16px", background: "#FEF3C7", borderLeft: `4px solid #F59E0B`, borderRadius: "4px" }}>
+                <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
+                  Additional Stop:
+                </h3>
+                <div style={{ fontSize: "12px", color: colors.gray, lineHeight: "1.5" }}>
+                  <p style={{ margin: "3px 0", fontWeight: "600", color: colors.dark }}>
+                    {formData.deliveryAddress}
+                  </p>
+                  <p style={{ margin: "3px 0" }}>
+                    {formData.deliveryCity && formData.deliveryState ? `${formData.deliveryCity}, ${formData.deliveryState} ${formData.deliveryZip || ''}` : ''}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Final Destination */}
+            <div style={{ padding: "16px", background: colors.lightGreen, borderLeft: `4px solid ${colors.success}`, borderRadius: "4px" }}>
+              <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
+                Final Destination:
               </h3>
               <div style={{ fontSize: "12px", color: colors.gray, lineHeight: "1.5" }}>
                 <p style={{ margin: "3px 0", fontWeight: "600", color: colors.dark }}>
