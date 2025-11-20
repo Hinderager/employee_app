@@ -2085,7 +2085,7 @@ export default function MoveWalkthrough() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 space-y-6">
+      <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 space-y-6 md:pb-24">
 
         {/* Service Type */}
         <section className="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500">
@@ -4527,20 +4527,36 @@ export default function MoveWalkthrough() {
           </section>
         )}
 
-        {/* Preview Customer Quote Button */}
+        {/* Quote Action Buttons */}
         {quote.total > 0 && (
           <section className="mb-6">
-            <button
-              type="button"
-              onClick={() => setShowQuotePreview(true)}
-              className="w-full py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105"
-              style={{
-                background: 'linear-gradient(135deg, #0072BC, #10B981)', 
-                boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
-              }}
-            >
-              Preview Customer Quote
-            </button>
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => setShowQuotePreview(true)}
+                className="py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105"
+                style={{
+                  background: 'linear-gradient(135deg, #0072BC, #10B981)',
+                  boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
+                }}
+              >
+                Preview Quote
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  // TODO: Implement send to customer functionality
+                  alert('Send to Customer - Coming soon!');
+                }}
+                className="py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105"
+                style={{
+                  background: 'linear-gradient(135deg, #10B981, #0072BC)',
+                  boxShadow: '0 4px 12px rgba(0,114,188,0.3)'
+                }}
+              >
+                Send to Customer
+              </button>
+            </div>
           </section>
         )}
 
@@ -4579,16 +4595,18 @@ export default function MoveWalkthrough() {
           </div>
         </div>
 
-        {/* Submit Button */}
-        <div className="sticky bottom-0 bg-white p-4 shadow-lg rounded-lg">
-          <button
-            type="submit"
-            disabled={isSaving || !jobNumber || !address || isFormSaved}
-            className="w-full py-3 px-4 text-white font-bold rounded-lg shadow-md transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
-            style={{ backgroundColor: isSaving || !jobNumber || !address || isFormSaved ? '#9CA3AF' : '#06649b' }}
-          >
-            {isSaving ? 'Saving...' : (isFormSaved ? 'Saved' : 'Save')}
-          </button>
+        {/* Submit Button - Fixed on desktop, normal on mobile */}
+        <div className="bg-white p-4 shadow-lg rounded-lg md:fixed md:bottom-0 md:left-0 md:right-0 md:z-50">
+          <div className="max-w-2xl mx-auto">
+            <button
+              type="submit"
+              disabled={isSaving || !jobNumber || !address || isFormSaved}
+              className="w-full py-3 px-4 text-white font-bold rounded-lg shadow-md transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
+              style={{ backgroundColor: isSaving || !jobNumber || !address || isFormSaved ? '#9CA3AF' : '#06649b' }}
+            >
+              {isSaving ? 'Saving...' : (isFormSaved ? 'Saved' : 'Save')}
+            </button>
+          </div>
         </div>
       </form>
     </main>
