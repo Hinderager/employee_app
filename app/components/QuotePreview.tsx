@@ -174,21 +174,21 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
 
             {/* Right: Estimate Info */}
             <div style={{ textAlign: "right" }}>
-              <h1 style={{ fontSize: "32px", fontWeight: "700", color: colors.gray, margin: "0 0 16px 0", letterSpacing: "1px" }}>
+              <h1 style={{ fontSize: "32px", fontWeight: "700", color: colors.gray, margin: "0 0 16px 0", letterSpacing: "1px", textAlign: "right" }}>
                 ESTIMATE
               </h1>
-              <table style={{ marginLeft: "auto", fontSize: "12px", borderCollapse: "collapse" }}>
+              <table style={{ marginLeft: "auto", marginRight: "0", fontSize: "12px", borderCollapse: "collapse" }}>
                 <tbody>
                   <tr>
-                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600" }}>Estimate #</td>
+                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Estimate #</td>
                     <td style={{ padding: "4px 0", color: colors.primary, textAlign: "right", fontWeight: "700" }}>{jobNumber || "DRAFT"}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600" }}>Date</td>
+                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Date</td>
                     <td style={{ padding: "4px 0", color: colors.dark, textAlign: "right" }}>{currentDate}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600" }}>Total</td>
+                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Total</td>
                     <td style={{ padding: "4px 0", color: colors.success, textAlign: "right", fontWeight: "700", fontSize: "14px" }}>{formatCurrency(quote.total)}</td>
                   </tr>
                 </tbody>
@@ -276,16 +276,11 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
 
               {/* Quote Items */}
               {groupedItems.map((section, index) => (
-                <div key={index} style={{ marginBottom: "20px" }}>
-                  {/* Category Header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", gap: "20px" }}>
-                    <h3 style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, margin: 0, flex: 1 }}>
-                      {section.category}
-                    </h3>
-                    <span style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, minWidth: "80px", textAlign: "right" }}>
-                      {formatCurrency(section.total)}
-                    </span>
-                  </div>
+                <div key={index} style={{ marginBottom: "24px" }}>
+                  {/* Category Header - Full Width */}
+                  <h3 style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, margin: "0 0 8px 0" }}>
+                    {section.category}
+                  </h3>
 
                   {/* Discount - show before sub-items */}
                   {section.discount && (
@@ -298,7 +293,7 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
 
                   {/* Sub Items - only show if different from category */}
                   {(section.items.length > 1 || (section.items.length === 1 && section.items[0].description !== section.category)) && (
-                    <div style={{ paddingLeft: "20px" }}>
+                    <div style={{ paddingLeft: "20px", marginBottom: "8px" }}>
                       {section.items.map((item: any, itemIndex: number) => (
                         <div key={itemIndex} style={{ marginBottom: item.details ? "10px" : "6px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", gap: "20px" }}>
@@ -318,6 +313,16 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
                       ))}
                     </div>
                   )}
+
+                  {/* Separator Line */}
+                  <div style={{ height: "1px", background: colors.lightGray, margin: "8px 0" }}></div>
+
+                  {/* Category Total */}
+                  <div style={{ display: "flex", justifyContent: "flex-end", paddingRight: "0" }}>
+                    <span style={{ fontSize: "14px", fontWeight: "700", color: colors.dark }}>
+                      {formatCurrency(section.total)}
+                    </span>
+                  </div>
                 </div>
               ))}
 

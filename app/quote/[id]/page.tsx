@@ -1,11 +1,9 @@
-import { createClient } from '@supabase/supabase-js';
-import { notFound } from 'next/navigation';
-import Image from 'next/image';
+'use client';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
-const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
+import { useEffect, useState } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 
 // Brand colors (matching QuotePreview)
 const colors = {
@@ -25,24 +23,84 @@ interface QuotePageProps {
   };
 }
 
-export default async function QuotePage({ params }: QuotePageProps) {
+export default function QuotePage({ params }: QuotePageProps) {
   const { id } = params;
+  const router = useRouter();
+  const [quoteData, setQuoteData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isExpired, setIsExpired] = useState(false);
 
-  // Look up quote by URL path
-  const quotePath = `/quote/${id}`;
-  const { data: quoteData, error } = await supabase
-    .from('move_quote')
-    .select('*')
-    .eq('quote_url', quotePath)
-    .single();
+  // Initialize Supabase client on client side
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
 
-  if (error || !quoteData) {
-    notFound();
+  useEffect(() => {
+    const quotePath = `/quote/${id}`;
+
+    // Fetch initial data
+    const fetchQuote = async () => {
+      const { data, error } = await supabase
+        .from('move_quote')
+        .select('*')
+        .eq('quote_url', quotePath)
+        .single();
+
+      if (error || !data) {
+        router.push('/404');
+        return;
+      }
+
+      setQuoteData(data);
+
+      // Check if quote has expired
+      const expiresAt = data.quote_url_expires_at;
+      setIsExpired(expiresAt && new Date(expiresAt) < new Date());
+      setIsLoading(false);
+    };
+
+    fetchQuote();
+
+    // Set up real-time subscription
+    const channel = supabase
+      .channel('quote-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'move_quote',
+          filter: `quote_url=eq.${quotePath}`,
+        },
+        (payload) => {
+          console.log('Quote updated:', payload);
+          setQuoteData(payload.new);
+
+          // Re-check expiration
+          const expiresAt = payload.new.quote_url_expires_at;
+          setIsExpired(expiresAt && new Date(expiresAt) < new Date());
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscription on unmount
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id]);
+
+  if (isLoading) {
+    return (
+      <div style={{ minHeight: "100vh", background: "#F9FAFB", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ color: colors.gray, fontSize: "18px" }}>Loading quote...</div>
+      </div>
+    );
   }
 
-  // Check if quote has expired
-  const expiresAt = quoteData.quote_url_expires_at;
-  const isExpired = expiresAt && new Date(expiresAt) < new Date();
+  if (!quoteData) {
+    return null;
+  }
 
   if (isExpired) {
     return (
@@ -156,21 +214,21 @@ export default async function QuotePage({ params }: QuotePageProps) {
 
             {/* Right: Estimate Info */}
             <div style={{ textAlign: "right" }}>
-              <h1 style={{ fontSize: "32px", fontWeight: "700", color: colors.gray, margin: "0 0 16px 0", letterSpacing: "1px" }}>
+              <h1 style={{ fontSize: "32px", fontWeight: "700", color: colors.gray, margin: "0 0 16px 0", letterSpacing: "1px", textAlign: "right" }}>
                 ESTIMATE
               </h1>
-              <table style={{ marginLeft: "auto", fontSize: "12px", borderCollapse: "collapse" }}>
+              <table style={{ marginLeft: "auto", marginRight: "0", fontSize: "12px", borderCollapse: "collapse" }}>
                 <tbody>
                   <tr>
-                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600" }}>Estimate #</td>
+                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Estimate #</td>
                     <td style={{ padding: "4px 0", color: colors.primary, textAlign: "right", fontWeight: "700" }}>{quoteNumber}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600" }}>Date</td>
+                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Date</td>
                     <td style={{ padding: "4px 0", color: colors.dark, textAlign: "right" }}>{currentDate}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600" }}>Total</td>
+                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Total</td>
                     <td style={{ padding: "4px 0", color: colors.success, textAlign: "right", fontWeight: "700", fontSize: "14px" }}>{formatCurrency(total)}</td>
                   </tr>
                 </tbody>
@@ -258,16 +316,11 @@ export default async function QuotePage({ params }: QuotePageProps) {
 
               {/* Quote Items */}
               {groupedItems.map((section, index) => (
-                <div key={index} style={{ marginBottom: "20px" }}>
-                  {/* Category Header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", gap: "20px" }}>
-                    <h3 style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, margin: 0, flex: 1 }}>
-                      {section.category}
-                    </h3>
-                    <span style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, minWidth: "80px", textAlign: "right" }}>
-                      {formatCurrency(section.total)}
-                    </span>
-                  </div>
+                <div key={index} style={{ marginBottom: "24px" }}>
+                  {/* Category Header - Full Width */}
+                  <h3 style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, margin: "0 0 8px 0" }}>
+                    {section.category}
+                  </h3>
 
                   {/* Discount - show before sub-items */}
                   {section.discount && (
@@ -280,7 +333,7 @@ export default async function QuotePage({ params }: QuotePageProps) {
 
                   {/* Sub Items - only show if different from category */}
                   {(section.items.length > 1 || (section.items.length === 1 && section.items[0].description !== section.category)) && (
-                    <div style={{ paddingLeft: "20px" }}>
+                    <div style={{ paddingLeft: "20px", marginBottom: "8px" }}>
                       {section.items.map((item: any, itemIndex: number) => (
                         <div key={itemIndex} style={{ marginBottom: item.details ? "10px" : "6px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", gap: "20px" }}>
@@ -300,6 +353,16 @@ export default async function QuotePage({ params }: QuotePageProps) {
                       ))}
                     </div>
                   )}
+
+                  {/* Separator Line */}
+                  <div style={{ height: "1px", background: colors.lightGray, margin: "8px 0" }}></div>
+
+                  {/* Category Total */}
+                  <div style={{ display: "flex", justifyContent: "flex-end", paddingRight: "0" }}>
+                    <span style={{ fontSize: "14px", fontWeight: "700", color: colors.dark }}>
+                      {formatCurrency(section.total)}
+                    </span>
+                  </div>
                 </div>
               ))}
 

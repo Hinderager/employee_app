@@ -438,7 +438,10 @@ export async function POST(request: NextRequest) {
     const emailSubject = `Your Moving Quote is Ready - ${quoteNumber}`;
     const emailBody = `
       <p>Hi ${firstName},</p>
-      <p>Your moving quote is ready! View it here: <a href="${fullQuoteUrl}">${fullQuoteUrl}</a></p>
+      <p>Your moving quote is ready!</p>
+      <p>View your quote here:</p>
+      <p style="font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 4px;">${fullQuoteUrl}</p>
+      <p><em>Copy and paste the link above into your browser to view your quote.</em></p>
       <p>Thank you for choosing Top Shelf Moving!</p>
     `;
     console.log(`[send-quote] Sending email`);
