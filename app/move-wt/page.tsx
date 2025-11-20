@@ -253,7 +253,7 @@ export default function MoveWalkthrough() {
     timingNotes: "",
 
     // Estimates
-    estimatedCrewSize: "",
+    estimatedCrewSize: "2-3",
     crewSizeNotes: "",
 
     // Special Notes
@@ -1093,7 +1093,7 @@ export default function MoveWalkthrough() {
       timingNotes: "",
 
       // Estimates
-      estimatedCrewSize: "",
+      estimatedCrewSize: "2-3",
       crewSizeNotes: "",
 
       // Special Notes
@@ -4282,7 +4282,6 @@ export default function MoveWalkthrough() {
                 onChange={handleInputChange}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="">Select crew size</option>
                 <option value="2 max">2 max</option>
                 <option value="2-3">2-3</option>
                 <option value="3-4">3-4</option>
