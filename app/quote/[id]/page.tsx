@@ -1,10 +1,23 @@
 import { createClient } from '@supabase/supabase-js';
 import { notFound } from 'next/navigation';
+import Image from 'next/image';
 
 // Initialize Supabase client
 const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
 const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Brand colors (matching QuotePreview)
+const colors = {
+  primary: "#0072BC",
+  success: "#10B981",
+  dark: "#2D2D2D",
+  gray: "#6B7280",
+  lightGray: "#E5E7EB",
+  lightGreen: "#F0FDF4",
+  white: "#FFFFFF",
+  border: "#34D399",
+};
 
 interface QuotePageProps {
   params: {
@@ -33,135 +46,262 @@ export default async function QuotePage({ params }: QuotePageProps) {
 
   if (isExpired) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">
-          <div className="text-red-600 text-5xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Quote Expired</h1>
-          <p className="text-gray-600 mb-6">
+      <div style={{ minHeight: "100vh", background: "#F9FAFB", display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+        <div style={{ maxWidth: "448px", width: "100%", background: colors.white, borderRadius: "8px", boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)", padding: "32px", textAlign: "center" }}>
+          <div style={{ color: "#DC2626", fontSize: "48px", marginBottom: "16px" }}>⚠️</div>
+          <h1 style={{ fontSize: "24px", fontWeight: "bold", color: colors.dark, marginBottom: "8px" }}>Quote Expired</h1>
+          <p style={{ color: colors.gray, marginBottom: "24px" }}>
             This quote link has expired. Please contact us for an updated quote.
           </p>
-          <div className="space-y-2 text-sm text-gray-500">
+          <div style={{ fontSize: "14px", color: colors.gray, lineHeight: "1.5" }}>
             <p>Top Shelf Moving & Junk Removal</p>
-            <p>Phone: (208) 123-4567</p>
+            <p style={{ color: colors.primary, fontWeight: "600" }}>Phone: (208) 593-2877</p>
           </div>
         </div>
       </div>
     );
   }
 
-  // Parse form data and calculate line items
+  // Parse form data
   const formData = quoteData.form_data || {};
   const quoteNumber = quoteData.quote_number || 'N/A';
+  const quoteItems = formData.quoteItems || [];
+  const total = formData.total || 0;
 
   // Customer info
   const customerName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || 'Customer';
-  const customerEmail = formData.email || '';
-  const customerPhone = formData.phone || '';
+  const customerEmail = formData.email || formData.emails?.[0]?.email || '';
+  const customerPhone = formData.phone || formData.phones?.[0]?.number || '';
   const company = formData.company || '';
 
-  // Calculate the same line items as the employee form
-  const lineItems: Array<{ description: string; amount: number }> = [];
+  // Format functions
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+    }).format(amount);
+  };
 
-  // Add line items based on form data
-  // (You'll need to implement the same pricing logic as in the employee form)
+  const formatPhone = (phoneStr: string) => {
+    const cleaned = phoneStr?.replace(/\D/g, "") || "";
+    if (cleaned.length === 10) {
+      return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+    }
+    return phoneStr || "";
+  };
 
-  // For now, use the total from form_data
-  const total = formData.total || 0;
+  // Group quote items into categories
+  const groupedItems: any[] = [];
+  quoteItems.forEach((item: any) => {
+    if (item.subItems && item.subItems.length > 0) {
+      groupedItems.push({
+        category: item.description,
+        total: item.amount,
+        discount: item.discount,
+        items: item.subItems.map((sub: any) => ({
+          description: sub.description,
+          amount: sub.amount
+        }))
+      });
+    } else {
+      groupedItems.push({
+        category: item.description,
+        total: item.amount,
+        discount: item.discount,
+        items: [{ description: item.description, amount: item.amount }]
+      });
+    }
+  });
 
-  // Format expiration date
-  const expirationDate = expiresAt
-    ? new Date(expiresAt).toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      })
-    : 'N/A';
+  const currentDate = new Date().toLocaleDateString('en-US', {
+    weekday: 'short',
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
-      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg overflow-hidden">
-        {/* Header */}
-        <div className="bg-blue-600 text-white p-8">
-          <h1 className="text-3xl font-bold mb-2">Moving Quote</h1>
-          <p className="text-blue-100">Quote #{quoteNumber}</p>
-        </div>
-
-        {/* Expiration Notice */}
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
-          <p className="text-sm text-yellow-800">
-            <strong>Valid Until:</strong> {expirationDate}
-          </p>
-        </div>
-
-        {/* Customer Information */}
-        <div className="p-8 border-b">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Customer Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div style={{ minHeight: "100vh", background: "#F9FAFB", padding: "20px" }}>
+      <div style={{
+        maxWidth: "900px",
+        margin: "40px auto",
+        background: colors.white,
+        borderRadius: "8px",
+        boxShadow: "0 20px 60px rgba(0,0,0,0.1)"
+      }}>
+        {/* Quote Content */}
+        <div style={{ padding: "40px" }}>
+          {/* Header Section */}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "30px", flexWrap: "wrap", gap: "20px" }}>
+            {/* Left: Logo and Company Info */}
             <div>
-              <p className="text-sm text-gray-600">Name</p>
-              <p className="font-medium text-gray-900">{customerName}</p>
+              <Image
+                src="/images/topshelf-logo.png"
+                alt="TopShelf"
+                width={150}
+                height={100}
+                style={{ marginBottom: "12px" }}
+                priority
+              />
+              <div style={{ color: colors.gray, fontSize: "12px", lineHeight: "1.6" }}>
+                <p style={{ margin: "2px 0", fontWeight: "500", color: colors.dark }}>Top Shelf Moving and Junk Removal</p>
+                <p style={{ margin: "2px 0" }}>1755 N Westgate Dr Suite 110 Boise ID 83704</p>
+                <p style={{ margin: "2px 0" }}>info@topshelfpros.com</p>
+                <p style={{ margin: "2px 0", color: colors.primary, fontWeight: "600" }}>(208) 593-2877</p>
+              </div>
             </div>
-            {company && (
-              <div>
-                <p className="text-sm text-gray-600">Company</p>
-                <p className="font-medium text-gray-900">{company}</p>
-              </div>
-            )}
-            {customerPhone && (
-              <div>
-                <p className="text-sm text-gray-600">Phone</p>
-                <p className="font-medium text-gray-900">{customerPhone}</p>
-              </div>
-            )}
-            {customerEmail && (
-              <div>
-                <p className="text-sm text-gray-600">Email</p>
-                <p className="font-medium text-gray-900">{customerEmail}</p>
-              </div>
-            )}
-          </div>
-        </div>
 
-        {/* Move Details */}
-        <div className="p-8 border-b">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Move Details</h2>
-          <div className="space-y-3">
-            {formData.pickupAddress && (
-              <div>
-                <p className="text-sm text-gray-600">Pickup Location</p>
-                <p className="font-medium text-gray-900">{formData.pickupAddress}</p>
-              </div>
-            )}
-            {formData.deliveryAddress && (
-              <div>
-                <p className="text-sm text-gray-600">Delivery Location</p>
-                <p className="font-medium text-gray-900">{formData.deliveryAddress}</p>
-              </div>
-            )}
+            {/* Right: Estimate Info */}
+            <div style={{ textAlign: "right" }}>
+              <h1 style={{ fontSize: "32px", fontWeight: "700", color: colors.gray, margin: "0 0 16px 0", letterSpacing: "1px" }}>
+                ESTIMATE
+              </h1>
+              <table style={{ marginLeft: "auto", fontSize: "12px", borderCollapse: "collapse" }}>
+                <tbody>
+                  <tr>
+                    <td style={{ padding: "4px 12px 4px 0", color: colors.gray, fontWeight: "600" }}>Estimate #</td>
+                    <td style={{ padding: "4px 0", color: colors.primary, textAlign: "right", fontWeight: "700" }}>{quoteNumber}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "4px 12px 4px 0", color: colors.gray, fontWeight: "600" }}>Date</td>
+                    <td style={{ padding: "4px 0", color: colors.dark, textAlign: "right" }}>{currentDate}</td>
+                  </tr>
+                  <tr>
+                    <td style={{ padding: "4px 12px 4px 0", color: colors.gray, fontWeight: "600" }}>Total</td>
+                    <td style={{ padding: "4px 0", color: colors.success, textAlign: "right", fontWeight: "700", fontSize: "14px" }}>{formatCurrency(total)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
 
-        {/* Quote Total */}
-        <div className="p-8 bg-gray-50">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-2xl font-bold text-gray-900">Total Estimate</h2>
-            <p className="text-3xl font-bold text-blue-600">
-              ${typeof total === 'number' ? total.toFixed(2) : '0.00'}
-            </p>
+          {/* Customer Info Section */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "30px", marginBottom: "30px" }}>
+            {/* Prepared For */}
+            <div style={{ padding: "16px", background: colors.lightGreen, borderLeft: `4px solid ${colors.success}`, borderRadius: "4px" }}>
+              <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
+                Prepared For:
+              </h3>
+              <div style={{ fontSize: "12px", color: colors.gray, lineHeight: "1.5" }}>
+                <p style={{ margin: "3px 0", fontWeight: "600", color: colors.dark }}>{customerName}</p>
+                {company && <p style={{ margin: "3px 0" }}>{company}</p>}
+                <p style={{ margin: "3px 0" }}>{formData.pickupAddress || "Address TBD"}</p>
+                <p style={{ margin: "3px 0" }}>
+                  {formData.pickupCity && formData.pickupState ? `${formData.pickupCity}, ${formData.pickupState} ${formData.pickupZip || ''}` : ''}
+                </p>
+                {customerPhone && <p style={{ margin: "3px 0", color: colors.primary }}>{formatPhone(customerPhone)}</p>}
+                {customerEmail && <p style={{ margin: "3px 0", color: colors.primary }}>{customerEmail}</p>}
+              </div>
+            </div>
+
+            {/* Service Location */}
+            <div style={{ padding: "16px", background: "#EFF6FF", borderLeft: `4px solid ${colors.primary}`, borderRadius: "4px" }}>
+              <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
+                Service Location:
+              </h3>
+              <div style={{ fontSize: "12px", color: colors.gray, lineHeight: "1.5" }}>
+                <p style={{ margin: "3px 0", fontWeight: "600", color: colors.dark }}>
+                  {formData.deliveryAddress || formData.pickupAddress || "TBD"}
+                </p>
+                <p style={{ margin: "3px 0" }}>
+                  {formData.deliveryCity && formData.deliveryState ?
+                    `${formData.deliveryCity}, ${formData.deliveryState} ${formData.deliveryZip || ''}` :
+                    (formData.pickupCity && formData.pickupState ? `${formData.pickupCity}, ${formData.pickupState} ${formData.pickupZip || ''}` : '')}
+                </p>
+              </div>
+            </div>
           </div>
-          <p className="text-sm text-gray-600">
-            This is an estimate based on the information provided. Final pricing may vary.
-          </p>
-        </div>
 
-        {/* Footer */}
-        <div className="p-8 bg-gray-100 text-center">
-          <h3 className="font-semibold text-gray-900 mb-2">Questions about your quote?</h3>
-          <p className="text-gray-600 mb-4">Contact us to discuss your move</p>
-          <div className="space-y-1 text-sm text-gray-700">
-            <p className="font-medium">Top Shelf Moving & Junk Removal</p>
-            <p>Phone: (208) 123-4567</p>
-            <p>Email: info@topshelfpros.com</p>
+          {/* Active Estimate Card */}
+          {groupedItems.length > 0 ? (
+            <div style={{
+              border: `3px solid ${colors.border}`,
+              borderRadius: "12px",
+              padding: "24px",
+              background: colors.white,
+              marginBottom: "24px"
+            }}>
+              <h2 style={{ fontSize: "24px", fontWeight: "700", color: colors.dark, marginBottom: "20px" }}>
+                Active Estimate
+              </h2>
+
+              {/* Quote Items */}
+              {groupedItems.map((section, index) => (
+                <div key={index} style={{ marginBottom: "20px" }}>
+                  {/* Category Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
+                    <h3 style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, margin: 0 }}>
+                      {section.category}
+                    </h3>
+                    <span style={{ fontSize: "15px", fontWeight: "700", color: colors.dark }}>
+                      {formatCurrency(section.total)}
+                    </span>
+                  </div>
+
+                  {/* Sub Items - only show if different from category */}
+                  {section.items.length > 1 && (
+                    <div style={{ paddingLeft: "20px" }}>
+                      {section.items.map((item: any, itemIndex: number) => (
+                        <div key={itemIndex} style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                          <span style={{ fontSize: "13px", color: colors.gray }}>
+                            {item.description}
+                          </span>
+                          <span style={{ fontSize: "13px", color: colors.primary, fontWeight: "600" }}>
+                            {formatCurrency(item.amount)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {section.discount && (
+                    <div style={{ marginTop: "6px", paddingLeft: "20px" }}>
+                      <span style={{ fontSize: "11px", color: colors.success, fontStyle: "italic" }}>
+                        {section.discount}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* Total Line */}
+              <div style={{ height: "3px", background: colors.success, margin: "20px 0" }}></div>
+
+              {/* Estimated Total */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+                <h2 style={{ fontSize: "20px", fontWeight: "700", color: colors.dark, margin: 0 }}>
+                  Estimated Total:
+                </h2>
+                <span style={{ fontSize: "32px", fontWeight: "700", color: colors.success }}>
+                  {formatCurrency(total)}
+                </span>
+              </div>
+
+              {/* Disclaimer */}
+              <p style={{ fontSize: "11px", color: colors.gray, fontStyle: "italic", textAlign: "center", margin: 0 }}>
+                *Estimate based on provided information. Final price may vary.
+              </p>
+            </div>
+          ) : (
+            <div style={{
+              padding: "40px",
+              textAlign: "center",
+              background: colors.lightGray,
+              borderRadius: "8px",
+              marginBottom: "24px"
+            }}>
+              <p style={{ color: colors.gray, fontSize: "14px" }}>
+                Quote details are being prepared. Please contact us for more information.
+              </p>
+            </div>
+          )}
+
+          {/* Thank You Message */}
+          <div style={{ textAlign: "center", marginTop: "40px", paddingTop: "24px", borderTop: `2px solid ${colors.success}` }}>
+            <h2 style={{ fontSize: "24px", fontWeight: "700", color: colors.dark, margin: 0 }}>
+              Thank You For Your Business
+            </h2>
           </div>
         </div>
       </div>
