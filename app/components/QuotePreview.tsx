@@ -19,7 +19,7 @@ interface QuoteItem {
   description: string;
   amount: number;
   discount?: string;
-  subItems?: Array<{ description: string; amount: number }>;
+  subItems?: Array<{ description: string; amount: number; details?: string }>;
 }
 
 interface QuotePreviewProps {
