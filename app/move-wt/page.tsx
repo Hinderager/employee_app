@@ -72,6 +72,7 @@ export default function MoveWalkthrough() {
   const pickupAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const deliveryAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
   const additionalStopAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const previousEffectiveSqFtRef = useRef<number>(0);
   const [quote, setQuote] = useState({
     baseRate: 0,
     items: [] as Array<{
@@ -485,32 +486,32 @@ export default function MoveWalkthrough() {
     // Calculate effective square footage (sqft × percentage/100)
     const effectiveSqFt = squareFeet * (furnishedPercent / 100);
 
-    // Determine crew size based on effective square footage
-    let recommendedCrewSize = "2-3"; // default
+    // Only update crew size if effective square footage actually changed
+    if (effectiveSqFt !== previousEffectiveSqFtRef.current && squareFeet > 0) {
+      // Determine crew size based on effective square footage
+      let recommendedCrewSize = "2-3"; // default
 
-    if (effectiveSqFt < 500) {
-      recommendedCrewSize = "2 max";
-    } else if (effectiveSqFt >= 500 && effectiveSqFt < 1500) {
-      recommendedCrewSize = "2-3";
-    } else if (effectiveSqFt >= 1500 && effectiveSqFt < 2500) {
-      recommendedCrewSize = "3-4";
-    } else if (effectiveSqFt >= 2500 && effectiveSqFt < 3000) {
-      recommendedCrewSize = "4-6";
-    } else if (effectiveSqFt >= 3000) {
-      recommendedCrewSize = "6+";
-    }
+      if (effectiveSqFt < 500) {
+        recommendedCrewSize = "2 max";
+      } else if (effectiveSqFt >= 500 && effectiveSqFt < 1500) {
+        recommendedCrewSize = "2-3";
+      } else if (effectiveSqFt >= 1500 && effectiveSqFt < 2500) {
+        recommendedCrewSize = "3-4";
+      } else if (effectiveSqFt >= 2500 && effectiveSqFt < 3000) {
+        recommendedCrewSize = "4-6";
+      } else if (effectiveSqFt >= 3000) {
+        recommendedCrewSize = "6+";
+      }
 
-    // Only update if square footage is provided and crew size changed
-    if (squareFeet > 0 && formData.estimatedCrewSize !== recommendedCrewSize) {
       setFormData(prev => ({ ...prev, estimatedCrewSize: recommendedCrewSize }));
+      previousEffectiveSqFtRef.current = effectiveSqFt;
     }
   }, [
     formData.pickupLocationType,
     formData.pickupHouseSquareFeet,
     formData.pickupApartmentSquareFeet,
     formData.pickupHowFurnished,
-    formData.pickupApartmentHowFurnished,
-    formData.estimatedCrewSize
+    formData.pickupApartmentHowFurnished
   ]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
