@@ -196,19 +196,17 @@ async function upsertGHLOpportunity(contactId: string, quoteNumber: string, quot
   // First, search for existing opportunity
   const existingOpportunity = await findGHLOpportunity(contactId);
 
-  const payload: any = {
-    pipelineId: GHL_PIPELINE_ID,
-    locationId: GHL_LOCATION_ID,
-    name: `Moving Quote ${quoteNumber}`,
-    pipelineStageId: GHL_QUOTE_SENT_STAGE_ID,
-    status: 'open',
-    contactId: contactId,
-    monetaryValue: Math.round(quoteTotal),
-  };
-
   if (existingOpportunity) {
-    // Update existing opportunity
-    console.log('[send-quote] Updating existing opportunity:', existingOpportunity.id, 'with payload:', payload);
+    // Update existing opportunity - locationId should NOT be included in update payload
+    const updatePayload: any = {
+      pipelineId: GHL_PIPELINE_ID,
+      name: `Moving Quote ${quoteNumber}`,
+      pipelineStageId: GHL_QUOTE_SENT_STAGE_ID,
+      status: 'open',
+      monetaryValue: Math.round(quoteTotal),
+    };
+
+    console.log('[send-quote] Updating existing opportunity:', existingOpportunity.id, 'with payload:', updatePayload);
     const response = await fetch(
       `${GHL_API_BASE}/opportunities/${existingOpportunity.id}`,
       {
@@ -218,7 +216,7 @@ async function upsertGHLOpportunity(contactId: string, quoteNumber: string, quot
           'Version': '2021-07-28',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(updatePayload),
       }
     );
 
@@ -228,15 +226,25 @@ async function upsertGHLOpportunity(contactId: string, quoteNumber: string, quot
         status: response.status,
         statusText: response.statusText,
         body: errorBody,
-        payload: payload,
+        payload: updatePayload,
       });
       throw new Error(`Failed to update GHL opportunity: ${response.statusText} - ${errorBody}`);
     }
 
     return await response.json();
   } else {
-    // Create new opportunity
-    console.log('[send-quote] Creating new opportunity with payload:', payload);
+    // Create new opportunity - locationId and contactId are required for creation
+    const createPayload: any = {
+      pipelineId: GHL_PIPELINE_ID,
+      locationId: GHL_LOCATION_ID,
+      name: `Moving Quote ${quoteNumber}`,
+      pipelineStageId: GHL_QUOTE_SENT_STAGE_ID,
+      status: 'open',
+      contactId: contactId,
+      monetaryValue: Math.round(quoteTotal),
+    };
+
+    console.log('[send-quote] Creating new opportunity with payload:', createPayload);
     const response = await fetch(
       `${GHL_API_BASE}/opportunities/`,
       {
@@ -246,7 +254,7 @@ async function upsertGHLOpportunity(contactId: string, quoteNumber: string, quot
           'Version': '2021-07-28',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(createPayload),
       }
     );
 
@@ -256,7 +264,7 @@ async function upsertGHLOpportunity(contactId: string, quoteNumber: string, quot
         status: response.status,
         statusText: response.statusText,
         body: errorBody,
-        payload: payload,
+        payload: createPayload,
         pipelineId: GHL_PIPELINE_ID,
         locationId: GHL_LOCATION_ID,
         stageId: GHL_QUOTE_SENT_STAGE_ID,
