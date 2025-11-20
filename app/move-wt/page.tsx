@@ -712,6 +712,14 @@ export default function MoveWalkthrough() {
         // Load the selected form
         setAddress(selectedForm.address);
         setJobNumber(selectedForm.jobNumber);
+        setFolderUrl(selectedForm.folderUrl || '');
+        setIsFolderLinkCopied(false);
+        setIsFormSaved(true);
+
+        // Capture quote number if present
+        if (selectedForm.quoteNumber) {
+          setQuoteNumber(selectedForm.quoteNumber);
+        }
 
         // Load customer info if available
         if (result.customerInfo) {
