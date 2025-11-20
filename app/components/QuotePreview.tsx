@@ -3,16 +3,17 @@
 import { useState } from "react";
 import Image from "next/image";
 
-// Brand colors
+// Brand colors (matching Top Shelf brand palette)
 const colors = {
-  primary: "#0072BC",
-  success: "#10B981",
-  dark: "#2D2D2D",
+  primary: "#00A3E0", // Light blue
+  darkBlue: "#0A5275", // Dark blue
+  success: "#00A3E0", // Using light blue for success
+  dark: "#3D3D3D",
   gray: "#6B7280",
   lightGray: "#E5E7EB",
-  lightGreen: "#F0FDF4",
+  lightBlue: "#E6F4F9", // Light blue background
   white: "#FFFFFF",
-  border: "#34D399",
+  border: "#00A3E0", // Light blue border
 };
 
 interface QuoteItem {
@@ -121,7 +122,7 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
       >
         {/* Header Bar */}
         <div style={{
-          background: `linear-gradient(135deg, ${colors.primary}, ${colors.success})`,
+          background: `linear-gradient(135deg, ${colors.darkBlue}, ${colors.primary})`,
           padding: "16px 30px",
           borderTopLeftRadius: "8px",
           borderTopRightRadius: "8px",
@@ -199,7 +200,7 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
           {/* Customer Info Section */}
           <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginBottom: "30px" }}>
             {/* Prepared For */}
-            <div style={{ padding: "16px", background: colors.lightGreen, borderLeft: `4px solid ${colors.success}`, borderRadius: "4px" }}>
+            <div style={{ padding: "16px", background: colors.lightBlue, borderLeft: `4px solid ${colors.darkBlue}`, borderRadius: "4px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
                 Prepared For:
               </h3>
@@ -212,7 +213,7 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
             </div>
 
             {/* Primary Pickup */}
-            <div style={{ padding: "16px", background: "#EFF6FF", borderLeft: `4px solid ${colors.primary}`, borderRadius: "4px" }}>
+            <div style={{ padding: "16px", background: colors.lightBlue, borderLeft: `4px solid ${colors.primary}`, borderRadius: "4px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
                 Primary Pickup:
               </h3>
@@ -244,7 +245,7 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
             )}
 
             {/* Final Destination */}
-            <div style={{ padding: "16px", background: colors.lightGreen, borderLeft: `4px solid ${colors.success}`, borderRadius: "4px" }}>
+            <div style={{ padding: "16px", background: colors.lightBlue, borderLeft: `4px solid ${colors.darkBlue}`, borderRadius: "4px" }}>
               <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
                 Final Destination:
               </h3>
