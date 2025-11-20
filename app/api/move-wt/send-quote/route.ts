@@ -16,11 +16,29 @@ const GHL_QUOTE_SENT_STAGE_ID = process.env.GHL_QUOTE_SENT_STAGE_ID || '752daf82
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com';
 
-// Generate unique quote URL path
-function generateQuoteUrl(): string {
-  // Generate a random string for the URL
-  const randomString = crypto.randomBytes(16).toString('hex');
-  return `/quote/${randomString}`;
+// Helper function to create URL-friendly slug from address
+function createAddressSlug(address: string): string {
+  if (!address) return 'quote';
+
+  return address
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, '') // Remove special characters
+    .trim()
+    .split(/\s+/) // Split on whitespace
+    .slice(0, 6) // Take first 6 words
+    .join('_'); // Join with underscores
+}
+
+// Generate unique quote URL path with address and short hash
+function generateQuoteUrl(address: string): string {
+  // Create URL-friendly version of address
+  const addressSlug = createAddressSlug(address);
+
+  // Generate a short random string for uniqueness (4 bytes = 8 hex chars)
+  const randomString = crypto.randomBytes(4).toString('hex');
+
+  // Combine: /quote/5015_n_lolo_pass_way-a1b2c3d4
+  return `/quote/${addressSlug}-${randomString}`;
 }
 
 // Helper function to normalize phone numbers
@@ -291,7 +309,9 @@ export async function POST(request: NextRequest) {
     // Generate unique quote URL if not already exists
     let quoteUrl = quoteData.quote_url;
     if (!quoteUrl) {
-      quoteUrl = generateQuoteUrl();
+      // Use pickup address if available, otherwise use customer home address
+      const addressForUrl = formData.pickupAddress || customerHomeAddress;
+      quoteUrl = generateQuoteUrl(addressForUrl);
 
       // Calculate expiration date (2 months from now)
       const expiresAt = new Date();
@@ -312,7 +332,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Build full quote URL
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://employeeapp.topshelfpros.com';
+    // Use NEXT_PUBLIC_BASE_URL if set, otherwise use Vercel's VERCEL_URL, or localhost for dev
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
     const fullQuoteUrl = `${baseUrl}${quoteUrl}`;
 
     console.log(`[send-quote] Quote URL: ${fullQuoteUrl}`);
