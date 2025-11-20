@@ -1668,7 +1668,7 @@ export default function MoveWalkthrough() {
     }
 
     // Pickup location factors
-    if (formData.pickupStairs > 1) {
+    if (formData.pickupStairs > 1 && !formData.pickupElevator) {
       const stairFee = (formData.pickupStairs - 1) * 25;
       items.push({ description: `Pickup Stairs (${formData.pickupStairs} flights)`, amount: stairFee });
     }
@@ -1678,7 +1678,7 @@ export default function MoveWalkthrough() {
     }
 
     // Delivery location factors
-    if (formData.deliveryStairs > 1) {
+    if (formData.deliveryStairs > 1 && !formData.deliveryElevator) {
       const stairFee = (formData.deliveryStairs - 1) * 25;
       items.push({ description: `Delivery Stairs (${formData.deliveryStairs} flights)`, amount: stairFee });
     }
