@@ -12,6 +12,25 @@ const normalizePhoneNumber = (phone: string): string => {
   return phone.replace(/\D/g, '');
 };
 
+// Helper function to build full address string
+const buildFullAddress = (addressData: any, type: 'pickup' | 'delivery'): string => {
+  const parts = [];
+  if (type === 'pickup') {
+    if (addressData.pickupAddress) parts.push(addressData.pickupAddress);
+    if (addressData.pickupUnit) parts.push(`Unit ${addressData.pickupUnit}`);
+    if (addressData.pickupCity) parts.push(addressData.pickupCity);
+    if (addressData.pickupState) parts.push(addressData.pickupState);
+    if (addressData.pickupZip) parts.push(addressData.pickupZip);
+  } else {
+    if (addressData.deliveryAddress) parts.push(addressData.deliveryAddress);
+    if (addressData.deliveryUnit) parts.push(`Unit ${addressData.deliveryUnit}`);
+    if (addressData.deliveryCity) parts.push(addressData.deliveryCity);
+    if (addressData.deliveryState) parts.push(addressData.deliveryState);
+    if (addressData.deliveryZip) parts.push(addressData.deliveryZip);
+  }
+  return parts.join(', ');
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -24,50 +43,178 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!address || !address.trim()) {
-      return NextResponse.json(
-        { error: 'Address is required' },
-        { status: 400 }
-      );
+    // Determine customer home address from the checkbox
+    const customerHomeAddressType = formData?.customerHomeAddressType;
+    let customerHomeAddress = '';
+
+    if (customerHomeAddressType === 'pickup') {
+      customerHomeAddress = buildFullAddress(formData, 'pickup');
+    } else if (customerHomeAddressType === 'delivery') {
+      customerHomeAddress = buildFullAddress(formData, 'delivery');
     }
 
     // Extract and normalize phone number from formData
     const phoneNumber = formData?.phone || '';
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
-    console.log(`[move-wt/save-form] Saving form for job: ${jobNumber}, address: ${address}, phone: ${normalizedPhone}`);
+    console.log(`[move-wt/save-form] Saving form for job: ${jobNumber}, customer home address: ${customerHomeAddress || 'Not Set'}, phone: ${normalizedPhone}`);
 
-    // Upsert form data in Supabase
-    const { data, error } = await supabase
-      .from('move_walkthrough_forms')
-      .upsert(
-        {
-          job_number: jobNumber,
-          address: address,
-          phone_number: normalizedPhone,
-          form_data: formData,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'job_number',
+    // If customer home address is set, use address-based UPSERT
+    if (customerHomeAddress && customerHomeAddress.trim()) {
+      // Check if this address already exists
+      const { data: existing, error: fetchError } = await supabase
+        .from('move_quote')
+        .select('*')
+        .eq('customer_home_address', customerHomeAddress)
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('[move-wt/save-form] Error fetching existing record:', fetchError);
+        return NextResponse.json(
+          { error: 'Failed to check existing data' },
+          { status: 500 }
+        );
+      }
+
+      if (existing) {
+        // Address exists - UPDATE and add to arrays
+        console.log(`[move-wt/save-form] Existing record found, updating...`);
+
+        // Use the add_to_array_if_not_exists function for job numbers
+        const { data: updatedData, error: updateError } = await supabase.rpc(
+          'add_to_array_if_not_exists',
+          {
+            arr: existing.job_numbers || [],
+            item: jobNumber
+          }
+        );
+
+        if (updateError) {
+          console.error('[move-wt/save-form] Error updating job_numbers:', updateError);
         }
-      )
-      .select();
 
-    if (error) {
-      console.error('[move-wt/save-form] Supabase error:', error);
-      return NextResponse.json(
-        { error: 'Failed to save form data' },
-        { status: 500 }
-      );
+        const newJobNumbers = updatedData || existing.job_numbers || [];
+
+        // Add phone to phone_numbers array
+        const { data: updatedPhones, error: phoneError } = await supabase.rpc(
+          'add_to_array_if_not_exists',
+          {
+            arr: existing.phone_numbers || [],
+            item: normalizedPhone
+          }
+        );
+
+        if (phoneError) {
+          console.error('[move-wt/save-form] Error updating phone_numbers:', phoneError);
+        }
+
+        const newPhoneNumbers = updatedPhones || existing.phone_numbers || [];
+
+        // Update the record
+        const { data, error } = await supabase
+          .from('move_quote')
+          .update({
+            job_number: jobNumber, // Store most recent job number
+            job_numbers: newJobNumbers,
+            phone_number: normalizedPhone, // Store most recent phone
+            phone_numbers: newPhoneNumbers,
+            address: address, // Legacy field
+            form_data: formData,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('customer_home_address', customerHomeAddress)
+          .select();
+
+        if (error) {
+          console.error('[move-wt/save-form] Supabase update error:', error);
+          return NextResponse.json(
+            { error: 'Failed to update form data' },
+            { status: 500 }
+          );
+        }
+
+        console.log(`[move-wt/save-form] Form updated successfully`);
+
+        return NextResponse.json({
+          success: true,
+          message: 'Form updated successfully',
+          quoteNumber: existing.quote_number,
+          isExisting: true,
+        });
+
+      } else {
+        // New address - INSERT
+        console.log(`[move-wt/save-form] New address, inserting...`);
+
+        const { data, error } = await supabase
+          .from('move_quote')
+          .insert({
+            job_number: jobNumber,
+            job_numbers: [jobNumber],
+            customer_home_address: customerHomeAddress,
+            address: address, // Legacy field
+            phone_number: normalizedPhone,
+            phone_numbers: normalizedPhone ? [normalizedPhone] : [],
+            form_data: formData,
+            updated_at: new Date().toISOString(),
+          })
+          .select();
+
+        if (error) {
+          console.error('[move-wt/save-form] Supabase insert error:', error);
+          return NextResponse.json(
+            { error: 'Failed to save form data' },
+            { status: 500 }
+          );
+        }
+
+        console.log(`[move-wt/save-form] Form saved successfully with quote number: ${data[0]?.quote_number}`);
+
+        return NextResponse.json({
+          success: true,
+          message: 'Form saved successfully',
+          quoteNumber: data[0]?.quote_number,
+          isExisting: false,
+        });
+      }
+    } else {
+      // No customer home address set - use legacy job_number based UPSERT
+      console.log(`[move-wt/save-form] No customer home address set, using job_number based save`);
+
+      const { data, error } = await supabase
+        .from('move_quote')
+        .upsert(
+          {
+            job_number: jobNumber,
+            job_numbers: [jobNumber],
+            address: address,
+            phone_number: normalizedPhone,
+            phone_numbers: normalizedPhone ? [normalizedPhone] : [],
+            form_data: formData,
+            updated_at: new Date().toISOString(),
+          },
+          {
+            onConflict: 'job_number',
+          }
+        )
+        .select();
+
+      if (error) {
+        console.error('[move-wt/save-form] Supabase error:', error);
+        return NextResponse.json(
+          { error: 'Failed to save form data' },
+          { status: 500 }
+        );
+      }
+
+      console.log(`[move-wt/save-form] Form saved successfully`);
+
+      return NextResponse.json({
+        success: true,
+        message: 'Form saved successfully',
+        quoteNumber: data[0]?.quote_number,
+      });
     }
-
-    console.log(`[move-wt/save-form] Form saved successfully`);
-
-    return NextResponse.json({
-      success: true,
-      message: 'Form saved successfully',
-    });
 
   } catch (error) {
     console.error('[move-wt/save-form] Unexpected error:', error);

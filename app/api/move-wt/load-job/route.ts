@@ -250,7 +250,7 @@ export async function POST(request: NextRequest) {
 
     // Check if there's existing form data for this address
     const { data: existingFormData } = await supabase
-      .from('move_walkthrough_forms')
+      .from('move_quote')
       .select('*')
       .eq('address', address)
       .order('updated_at', { ascending: false })
@@ -267,6 +267,7 @@ export async function POST(request: NextRequest) {
       customerInfo: customerInfo,
       folderUrl: folderUrl,
       existingFormData: existingFormData?.form_data || null,
+      quoteNumber: existingFormData?.quote_number || null,
     });
     }
 
@@ -316,7 +317,7 @@ export async function POST(request: NextRequest) {
 
       // Query Supabase for ALL form data matching this phone number
       const { data: formRecords, error: queryError } = await supabase
-        .from('move_walkthrough_forms')
+        .from('move_quote')
         .select('*')
         .eq('phone_number', normalizedPhone)
         .order('updated_at', { ascending: false });
@@ -337,6 +338,7 @@ export async function POST(request: NextRequest) {
         address: record.address || 'No address',
         updatedAt: record.updated_at || '',
         formData: record.form_data || null,
+        quoteNumber: record.quote_number || null,
       }));
 
       // Return customer info and all forms

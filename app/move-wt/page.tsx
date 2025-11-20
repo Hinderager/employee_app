@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import QuotePreview from "../components/QuotePreview";
 import Script from "next/script";
 
 export default function MoveWalkthrough() {
@@ -27,6 +28,7 @@ export default function MoveWalkthrough() {
 
   // Track if form is saved
   const [isFormSaved, setIsFormSaved] = useState(true);
+  const [showQuotePreview, setShowQuotePreview] = useState(false);
 
   // Custom styles for invisible slider
   useEffect(() => {
@@ -100,6 +102,9 @@ export default function MoveWalkthrough() {
     phoneName: "",
     email: "",
     emailName: "",
+
+    // Customer Home Address Indicator
+    customerHomeAddressType: "" as "" | "pickup" | "delivery",
 
     // Addresses - Pickup
     pickupAddress: "",
@@ -2236,7 +2241,23 @@ export default function MoveWalkthrough() {
             {/* Start Address Section */}
             <div className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded-r-lg">
               <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold text-blue-900">Start Address</h3>
+                <div className="flex items-center gap-3">
+                  <h3 className="text-lg font-semibold text-blue-900">Start Address</h3>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={formData.customerHomeAddressType === "pickup"}
+                      onChange={() => {
+                        setFormData(prev => ({
+                          ...prev,
+                          customerHomeAddressType: prev.customerHomeAddressType === "pickup" ? "" : "pickup"
+                        }));
+                      }}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm text-gray-600">Customer Home Address</span>
+                  </label>
+                </div>
                 <button
                   type="button"
                   onClick={handleMakePictureFolder}
@@ -2537,12 +2558,28 @@ export default function MoveWalkthrough() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
                     type="checkbox"
+                    checked={formData.customerHomeAddressType === "delivery"}
+                    disabled={formData.deliveryAddressUnknown}
+                    onChange={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        customerHomeAddressType: prev.customerHomeAddressType === "delivery" ? "" : "delivery"
+                      }));
+                    }}
+                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <span className={`text-sm ${formData.deliveryAddressUnknown ? 'text-gray-400' : 'text-gray-600'}`}>Customer Home Address</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
                     name="deliveryAddressUnknown"
                     checked={formData.deliveryAddressUnknown}
+                    disabled={formData.customerHomeAddressType === "delivery"}
                     onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddressUnknown: e.target.checked }))}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <span className="text-sm text-gray-700">Unknown</span>
+                  <span className={`text-sm ${formData.customerHomeAddressType === "delivery" ? 'text-gray-400' : 'text-gray-700'}`}>Unknown</span>
                 </label>
               </div>
               <div className="space-y-2">
@@ -4445,6 +4482,23 @@ export default function MoveWalkthrough() {
           </section>
         )}
 
+        {/* Preview Customer Quote Button */}
+        {quote.total > 0 && (
+          <section className="mb-6">
+            <button
+              type="button"
+              onClick={() => setShowQuotePreview(true)}
+              className="w-full py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105"
+              style={{
+                background: 'linear-gradient(135deg, #0072BC, #10B981)', 
+                boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
+              }}
+            >
+              👁️ Preview Customer Quote
+            </button>
+          </section>
+        )}
+
         {/* House Quality Rating */}
         <div className="bg-white p-4 rounded-lg shadow flex items-center justify-center">
           <div className="w-full">
@@ -4493,6 +4547,15 @@ export default function MoveWalkthrough() {
         </div>
       </form>
     </main>
+      {/* Quote Preview Modal */}
+      <QuotePreview
+        isOpen={showQuotePreview}
+        onClose={() => setShowQuotePreview(false)}
+        formData={formData}
+        quote={quote}
+        jobNumber={jobNumber}
+      />
+
     </>
   );
 }
