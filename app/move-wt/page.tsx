@@ -90,6 +90,7 @@ export default function MoveWalkthrough() {
     totalCharge: number;
   } | null>(null);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+  const [selectedBudgetCrew, setSelectedBudgetCrew] = useState<{ crewSize: number; hours: number; laborCost: number; materialsCost: number } | null>(null);
 
   const [formData, setFormData] = useState({
     // Service Type
@@ -533,6 +534,11 @@ export default function MoveWalkthrough() {
       processedValue = value.replace(/,/g, '');
     }
 
+    // Clear selected budget crew when fixed budget checkbox is toggled or budget amount changes
+    if (name === 'fixedBudgetRequested' || name === 'desiredBudget') {
+      setSelectedBudgetCrew(null);
+    }
+
     // Clear all additional stop fields when clicking the additional stop checkbox
     if (name === 'hasAdditionalStop' && type === 'checkbox') {
       setFormData(prev => ({
@@ -559,6 +565,17 @@ export default function MoveWalkthrough() {
         [name]: type === 'checkbox' ? checked : processedValue
       }));
     }
+  };
+
+  // Handle selecting a budget crew option
+  const handleSelectBudgetCrew = (option: { crewSize: number; hours: number; totalHours: number; laborCost: number; totalCost: number }) => {
+    const materialsCost = option.laborCost * 0.05;
+    setSelectedBudgetCrew({
+      crewSize: option.crewSize,
+      hours: option.hours,
+      laborCost: option.laborCost,
+      materialsCost: materialsCost
+    });
   };
 
   // Handle phone number input with auto-formatting
@@ -1583,6 +1600,11 @@ export default function MoveWalkthrough() {
       }
 
       movingLabor = movingLabor * parkingFactor;
+
+      // If a budget crew option is selected, use its labor cost instead
+      if (selectedBudgetCrew) {
+        movingLabor = selectedBudgetCrew.laborCost;
+      }
 
       if (movingLabor > 0) {
         const materialsCharge = movingLabor * 0.05; // 5% of labor
@@ -4593,24 +4615,36 @@ export default function MoveWalkthrough() {
                         </div>
 
                         <p className="text-sm font-medium text-gray-700 mb-2">
-                          Viable Crew Configurations (3-5 hours per person):
+                          Viable Crew Configurations - Click to select:
                         </p>
                         <div className="space-y-2">
-                          {budgetCrewOptions.options.map((option, index) => (
-                            <div key={index} className="bg-white p-3 rounded border border-blue-300">
-                              <div className="flex justify-between items-center">
-                                <span className="font-semibold text-gray-900">
-                                  {option.crewSize} {option.crewSize === 1 ? 'person' : 'people'} for {formatHoursMinutes(option.hours)}
-                                </span>
-                                <span className="text-sm text-gray-600">
-                                  ${Math.round(option.totalCost).toLocaleString()}
-                                </span>
-                              </div>
-                              <p className="text-xs text-gray-500 mt-1">
-                                Total combined hours: {option.totalHours.toFixed(1)} • Labor: ${Math.round(option.laborCost).toLocaleString()} + Materials: ${Math.round(option.laborCost * 0.05).toLocaleString()}
-                              </p>
-                            </div>
-                          ))}
+                          {budgetCrewOptions.options.map((option, index) => {
+                            const isSelected = selectedBudgetCrew?.crewSize === option.crewSize && selectedBudgetCrew?.hours === option.hours;
+                            return (
+                              <button
+                                key={index}
+                                onClick={() => handleSelectBudgetCrew(option)}
+                                className={`w-full text-left p-3 rounded border transition-all ${
+                                  isSelected
+                                    ? 'bg-green-50 border-green-500 ring-2 ring-green-500'
+                                    : 'bg-white border-blue-300 hover:border-blue-500 hover:bg-blue-50'
+                                }`}
+                              >
+                                <div className="flex justify-between items-center">
+                                  <span className="font-semibold text-gray-900">
+                                    {option.crewSize} {option.crewSize === 1 ? 'person' : 'people'} for {formatHoursMinutes(option.hours)}
+                                    {isSelected && <span className="ml-2 text-green-600">✓ Selected</span>}
+                                  </span>
+                                  <span className="text-sm text-gray-600">
+                                    ${Math.round(option.totalCost).toLocaleString()}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  Total combined hours: {option.totalHours.toFixed(1)} • Labor: ${Math.round(option.laborCost).toLocaleString()} + Materials: ${Math.round(option.laborCost * 0.05).toLocaleString()}
+                                </p>
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     ) : (
