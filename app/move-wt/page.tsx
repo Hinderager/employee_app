@@ -393,7 +393,12 @@ export default function MoveWalkthrough() {
         body: JSON.stringify({
           jobNumber: effectiveJobNumber,
           address: effectiveAddress,
-          formData: normalizedFormData,
+          formData: {
+            ...normalizedFormData,
+            quoteItems: quote.items,
+            total: quote.total,
+            baseRate: quote.baseRate
+          },
           folderUrl: folderUrl,
           isTemporary: !jobNumber || jobNumber.trim() === '',
         }),
