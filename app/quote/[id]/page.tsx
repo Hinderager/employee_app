@@ -409,11 +409,11 @@ export default function QuotePage({ params }: QuotePageProps) {
           {/* Moving Truck Image */}
           <div style={{ textAlign: "center", marginTop: "30px", marginBottom: "20px" }}>
             <Image
-              src="/images/moving-truck.png"
+              src="/images/moving-truck.jpg"
               alt="Top Shelf Moving Truck"
-              width={340}
-              height={180}
-              style={{ display: "inline-block" }}
+              width={1130}
+              height={585}
+              style={{ display: "inline-block", maxWidth: "100%", height: "auto" }}
             />
           </div>
         </div>
