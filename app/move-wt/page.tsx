@@ -2394,6 +2394,7 @@ export default function MoveWalkthrough() {
                       name="pickupAddress"
                       value={formData.pickupAddress}
                       onChange={handleInputChange}
+                      autoComplete="off"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -2702,6 +2703,7 @@ export default function MoveWalkthrough() {
                           name="deliveryAddress"
                           value={formData.deliveryAddress}
                           onChange={handleInputChange}
+                          autoComplete="off"
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         />
                       </div>
@@ -2908,6 +2910,7 @@ export default function MoveWalkthrough() {
                         name="additionalStopAddress"
                         value={formData.additionalStopAddress}
                         onChange={handleInputChange}
+                        autoComplete="off"
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
