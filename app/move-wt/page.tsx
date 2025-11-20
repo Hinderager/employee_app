@@ -1574,7 +1574,7 @@ export default function MoveWalkthrough() {
         toStartBillableMiles = 0;
       }
       const toStartDistanceCharge = toStartBillableMiles * pricePerMile;
-      const toStartTimeCharge = (distanceData.toPickup.minutes / 60) * 85 * crewSize;
+      const toStartTimeCharge = (distanceData.toPickup.minutes / 60) * 170; // Always 2-person crew for travel time
       const toStartCharge = toStartDistanceCharge + toStartTimeCharge;
 
       // 2. Move Travel (distance + time)
@@ -1594,7 +1594,7 @@ export default function MoveWalkthrough() {
         }
 
         const moveTravelDistanceCharge = moveTravelBillableMiles * pricePerMile;
-        const moveTravelTimeCharge = (distanceData.pickupToDelivery.minutes / 60) * 85 * crewSize;
+        const moveTravelTimeCharge = (distanceData.pickupToDelivery.minutes / 60) * 170; // Always 2-person crew for travel time
         moveTravelCharge = moveTravelDistanceCharge + moveTravelTimeCharge;
       }
 
@@ -1610,7 +1610,7 @@ export default function MoveWalkthrough() {
         }
       }
       const returnTravelDistanceCharge = returnTravelBillableMiles * pricePerMile;
-      const returnTravelTimeCharge = (distanceData.fromDelivery.minutes / 60) * 85 * crewSize;
+      const returnTravelTimeCharge = (distanceData.fromDelivery.minutes / 60) * 170; // Always 2-person crew for travel time
       const returnTravelCharge = returnTravelDistanceCharge + returnTravelTimeCharge;
 
       const totalTravelCharge = toStartCharge + moveTravelCharge + returnTravelCharge;
