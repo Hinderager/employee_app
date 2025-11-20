@@ -12,6 +12,7 @@ export default function MoveWalkthrough() {
   const [searchPhone, setSearchPhone] = useState("");
   const [address, setAddress] = useState("");
   const [folderUrl, setFolderUrl] = useState("");
+  const [quoteNumber, setQuoteNumber] = useState("");
   const [isLoadingJob, setIsLoadingJob] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
@@ -404,6 +405,11 @@ export default function MoveWalkthrough() {
         throw new Error(result.error || 'Failed to save form');
       }
 
+      // Capture quote number from response
+      if (result.quoteNumber) {
+        setQuoteNumber(result.quoteNumber);
+      }
+
       console.log("Form auto-saved:", new Date().toLocaleTimeString());
 
       // Mark form as saved
@@ -721,6 +727,11 @@ export default function MoveWalkthrough() {
       setIsFolderLinkCopied(false);
       setIsFormSaved(true);
 
+      // Capture quote number if present
+      if (result.quoteNumber) {
+        setQuoteNumber(result.quoteNumber);
+      }
+
       // Populate customer information
       if (result.customerInfo) {
         setFormData(prev => ({
@@ -908,6 +919,11 @@ export default function MoveWalkthrough() {
       setFolderUrl(result.folderUrl || '');
       setIsFolderLinkCopied(false);
       setIsFormSaved(true);
+
+      // Capture quote number if present
+      if (result.quoteNumber) {
+        setQuoteNumber(result.quoteNumber);
+      }
 
       // Populate customer information
       if (result.customerInfo) {
@@ -4544,11 +4560,46 @@ export default function MoveWalkthrough() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  // TODO: Implement send to customer functionality
-                  alert('Send to Customer - Coming soon!');
+                onClick={async () => {
+                  if (!quoteNumber) {
+                    alert('Please save the form first to generate a quote number.');
+                    return;
+                  }
+
+                  if (!formData.firstName || !formData.phone) {
+                    alert('Customer name and phone number are required.');
+                    return;
+                  }
+
+                  const confirmed = confirm(`Send quote ${quoteNumber} to ${formData.firstName} ${formData.lastName}?`);
+                  if (!confirmed) return;
+
+                  try {
+                    const response = await fetch('/api/move-wt/send-quote', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                      },
+                      body: JSON.stringify({
+                        quoteNumber: quoteNumber,
+                        quoteTotal: quote.total,
+                      }),
+                    });
+
+                    const result = await response.json();
+
+                    if (!response.ok) {
+                      throw new Error(result.error || 'Failed to send quote');
+                    }
+
+                    alert(`Quote sent successfully!\n\nSMS and email sent to ${formData.firstName}\nQuote URL: ${result.quoteUrl}`);
+                  } catch (error) {
+                    console.error('Send quote error:', error);
+                    alert(error instanceof Error ? error.message : 'Failed to send quote. Please try again.');
+                  }
                 }}
-                className="py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105"
+                disabled={!quoteNumber || !formData.firstName || !formData.phone}
+                className="py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   background: 'linear-gradient(135deg, #10B981, #0072BC)',
                   boxShadow: '0 4px 12px rgba(0,114,188,0.3)'
