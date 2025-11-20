@@ -1932,7 +1932,7 @@ export default function MoveWalkthrough() {
 
       return {
         viable: false,
-        message: `We are sorry, this budget does not cover the cost for this move. The minimum budget required is $${minimumBudget.toLocaleString()} (includes fixed costs of $${Math.round(fixedCosts).toLocaleString()} plus minimum 2 people for 1 hour at $${minimumLaborCost} plus materials).`
+        message: `Sorry, this budget does not cover the cost for this move. The minimum budget for 2 people to work at least 1 hour is $${minimumBudget.toLocaleString()}`
       };
     }
 
@@ -1964,7 +1964,7 @@ export default function MoveWalkthrough() {
 
       return {
         viable: false,
-        message: `We are sorry, this budget does not cover the cost for this move. The minimum budget required is $${minimumBudget.toLocaleString()} (includes fixed costs of $${Math.round(fixedCosts).toLocaleString()} plus minimum 2 people for 1 hour at $${minimumLaborCost} plus materials).`
+        message: `Sorry, this budget does not cover the cost for this move. The minimum budget for 2 people to work at least 1 hour is $${minimumBudget.toLocaleString()}`
       };
     }
 
