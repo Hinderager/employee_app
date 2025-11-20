@@ -7,12 +7,13 @@ const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
 const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// GHL Configuration
+// GHL Configuration from environment variables
 const GHL_API_KEY = process.env.GHL_API_KEY!;
 const GHL_LOCATION_ID = process.env.GHL_LOCATION_ID!;
 const GHL_PIPELINE_ID = process.env.GHL_PIPELINE_ID!;
-// TODO: Find correct stage ID for "Quote Sent" stage
+console.log(`[send-quote] GHL_PIPELINE_ID from env: ${GHL_PIPELINE_ID}`);
 const GHL_QUOTE_SENT_STAGE_ID = process.env.GHL_QUOTE_SENT_STAGE_ID || '752daf82-f827-4bd4-9e68-ba8b683b29fa';
+console.log(`[send-quote] GHL_QUOTE_SENT_STAGE_ID from env: ${GHL_QUOTE_SENT_STAGE_ID}`);
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com';
 
@@ -402,9 +403,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build full quote URL
-    // Use NEXT_PUBLIC_BASE_URL if set, otherwise use Vercel's VERCEL_URL, or localhost for dev
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL
-      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://employeeapp.topshelfpros.com';
     const fullQuoteUrl = `${baseUrl}${quoteUrl}`;
 
     console.log(`[send-quote] Quote URL: ${fullQuoteUrl}`);
@@ -434,18 +433,22 @@ export async function POST(request: NextRequest) {
     console.log(`[send-quote] Sending SMS`);
     await sendGHLSMS(contactId, smsMessage);
 
-    // Step 4: Send Email
-    const emailSubject = `Your Moving Quote is Ready - ${quoteNumber}`;
-    const emailBody = `
-      <p>Hi ${firstName},</p>
-      <p>Your moving quote is ready!</p>
-      <p>View your quote here:</p>
-      <p style="font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 4px;">${fullQuoteUrl}</p>
-      <p><em>Copy and paste the link above into your browser to view your quote.</em></p>
-      <p>Thank you for choosing Top Shelf Moving!</p>
-    `;
-    console.log(`[send-quote] Sending email`);
-    await sendGHLEmail(contactId, emailSubject, emailBody);
+    // Step 4: Send Email (only if email is provided)
+    if (email && email.includes('@')) {
+      const emailSubject = `Your Moving Quote is Ready - ${quoteNumber}`;
+      const emailBody = `
+        <p>Hi ${firstName},</p>
+        <p>Your moving quote is ready!</p>
+        <p>View your quote here:</p>
+        <p style="font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 4px;">${fullQuoteUrl}</p>
+        <p><em>Copy and paste the link above into your browser to view your quote.</em></p>
+        <p>Thank you for choosing Top Shelf Moving!</p>
+      `;
+      console.log(`[send-quote] Sending email to ${email}`);
+      await sendGHLEmail(contactId, emailSubject, emailBody);
+    } else {
+      console.log(`[send-quote] No email provided, skipping email send`);
+    }
 
     console.log(`[send-quote] Quote sent successfully`);
 

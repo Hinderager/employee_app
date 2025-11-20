@@ -31,6 +31,7 @@ export default function MoveWalkthrough() {
   const [isFormSaved, setIsFormSaved] = useState(true);
   const [showQuotePreview, setShowQuotePreview] = useState(false);
   const [quoteSent, setQuoteSent] = useState(false);
+  const [isSendingQuote, setIsSendingQuote] = useState(false);
 
   // Custom styles for invisible slider
   useEffect(() => {
@@ -421,6 +422,9 @@ export default function MoveWalkthrough() {
       // Capture quote number from response
       if (result.quoteNumber) {
         setQuoteNumber(result.quoteNumber);
+        console.log("Quote number set:", result.quoteNumber);
+      } else {
+        console.warn("No quote number in save response:", result);
       }
 
       console.log("Form auto-saved:", new Date().toLocaleTimeString());
@@ -557,7 +561,52 @@ export default function MoveWalkthrough() {
         additionalStopStorageUnitSizes: [""],
         additionalStopNotes: ""
       }));
-    } else {
+    }
+    // Auto-check Safe Dolly if Piano or Gun Safe is checked
+    else if ((name === 'pianos' || name === 'gunSafes') && type === 'checkbox' && checked) {
+      setFormData(prev => ({
+        ...prev,
+        [name]: checked,
+        safeDolly: true
+      }));
+    }
+    // Auto-check Socket Wrenches if any Special Disassembly item is checked
+    else if ((name === 'trampoline' || name === 'bunkBeds' || name === 'gymEquipment' || name === 'sauna') && type === 'checkbox' && checked) {
+      setFormData(prev => ({
+        ...prev,
+        [name]: checked,
+        socketWrenches: true
+      }));
+    }
+    // Auto-check Air Sled if home quality is set to 5 AND any Large Appliances are selected
+    else if (name === 'houseQuality' && processedValue === '5') {
+      setFormData(prev => {
+        const hasLargeAppliances = prev.applianceFridge || prev.applianceWasher || prev.applianceDryer;
+        return {
+          ...prev,
+          [name]: Number(processedValue),
+          airSled: hasLargeAppliances ? true : prev.airSled
+        };
+      });
+    }
+    // Auto-check Appliance Dolly if Fridge is checked; also check Air Sled if house quality is 5
+    else if (name === 'applianceFridge' && type === 'checkbox' && checked) {
+      setFormData(prev => ({
+        ...prev,
+        [name]: checked,
+        applianceDolly: true,
+        airSled: prev.houseQuality === 5 ? true : prev.airSled
+      }));
+    }
+    // Auto-check Air Sled if Clothes Washer or Dryer is checked and house quality is 5
+    else if ((name === 'applianceWasher' || name === 'applianceDryer') && type === 'checkbox' && checked) {
+      setFormData(prev => ({
+        ...prev,
+        [name]: checked,
+        airSled: prev.houseQuality === 5 ? true : prev.airSled
+      }));
+    }
+    else {
       setFormData(prev => ({
         ...prev,
         [name]: type === 'checkbox' ? checked : processedValue
@@ -1262,12 +1311,8 @@ export default function MoveWalkthrough() {
       // Build street address (only street number and route, NOT city/state/zip)
       const streetAddress = [addressData.streetNumber, addressData.route].filter(Boolean).join(' ');
 
-      // Manually set the input field value to only the street address
-      if (inputRef.current) {
-        inputRef.current.value = streetAddress;
-      }
-
       // Update form data with parsed components
+      // React will update the input value through the controlled component
       setFormData(prev => ({
         ...prev,
         [`${fieldPrefix}Address`]: streetAddress || '',
@@ -1281,12 +1326,15 @@ export default function MoveWalkthrough() {
     const cleanup = () => {
       if (pickupAutocompleteRef.current) {
         google.maps.event.clearInstanceListeners(pickupAutocompleteRef.current);
+        pickupAutocompleteRef.current = null;
       }
       if (deliveryAutocompleteRef.current) {
         google.maps.event.clearInstanceListeners(deliveryAutocompleteRef.current);
+        deliveryAutocompleteRef.current = null;
       }
       if (additionalStopAutocompleteRef.current) {
         google.maps.event.clearInstanceListeners(additionalStopAutocompleteRef.current);
+        additionalStopAutocompleteRef.current = null;
       }
     };
 
@@ -1321,7 +1369,7 @@ export default function MoveWalkthrough() {
     }
   };
 
-  // Initialize autocomplete when Google is loaded or when additional stop is toggled
+  // Initialize autocomplete when Google is loaded or when additional stop is toggled or when delivery address visibility changes
   useEffect(() => {
     if (isGoogleLoaded) {
       initializeAutocomplete();
@@ -1339,7 +1387,7 @@ export default function MoveWalkthrough() {
         google.maps.event.clearInstanceListeners(additionalStopAutocompleteRef.current);
       }
     };
-  }, [isGoogleLoaded, formData.hasAdditionalStop]);
+  }, [isGoogleLoaded, formData.hasAdditionalStop, formData.deliveryAddressUnknown]);
 
   // Calculate Distance
   const calculateDistance = async () => {
@@ -1372,8 +1420,14 @@ export default function MoveWalkthrough() {
       formData.additionalStopZip
     ].filter(Boolean).join(', ') : null;
 
-    // Only calculate if we have both complete addresses
-    if (!formData.pickupCity || !formData.pickupState || !formData.deliveryCity || !formData.deliveryState) {
+    // For labor-only, we only need pickup address. For truck service, we need both.
+    if (!formData.pickupCity || !formData.pickupState) {
+      setDistanceData(null);
+      return;
+    }
+
+    // For truck service, also require delivery address
+    if (formData.serviceType !== 'labor-only' && (!formData.deliveryCity || !formData.deliveryState)) {
       setDistanceData(null);
       return;
     }
@@ -1387,12 +1441,17 @@ export default function MoveWalkthrough() {
     setIsCalculatingDistance(true);
 
     try {
+      // For labor-only, use pickup address as delivery address (no actual move, just round trip)
+      const effectiveDeliveryAddress = formData.serviceType === 'labor-only'
+        ? pickupFullAddress
+        : deliveryFullAddress;
+
       const requestBody: any = {
         pickupAddress: pickupFullAddress,
-        deliveryAddress: deliveryFullAddress
+        deliveryAddress: effectiveDeliveryAddress
       };
 
-      if (additionalStopFullAddress) {
+      if (additionalStopFullAddress && formData.serviceType !== 'labor-only') {
         requestBody.additionalStopAddress = additionalStopFullAddress;
       }
 
@@ -1549,15 +1608,21 @@ export default function MoveWalkthrough() {
       pickupSquareFeet = parseInt(formData.pickupApartmentSquareFeet.replace(/,/g, ''));
     }
 
-    if (pickupSquareFeet > 0) {
-      // Get "how much is getting moved" slider value
-      let sliderValue = 0;
-      if (formData.pickupLocationType === 'house') {
-        sliderValue = formData.pickupHowFurnished || 80;
-      } else if (formData.pickupLocationType === 'apartment') {
-        sliderValue = formData.pickupApartmentHowFurnished || 80;
-      }
+    // Get "how much is getting moved" slider value
+    let sliderValue = 0;
+    if (formData.pickupLocationType === 'house') {
+      sliderValue = formData.pickupHowFurnished || 80;
+    } else if (formData.pickupLocationType === 'apartment') {
+      sliderValue = formData.pickupApartmentHowFurnished || 80;
+    }
 
+    const MINIMUM_LABOR = 170;
+    let movingLabor = MINIMUM_LABOR;
+
+    // If no square feet or slider value is very low (barely anything), just use minimum labor
+    if (pickupSquareFeet === 0 || sliderValue <= 20) {
+      movingLabor = MINIMUM_LABOR;
+    } else {
       // Convert slider value to calculation percentage
       // Slider at 80% ("Whole house") = 100% for calculation
       // Slider at 100% ("It's Loaded!") = 120% for calculation
@@ -1569,7 +1634,7 @@ export default function MoveWalkthrough() {
       }
 
       // Formula: square_footage × calculation_percentage × 0.8
-      let movingLabor = pickupSquareFeet * (calculationPercentage / 100) * 0.8;
+      movingLabor = pickupSquareFeet * (calculationPercentage / 100) * 0.8;
 
       // Apply parking distance factor
       // close (0-50ft) = 0%, medium = 5%, long/far = 10%
@@ -1591,25 +1656,30 @@ export default function MoveWalkthrough() {
 
       movingLabor = movingLabor * parkingFactor;
 
-      if (movingLabor > 0) {
-        const materialsCharge = movingLabor * 0.05; // 5% of labor
-        const totalMovingCharge = movingLabor + materialsCharge;
-
-        items.push({
-          description: 'Moving',
-          amount: Math.round(totalMovingCharge),
-          subItems: [
-            {
-              description: 'Labor',
-              amount: Math.round(movingLabor)
-            },
-            {
-              description: 'Materials and Supplies',
-              amount: Math.round(materialsCharge)
-            }
-          ]
-        });
+      // Enforce minimum labor of $170
+      if (movingLabor < MINIMUM_LABOR) {
+        movingLabor = MINIMUM_LABOR;
       }
+    }
+
+    if (movingLabor > 0) {
+      const materialsCharge = movingLabor * 0.05; // 5% of labor
+      const totalMovingCharge = movingLabor + materialsCharge;
+
+      items.push({
+        description: 'Moving',
+        amount: Math.round(totalMovingCharge),
+        subItems: [
+          {
+            description: 'Labor',
+            amount: Math.round(movingLabor)
+          },
+          {
+            description: 'Materials and Supplies',
+            amount: Math.round(materialsCharge)
+          }
+        ]
+      });
     }
 
     // Travel billing - use calculated distance data
@@ -1631,10 +1701,21 @@ export default function MoveWalkthrough() {
       // Determine price per mile based on service type
       const pricePerMile = formData.serviceType === 'labor-only' ? 1 : 2;
 
+      // For labor-only, use average of to/from distances for both legs
+      let adjustedToPickup = distanceData.toPickup;
+      let adjustedFromDelivery = distanceData.fromDelivery;
+
+      if (formData.serviceType === 'labor-only') {
+        const avgMiles = (distanceData.toPickup.miles + distanceData.fromDelivery.miles) / 2;
+        const avgMinutes = (distanceData.toPickup.minutes + distanceData.fromDelivery.minutes) / 2;
+        adjustedToPickup = { miles: avgMiles, minutes: avgMinutes };
+        adjustedFromDelivery = { miles: avgMiles, minutes: avgMinutes };
+      }
+
       // Apply free miles sequentially: Travel to Start -> Move Travel -> Return Travel
 
       // 1. Travel to Start (distance + time)
-      let toStartBillableMiles = distanceData.toPickup.miles;
+      let toStartBillableMiles = adjustedToPickup.miles;
       if (toStartBillableMiles >= remainingFreeMiles) {
         toStartBillableMiles -= remainingFreeMiles;
         remainingFreeMiles = 0;
@@ -1643,7 +1724,7 @@ export default function MoveWalkthrough() {
         toStartBillableMiles = 0;
       }
       const toStartDistanceCharge = toStartBillableMiles * pricePerMile;
-      const toStartTimeCharge = (distanceData.toPickup.minutes / 60) * 170; // Always 2-person crew for travel time
+      const toStartTimeCharge = (adjustedToPickup.minutes / 60) * 170; // Always 2-person crew for travel time
       const toStartCharge = toStartDistanceCharge + toStartTimeCharge;
 
       // 2. Move Travel (distance + time)
@@ -1668,7 +1749,7 @@ export default function MoveWalkthrough() {
       }
 
       // 3. Return Travel (distance + time)
-      let returnTravelBillableMiles = distanceData.fromDelivery.miles;
+      let returnTravelBillableMiles = adjustedFromDelivery.miles;
       if (remainingFreeMiles > 0) {
         if (returnTravelBillableMiles >= remainingFreeMiles) {
           returnTravelBillableMiles -= remainingFreeMiles;
@@ -1679,7 +1760,7 @@ export default function MoveWalkthrough() {
         }
       }
       const returnTravelDistanceCharge = returnTravelBillableMiles * pricePerMile;
-      const returnTravelTimeCharge = (distanceData.fromDelivery.minutes / 60) * 170; // Always 2-person crew for travel time
+      const returnTravelTimeCharge = (adjustedFromDelivery.minutes / 60) * 170; // Always 2-person crew for travel time
       const returnTravelCharge = returnTravelDistanceCharge + returnTravelTimeCharge;
 
       const totalTravelCharge = toStartCharge + moveTravelCharge + returnTravelCharge;
@@ -1695,7 +1776,7 @@ export default function MoveWalkthrough() {
         const subItems = [
           {
             description: 'Travel to Start',
-            details: `(${distanceData.toPickup.miles.toFixed(1)} mi, ${formatDuration(distanceData.toPickup.minutes)})`,
+            details: `(${adjustedToPickup.miles.toFixed(1)} mi, ${formatDuration(adjustedToPickup.minutes)})`,
             amount: Math.round(toStartCharge)
           }
         ];
@@ -1711,7 +1792,7 @@ export default function MoveWalkthrough() {
 
         subItems.push({
           description: 'Return Travel',
-          details: `(${distanceData.fromDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.fromDelivery.minutes)})`,
+          details: `(${adjustedFromDelivery.miles.toFixed(1)} mi, ${formatDuration(adjustedFromDelivery.minutes)})`,
           amount: Math.round(returnTravelCharge)
         });
 
@@ -1886,55 +1967,65 @@ export default function MoveWalkthrough() {
       }
     }
 
-    // If Fixed Budget Requested, adjust Moving labor to match desired budget
+    // If Fixed Budget Requested, check if budget is sufficient (don't artificially increase labor)
     if (formData.fixedBudgetRequested && formData.desiredBudget) {
       const desiredBudget = parseFloat(formData.desiredBudget.replace(/,/g, ''));
 
       if (!isNaN(desiredBudget) && desiredBudget > 0) {
         // Calculate fixed costs (everything except Moving)
         let fixedCosts = 0;
+        let originalMovingLabor = 0;
+
         items.forEach(item => {
           if (item.description !== 'Moving') {
             fixedCosts += item.amount;
+          } else if (item.subItems) {
+            const laborSubItem = item.subItems.find(sub => sub.description === 'Labor');
+            originalMovingLabor = laborSubItem?.amount || 0;
           }
         });
 
-        // Calculate required moving labor to hit desired budget
+        // Calculate what budget allows for
         // Formula: desiredBudget = fixedCosts + movingLabor + (movingLabor * 0.05)
         // Solving: movingLabor = (desiredBudget - fixedCosts) / 1.05
         const availableForMoving = desiredBudget - fixedCosts;
-        const requiredMovingLabor = availableForMoving / 1.05;
+        const budgetAllowsLabor = availableForMoving / 1.05;
 
         // Minimum is 2 movers for 1 hour = $170
         const minimumMovingLabor = 170;
 
-        if (requiredMovingLabor < minimumMovingLabor) {
+        if (budgetAllowsLabor < minimumMovingLabor) {
           // Budget is insufficient
           setIsBudgetInsufficient(true);
         } else {
           setIsBudgetInsufficient(false);
 
-          // Update Moving item with new labor amount
-          const movingItemIndex = items.findIndex(item => item.description === 'Moving');
-          if (movingItemIndex !== -1) {
-            const materialsCharge = requiredMovingLabor * 0.05;
-            const totalMovingCharge = requiredMovingLabor + materialsCharge;
+          // Only reduce labor if budget is insufficient
+          // NEVER increase labor beyond the normal recommendation
+          if (budgetAllowsLabor < originalMovingLabor) {
+            // Budget is constraining - reduce labor to fit
+            const movingItemIndex = items.findIndex(item => item.description === 'Moving');
+            if (movingItemIndex !== -1) {
+              const materialsCharge = budgetAllowsLabor * 0.05;
+              const totalMovingCharge = budgetAllowsLabor + materialsCharge;
 
-            items[movingItemIndex] = {
-              description: 'Moving',
-              amount: Math.round(totalMovingCharge),
-              subItems: [
-                {
-                  description: 'Labor',
-                  amount: Math.round(requiredMovingLabor)
-                },
-                {
-                  description: 'Materials and Supplies',
-                  amount: Math.round(materialsCharge)
-                }
-              ]
-            };
+              items[movingItemIndex] = {
+                description: 'Moving',
+                amount: Math.round(totalMovingCharge),
+                subItems: [
+                  {
+                    description: 'Labor',
+                    amount: Math.round(budgetAllowsLabor)
+                  },
+                  {
+                    description: 'Materials and Supplies',
+                    amount: Math.round(materialsCharge)
+                  }
+                ]
+              };
+            }
           }
+          // If budgetAllowsLabor >= originalMovingLabor, leave the Moving item unchanged
         }
       }
     } else {
@@ -1967,6 +2058,18 @@ export default function MoveWalkthrough() {
       return null;
     }
 
+    // Find the normal Moving labor amount (without budget constraints)
+    let normalMovingLabor = 0;
+    let normalMovingMaterials = 0;
+
+    const movingItem = quote.items.find(item => item.description === 'Moving');
+    if (movingItem && movingItem.subItems) {
+      const laborSubItem = movingItem.subItems.find(sub => sub.description === 'Labor');
+      const materialsSubItem = movingItem.subItems.find(sub => sub.description === 'Materials and Supplies');
+      normalMovingLabor = laborSubItem?.amount || 0;
+      normalMovingMaterials = materialsSubItem?.amount || 0;
+    }
+
     // Calculate fixed costs (everything except Moving labor and its materials)
     // Moving materials are 5% of Moving labor, so they'll be calculated based on the new labor amount
     let fixedCosts = 0;
@@ -1984,7 +2087,26 @@ export default function MoveWalkthrough() {
     // Formula: desiredBudget = fixedCosts + movingLabor + (movingLabor * 0.05)
     // Solving for movingLabor: movingLabor = (desiredBudget - fixedCosts) / 1.05
     const availableForMoving = desiredBudget - fixedCosts;
-    const movingLaborBudget = availableForMoving / 1.05;
+    let movingLaborBudget = availableForMoving / 1.05;
+
+    // Check if budget is sufficient to cover normal recommended labor
+    // If yes, return early - no need to calculate alternative crew configurations
+    if (normalMovingLabor > 0 && movingLaborBudget >= normalMovingLabor) {
+      const normalTotal = normalMovingLabor + normalMovingMaterials;
+      const totalWithFixedCosts = Math.round(fixedCosts + normalTotal);
+
+      return {
+        viable: true,
+        budgetSufficient: true,
+        message: `Your budget of $${desiredBudget.toLocaleString()} is sufficient to cover the recommended labor. The quote shows the normal recommended crew and hours (not adjusted for budget).`,
+        desiredBudget,
+        fixedCosts,
+        movingLaborBudget: normalMovingLabor,
+        movingMaterialsBudget: normalMovingMaterials,
+        estimatedTotal: totalWithFixedCosts
+      };
+    }
+
     const movingMaterialsBudget = movingLaborBudget * 0.05;
 
     // Hourly rate per person is $85
@@ -2009,7 +2131,7 @@ export default function MoveWalkthrough() {
     // 3+ people: 3-5 hours per person (don't allow too many people finishing too quickly)
     const options: Array<{ crewSize: number; hours: number; totalHours: number; laborCost: number; totalCost: number }> = [];
 
-    for (let crewSize = 2; crewSize <= 10; crewSize++) {
+    for (let crewSize = 2; crewSize <= 6; crewSize++) {
       // Calculate max hours this crew can work within moving labor budget
       const maxHours = movingLaborBudget / (crewSize * hourlyRatePerPerson);
 
@@ -3832,6 +3954,12 @@ export default function MoveWalkthrough() {
                   )}
                 </div>
 
+                {formData.applianceFridge && (
+                  <div className="ml-6 text-xs text-red-600 italic">
+                    *Fridge doors cannot be fully removed to fit through narrow spaces
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2">
                   <input
                     type="checkbox"
@@ -3841,7 +3969,7 @@ export default function MoveWalkthrough() {
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <label className="text-sm text-gray-700">
-                    Washer
+                    Clothes Washer
                   </label>
                   {formData.applianceWasher && (
                     <div className="flex items-center gap-1 ml-auto">
@@ -3879,7 +4007,7 @@ export default function MoveWalkthrough() {
                     className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                   <label className="text-sm text-gray-700">
-                    Dryer
+                    Clothes Dryer
                   </label>
                   {formData.applianceDryer && (
                     <div className="flex items-center gap-1 ml-auto">
@@ -3937,44 +4065,6 @@ export default function MoveWalkthrough() {
                         onClick={() => setFormData(prev => ({
                           ...prev,
                           applianceOvenQty: prev.applianceOvenQty + 1
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                      >
-                        +
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="applianceDishwasher"
-                    checked={formData.applianceDishwasher}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="text-sm text-gray-700">
-                    Dishwasher
-                  </label>
-                  {formData.applianceDishwasher && (
-                    <div className="flex items-center gap-1 ml-auto">
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceDishwasherQty: Math.max(1, prev.applianceDishwasherQty - 1)
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                      >
-                        -
-                      </button>
-                      <span className="w-8 text-center text-sm font-semibold">{formData.applianceDishwasherQty}</span>
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceDishwasherQty: prev.applianceDishwasherQty + 1
                         }))}
                         className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
                       >
@@ -4702,18 +4792,53 @@ export default function MoveWalkthrough() {
                             Budget Breakdown:
                           </p>
                           <p className="text-sm text-gray-600">
-                            Desired Budget: <span className="font-semibold">${budgetCrewOptions.desiredBudget.toLocaleString()}</span>
+                            Desired Budget: <span className="font-semibold">${budgetCrewOptions.desiredBudget?.toLocaleString() || '0'}</span>
                           </p>
                           <p className="text-sm text-gray-600">
-                            Fixed Costs (Travel, Packing, Stairs, etc.): <span className="font-semibold">${Math.round(budgetCrewOptions.fixedCosts).toLocaleString()}</span>
+                            Fixed Costs (Travel, Packing, Stairs, etc.): <span className="font-semibold">${Math.round(budgetCrewOptions.fixedCosts || 0).toLocaleString()}</span>
                           </p>
                           <p className="text-sm text-gray-600">
-                            Available for Moving Labor: <span className="font-semibold text-green-600">${Math.round(budgetCrewOptions.movingLaborBudget).toLocaleString()}</span>
+                            Available for Moving Labor: <span className="font-semibold text-green-600">${Math.round(budgetCrewOptions.movingLaborBudget || 0).toLocaleString()}</span>
                           </p>
                           <p className="text-sm text-gray-600">
-                            Moving Materials (5%): <span className="font-semibold">${Math.round(budgetCrewOptions.movingMaterialsBudget).toLocaleString()}</span>
+                            Moving Materials (5%): <span className="font-semibold">${Math.round(budgetCrewOptions.movingMaterialsBudget || 0).toLocaleString()}</span>
                           </p>
                         </div>
+
+                        {/* Display crew options (non-selectable) */}
+                        {budgetCrewOptions.options && budgetCrewOptions.options.length > 0 && (
+                          <div className="mt-4">
+                            <p className="text-sm font-medium text-gray-700 mb-2">
+                              Possible Crew Configurations:
+                            </p>
+                            <div className="space-y-2">
+                              {budgetCrewOptions.options.map((option, index) => (
+                                <div
+                                  key={index}
+                                  className="p-3 bg-white border border-gray-200 rounded-md opacity-75 cursor-not-allowed"
+                                >
+                                  <div className="flex justify-between items-center">
+                                    <div className="text-sm">
+                                      <span className="font-semibold text-gray-800">
+                                        {option.crewSize} {option.crewSize === 1 ? 'Mover' : 'Movers'}
+                                      </span>
+                                      <span className="text-gray-600"> × </span>
+                                      <span className="font-semibold text-gray-800">
+                                        {option.hours.toFixed(1)} {option.hours === 1 ? 'Hour' : 'Hours'}
+                                      </span>
+                                      <span className="text-gray-500 text-xs ml-2">
+                                        ({option.totalHours.toFixed(1)} total hours)
+                                      </span>
+                                    </div>
+                                    <div className="text-sm font-semibold text-gray-700">
+                                      ${Math.round(option.totalCost).toLocaleString()}
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
 
                         <p className="text-sm text-gray-700 italic mt-3">
                           Crew configuration will be determined based on availability
@@ -4856,13 +4981,13 @@ export default function MoveWalkthrough() {
 
         {/* Quote Display */}
         {quote.total > 0 && (
-          <section className={`rounded-lg shadow-lg p-6 border-2 ${
+          <section id="quote-section" className={`rounded-lg shadow-lg p-6 border-2 ${
             isBudgetInsufficient
               ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-300'
               : 'bg-gradient-to-br from-green-50 to-blue-50 border-green-300'
           }`}>
             <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Active Estimate
+              Moving Estimate
             </h2>
 
             <div className="space-y-2 mb-4">
@@ -4887,9 +5012,16 @@ export default function MoveWalkthrough() {
                       </div>
                     )}
                     {item.subItems && item.subItems.map((subItem, subIndex) => (
-                      <div key={`${index}-${subIndex}`} className="flex justify-between items-center py-1 pl-6 text-sm">
-                        <span className="text-gray-600">{subItem.description}</span>
-                        <span className="text-gray-700">${Math.round(subItem.amount).toLocaleString()}</span>
+                      <div key={`${index}-${subIndex}`} className="py-1 pl-6 text-sm">
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-600">{subItem.description}</span>
+                          <span className="text-gray-700">${Math.round(subItem.amount).toLocaleString()}</span>
+                        </div>
+                        {subItem.description === 'Materials and Supplies' && (
+                          <div className="text-xs text-gray-500 italic mt-0.5">
+                            *Only charged if used
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -4932,10 +5064,13 @@ export default function MoveWalkthrough() {
                     return;
                   }
 
-                  if (!formData.firstName || !formData.phone) {
+                  const phoneNumber = phones[0]?.number || formData?.phone;
+                  if (!formData.firstName || !phoneNumber) {
                     alert('Customer name and phone number are required.');
                     return;
                   }
+
+                  setIsSendingQuote(true);
 
                   try {
                     const response = await fetch('/api/move-wt/send-quote', {
@@ -4957,24 +5092,26 @@ export default function MoveWalkthrough() {
 
                     console.log(`Quote sent successfully to ${formData.firstName}. URL: ${result.quoteUrl}`);
 
-                    // Show "Sent" for 5 seconds
+                    // Show "Sent" for 3 seconds
                     setQuoteSent(true);
                     setTimeout(() => {
                       setQuoteSent(false);
-                    }, 5000);
+                    }, 3000);
                   } catch (error) {
                     console.error('Send quote error:', error);
                     alert(error instanceof Error ? error.message : 'Failed to send quote. Please try again.');
+                  } finally {
+                    setIsSendingQuote(false);
                   }
                 }}
-                disabled={!quoteNumber || !formData.firstName || !formData.phone || quoteSent}
+                disabled={!quoteNumber || !formData.firstName || !(phones[0]?.number || formData?.phone) || isSendingQuote}
                 className="py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{
                   background: 'linear-gradient(135deg, #10B981, #0072BC)',
                   boxShadow: '0 4px 12px rgba(0,114,188,0.3)'
                 }}
               >
-                {quoteSent ? 'Sent' : 'Send to Customer'}
+                {isSendingQuote ? 'Sending...' : (quoteSent ? 'Sent' : 'Send to Customer')}
               </button>
             </div>
           </section>
@@ -5001,7 +5138,15 @@ export default function MoveWalkthrough() {
                   <button
                     key={value}
                     type="button"
-                    onClick={() => setFormData(prev => ({ ...prev, houseQuality: value }))}
+                    onClick={() => setFormData(prev => {
+                      const hasLargeAppliances = prev.applianceFridge || prev.applianceWasher || prev.applianceDryer;
+                      return {
+                        ...prev,
+                        houseQuality: value,
+                        // Auto-check Air Sled if quality level 5 is selected AND any Large Appliances are selected
+                        airSled: (value === 5 && hasLargeAppliances) ? true : prev.airSled
+                      };
+                    })}
                     className={`w-4 h-4 rounded-full border-2 transition-all cursor-pointer ${
                       formData.houseQuality === value
                         ? 'bg-gray-300 border-gray-400 scale-125'
@@ -5029,6 +5174,25 @@ export default function MoveWalkthrough() {
           </div>
         </div>
       </form>
+
+      {/* Floating See Quote Button */}
+      {quote.total > 0 && (
+        <button
+          onClick={() => {
+            const quoteSection = document.getElementById('quote-section');
+            if (quoteSection) {
+              quoteSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all z-40 flex items-center gap-2"
+          style={{ backgroundColor: '#10b981' }}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
+          </svg>
+          See Quote
+        </button>
+      )}
     </main>
       {/* Quote Preview Modal */}
       <QuotePreview
