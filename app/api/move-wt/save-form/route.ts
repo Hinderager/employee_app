@@ -143,39 +143,81 @@ export async function POST(request: NextRequest) {
         });
 
       } else {
-        // New address - INSERT
-        console.log(`[move-wt/save-form] New address, inserting...`);
+        // New address - check if job_number exists before inserting
+        console.log(`[move-wt/save-form] New address, checking if job_number exists...`);
 
-        const { data, error } = await supabase
+        // Check if this job_number already exists (important for temp jobs)
+        const { data: existingByJob } = await supabase
           .from('move_quote')
-          .insert({
-            job_number: jobNumber,
-            job_numbers: [jobNumber],
-            customer_home_address: customerHomeAddress,
-            address: address, // Legacy field
-            phone_number: normalizedPhone,
-            phone_numbers: normalizedPhone ? [normalizedPhone] : [],
-            form_data: formData,
-            updated_at: new Date().toISOString(),
-          })
-          .select();
+          .select('*')
+          .eq('job_number', jobNumber)
+          .maybeSingle();
 
-        if (error) {
-          console.error('[move-wt/save-form] Supabase insert error:', error);
-          return NextResponse.json(
-            { error: 'Failed to save form data' },
-            { status: 500 }
-          );
+        if (existingByJob) {
+          // Job number exists - UPDATE it with new customer_home_address
+          console.log(`[move-wt/save-form] Job number exists, updating with new address...`);
+
+          const { data, error } = await supabase
+            .from('move_quote')
+            .update({
+              customer_home_address: customerHomeAddress,
+              address: address,
+              phone_number: normalizedPhone,
+              form_data: formData,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('job_number', jobNumber)
+            .select();
+
+          if (error) {
+            console.error('[move-wt/save-form] Supabase update error:', error);
+            return NextResponse.json(
+              { error: 'Failed to update form data' },
+              { status: 500 }
+            );
+          }
+
+          return NextResponse.json({
+            success: true,
+            message: 'Form updated successfully',
+            quoteNumber: existingByJob.quote_number,
+            isExisting: true,
+          });
+        } else {
+          // Truly new - INSERT
+          console.log(`[move-wt/save-form] New job and address, inserting...`);
+
+          const { data, error } = await supabase
+            .from('move_quote')
+            .insert({
+              job_number: jobNumber,
+              job_numbers: [jobNumber],
+              customer_home_address: customerHomeAddress,
+              address: address, // Legacy field
+              phone_number: normalizedPhone,
+              phone_numbers: normalizedPhone ? [normalizedPhone] : [],
+              form_data: formData,
+              updated_at: new Date().toISOString(),
+            })
+            .select();
+
+          if (error) {
+            console.error('[move-wt/save-form] Supabase insert error:', error);
+            return NextResponse.json(
+              { error: 'Failed to save form data' },
+              { status: 500 }
+            );
+          }
+
+          console.log(`[move-wt/save-form] Form saved successfully with quote number: ${data[0]?.quote_number}`);
+
+          return NextResponse.json({
+            success: true,
+            message: 'Form saved successfully',
+            quoteNumber: data[0]?.quote_number,
+            isExisting: false,
+          });
         }
-
-        console.log(`[move-wt/save-form] Form saved successfully with quote number: ${data[0]?.quote_number}`);
-
-        return NextResponse.json({
-          success: true,
-          message: 'Form saved successfully',
-          quoteNumber: data[0]?.quote_number,
-          isExisting: false,
-        });
       }
     } else {
       // No customer home address set - use legacy job_number based UPSERT
