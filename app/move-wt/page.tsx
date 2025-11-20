@@ -4589,9 +4589,6 @@ export default function MoveWalkthrough() {
                     return;
                   }
 
-                  const confirmed = confirm(`Send quote ${quoteNumber} to ${formData.firstName} ${formData.lastName}?`);
-                  if (!confirmed) return;
-
                   try {
                     const response = await fetch('/api/move-wt/send-quote', {
                       method: 'POST',
@@ -4610,7 +4607,7 @@ export default function MoveWalkthrough() {
                       throw new Error(result.error || 'Failed to send quote');
                     }
 
-                    alert(`Quote sent successfully!\n\nSMS and email sent to ${formData.firstName}\nQuote URL: ${result.quoteUrl}`);
+                    console.log(`Quote sent successfully to ${formData.firstName}. URL: ${result.quoteUrl}`);
                   } catch (error) {
                     console.error('Send quote error:', error);
                     alert(error instanceof Error ? error.message : 'Failed to send quote. Please try again.');
