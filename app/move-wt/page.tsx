@@ -261,6 +261,7 @@ export default function MoveWalkthrough() {
 
     // Special Notes
     specialRequests: "",
+    fixedBudgetRequested: false,
 
     // House Quality Rating
     houseQuality: 3, // 1-5 scale, default to middle
@@ -1196,6 +1197,7 @@ export default function MoveWalkthrough() {
 
       // Special Notes
       specialRequests: "",
+      fixedBudgetRequested: false,
 
       // House Quality Rating
       houseQuality: 3, // 1-5 scale, default to middle
@@ -4426,18 +4428,36 @@ export default function MoveWalkthrough() {
         <section className="bg-white rounded-lg shadow p-4 border-l-4 border-fuchsia-500">
           <h2 className="text-xl font-bold text-fuchsia-900 mb-4">Special Requests & Notes</h2>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Additional Notes
-            </label>
-            <textarea
-              name="specialRequests"
-              value={formData.specialRequests}
-              onChange={handleInputChange}
-              rows={4}
-              placeholder="Any other important information..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
+          <div className="space-y-4">
+            {/* Fixed Budget Checkbox */}
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                id="fixedBudgetRequested"
+                name="fixedBudgetRequested"
+                checked={formData.fixedBudgetRequested}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="fixedBudgetRequested" className="ml-2 text-sm font-medium text-gray-700">
+                Fixed Budget Requested
+              </label>
+            </div>
+
+            {/* Additional Notes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Additional Notes
+              </label>
+              <textarea
+                name="specialRequests"
+                value={formData.specialRequests}
+                onChange={handleInputChange}
+                rows={4}
+                placeholder="Any other important information..."
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
           </div>
         </section>
 
