@@ -456,6 +456,51 @@ export default function MoveWalkthrough() {
     };
   }, [formData, jobNumber, address, folderUrl, phones, emails]);
 
+  // Auto-calculate crew size based on square footage and how furnished
+  useEffect(() => {
+    let squareFeet = 0;
+    let furnishedPercent = 0;
+
+    // Get the appropriate square footage and percentage based on location type
+    if (formData.pickupLocationType === 'house') {
+      squareFeet = parseFloat(formData.pickupHouseSquareFeet) || 0;
+      furnishedPercent = formData.pickupHowFurnished || 80;
+    } else if (formData.pickupLocationType === 'apartment') {
+      squareFeet = parseFloat(formData.pickupApartmentSquareFeet) || 0;
+      furnishedPercent = formData.pickupApartmentHowFurnished || 80;
+    }
+
+    // Calculate effective square footage (sqft × percentage/100)
+    const effectiveSqFt = squareFeet * (furnishedPercent / 100);
+
+    // Determine crew size based on effective square footage
+    let recommendedCrewSize = "2-3"; // default
+
+    if (effectiveSqFt < 500) {
+      recommendedCrewSize = "2 max";
+    } else if (effectiveSqFt >= 500 && effectiveSqFt < 1500) {
+      recommendedCrewSize = "2-3";
+    } else if (effectiveSqFt >= 1500 && effectiveSqFt < 2500) {
+      recommendedCrewSize = "3-4";
+    } else if (effectiveSqFt >= 2500 && effectiveSqFt < 3000) {
+      recommendedCrewSize = "4-6";
+    } else if (effectiveSqFt >= 3000) {
+      recommendedCrewSize = "6+";
+    }
+
+    // Only update if square footage is provided and crew size changed
+    if (squareFeet > 0 && formData.estimatedCrewSize !== recommendedCrewSize) {
+      setFormData(prev => ({ ...prev, estimatedCrewSize: recommendedCrewSize }));
+    }
+  }, [
+    formData.pickupLocationType,
+    formData.pickupHouseSquareFeet,
+    formData.pickupApartmentSquareFeet,
+    formData.pickupHowFurnished,
+    formData.pickupApartmentHowFurnished,
+    formData.estimatedCrewSize
+  ]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
