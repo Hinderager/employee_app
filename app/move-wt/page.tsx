@@ -465,7 +465,7 @@ export default function MoveWalkthrough() {
         clearTimeout(autoSaveTimeoutRef.current);
       }
     };
-  }, [formData, jobNumber, address, folderUrl, phones, emails]);
+  }, [formData, jobNumber, address, folderUrl, phones, emails, quote]);
 
   // Auto-calculate crew size based on square footage and how furnished
   useEffect(() => {
