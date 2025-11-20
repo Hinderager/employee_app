@@ -1519,21 +1519,21 @@ export default function MoveWalkthrough() {
       let movingLabor = pickupSquareFeet * (calculationPercentage / 100) * 0.8;
 
       // Apply parking distance factor
-      // close (0-50ft) = 1.0, medium = 1.1, long/far = 1.2
+      // close (0-50ft) = 0%, medium = 5%, long/far = 10%
       let parkingFactor = 1.0;
 
       // Pickup parking distance
       if (formData.pickupParkingDistance === 'medium') {
-        parkingFactor += 0.1;
+        parkingFactor += 0.05;
       } else if (formData.pickupParkingDistance === 'far') {
-        parkingFactor += 0.2;
+        parkingFactor += 0.10;
       }
 
       // Delivery parking distance
       if (formData.deliveryParkingDistance === 'medium') {
-        parkingFactor += 0.1;
+        parkingFactor += 0.05;
       } else if (formData.deliveryParkingDistance === 'far') {
-        parkingFactor += 0.2;
+        parkingFactor += 0.10;
       }
 
       movingLabor = movingLabor * parkingFactor;
@@ -1673,18 +1673,10 @@ export default function MoveWalkthrough() {
       items.push({ description: `Pickup Stairs (${formData.pickupStairs} flights)`, amount: stairFee });
     }
 
-    if (formData.pickupParkingDistance === 'far') {
-      items.push({ description: 'Pickup Long Carry', amount: 50 });
-    }
-
     // Delivery location factors
     if (formData.deliveryStairs > 1 && !formData.deliveryElevator) {
       const stairFee = (formData.deliveryStairs - 1) * 25;
       items.push({ description: `Delivery Stairs (${formData.deliveryStairs} flights)`, amount: stairFee });
-    }
-
-    if (formData.deliveryParkingDistance === 'far') {
-      items.push({ description: 'Delivery Long Carry', amount: 50 });
     }
 
     // Heavy/Special Items
@@ -3305,9 +3297,15 @@ export default function MoveWalkthrough() {
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
               />
               <label className="ml-2 text-sm text-gray-700">
-                Gun Safe
+                Gun Safe (over 300 pounds)
               </label>
             </div>
+
+            {formData.gunSafes && (
+              <div className="ml-6 text-xs text-red-600 italic">
+                *must be on ground level with no more than 2 steps
+              </div>
+            )}
 
             {formData.gunSafes && (
               <div className="ml-6 flex items-center gap-2">
@@ -3357,6 +3355,12 @@ export default function MoveWalkthrough() {
                 Piano
               </label>
             </div>
+
+            {formData.pianos && (
+              <div className="ml-6 text-xs text-red-600 italic">
+                *must be on ground level with no more than 2 steps
+              </div>
+            )}
 
             {formData.pianos && (
               <div className="ml-6 flex items-center gap-2">
@@ -3481,6 +3485,12 @@ export default function MoveWalkthrough() {
                 Treadmills/Exercise Equipment
               </label>
             </div>
+
+            {formData.treadmills && (
+              <div className="ml-6 text-xs text-red-600 italic">
+                *treadmills cannot be disassembled
+              </div>
+            )}
 
             {formData.treadmills && (
               <div className="ml-6">
