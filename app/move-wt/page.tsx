@@ -15,6 +15,8 @@ export default function MoveWalkthrough() {
   const [isSaving, setIsSaving] = useState(false);
   const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
   const [tempJobNumber, setTempJobNumber] = useState<string>("");
+  const [isLoadingPickupProperty, setIsLoadingPickupProperty] = useState(false);
+  const [isLoadingDeliveryProperty, setIsLoadingDeliveryProperty] = useState(false);
 
   // Dynamic phone and email arrays
   const [phones, setPhones] = useState<Array<{ number: string; name: string }>>([{ number: "", name: "" }]);
@@ -1787,6 +1789,7 @@ export default function MoveWalkthrough() {
 
     const fullAddress = `${formData.pickupAddress}, ${formData.pickupCity}, ${formData.pickupState} ${formData.pickupZip}`;
 
+    setIsLoadingPickupProperty(true);
     try {
       const response = await fetch('/api/move-wt/get-property-data', {
         method: 'POST',
@@ -1827,6 +1830,8 @@ export default function MoveWalkthrough() {
     } catch (error) {
       console.error('[Manual Fetch Pickup] Error:', error);
       alert('Failed to fetch property data');
+    } finally {
+      setIsLoadingPickupProperty(false);
     }
   };
 
@@ -1838,6 +1843,7 @@ export default function MoveWalkthrough() {
 
     const fullAddress = `${formData.deliveryAddress}, ${formData.deliveryCity}, ${formData.deliveryState} ${formData.deliveryZip}`;
 
+    setIsLoadingDeliveryProperty(true);
     try {
       const response = await fetch('/api/move-wt/get-property-data', {
         method: 'POST',
@@ -1878,6 +1884,8 @@ export default function MoveWalkthrough() {
     } catch (error) {
       console.error('[Manual Fetch Delivery] Error:', error);
       alert('Failed to fetch property data');
+    } finally {
+      setIsLoadingDeliveryProperty(false);
     }
   };
 
@@ -2458,23 +2466,26 @@ export default function MoveWalkthrough() {
                     <input
                       type="text"
                       name="pickupHouseSquareFeet"
-                      value={formatNumberWithCommas(formData.pickupHouseSquareFeet)}
+                      value={isLoadingPickupProperty ? '' : formatNumberWithCommas(formData.pickupHouseSquareFeet)}
                       onChange={handleInputChange}
-                      placeholder="Square Feet"
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder={isLoadingPickupProperty ? "Loading..." : "Square Feet"}
+                      disabled={isLoadingPickupProperty}
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                     <input
                       type="text"
                       name="pickupZestimate"
-                      value={formatNumberWithCommas(formData.pickupZestimate)}
+                      value={isLoadingPickupProperty ? '' : formatNumberWithCommas(formData.pickupZestimate)}
                       onChange={handleInputChange}
-                      placeholder="Value"
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder={isLoadingPickupProperty ? "Loading..." : "Value"}
+                      disabled={isLoadingPickupProperty}
+                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                     <button
                       type="button"
                       onClick={fetchPickupPropertyData}
-                      className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                      disabled={isLoadingPickupProperty}
+                      className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
                       title="Fetch property data from Zillow"
                     >
                       $
@@ -2487,24 +2498,27 @@ export default function MoveWalkthrough() {
                     <input
                       type="text"
                       name="pickupApartmentSquareFeet"
-                      value={formatNumberWithCommas(formData.pickupApartmentSquareFeet)}
+                      value={isLoadingPickupProperty ? '' : formatNumberWithCommas(formData.pickupApartmentSquareFeet)}
                       onChange={handleInputChange}
-                      placeholder="Square Feet"
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder={isLoadingPickupProperty ? "Loading..." : "Square Feet"}
+                      disabled={isLoadingPickupProperty}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                     <div className="flex-1 flex gap-1 min-w-0">
                       <input
                         type="text"
                         name="pickupApartmentBedBath"
-                        value={formData.pickupApartmentBedBath}
+                        value={isLoadingPickupProperty ? '' : formData.pickupApartmentBedBath}
                         onChange={handleInputChange}
-                        placeholder="Bed/Bath"
-                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder={isLoadingPickupProperty ? "Loading..." : "Bed/Bath"}
+                        disabled={isLoadingPickupProperty}
+                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                       />
                       <button
                         type="button"
                         onClick={fetchPickupPropertyData}
-                        className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0"
+                        disabled={isLoadingPickupProperty}
+                        className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
                         title="Fetch property data from Zillow"
                       >
                         sf
