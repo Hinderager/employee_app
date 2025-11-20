@@ -186,6 +186,9 @@ export default function MoveWalkthrough() {
     pianos: false,
     pianosQty: 1,
     pianosDetails: "",
+    poolTables: false,
+    poolTablesQty: 1,
+    poolTablesDetails: "",
     otherHeavyItems: false,
     otherHeavyItemsDetails: "",
     largeTVs: false,
@@ -1139,6 +1142,9 @@ export default function MoveWalkthrough() {
       pianos: false,
       pianosQty: 1,
       pianosDetails: "",
+      poolTables: false,
+      poolTablesQty: 1,
+      poolTablesDetails: "",
       otherHeavyItems: false,
       otherHeavyItemsDetails: "",
       largeTVs: false,
@@ -1757,6 +1763,12 @@ export default function MoveWalkthrough() {
       const pianoCount = formData.pianosQty || 1;
       const pianoCharge = 100 * pianoCount;
       heavyItems.push({ description: `Piano${pianoCount > 1 ? ` (${pianoCount})` : ''}`, amount: pianoCharge });
+    }
+
+    if (formData.poolTables) {
+      const poolTableCount = formData.poolTablesQty || 1;
+      const poolTableCharge = 100 * poolTableCount;
+      heavyItems.push({ description: `Pool Table${poolTableCount > 1 ? ` (${poolTableCount})` : ''}`, amount: poolTableCharge });
     }
 
     if (formData.gunSafes) {
@@ -3564,6 +3576,61 @@ export default function MoveWalkthrough() {
                   type="text"
                   name="pianosDetails"
                   value={formData.pianosDetails}
+                  onChange={handleInputChange}
+                  placeholder="Details"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+            )}
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                name="poolTables"
+                checked={formData.poolTables}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label className="ml-2 text-sm text-gray-700">
+                Pool Table
+              </label>
+            </div>
+
+            {formData.poolTables && (
+              <div className="ml-6 text-xs text-red-600 italic">
+                *must be on ground level with no more than 2 steps
+              </div>
+            )}
+
+            {formData.poolTables && (
+              <div className="ml-6 flex items-center gap-2">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      poolTablesQty: Math.max(1, prev.poolTablesQty - 1)
+                    }))}
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                  >
+                    -
+                  </button>
+                  <span className="w-8 text-center text-sm font-semibold">{formData.poolTablesQty}</span>
+                  <button
+                    type="button"
+                    onClick={() => setFormData(prev => ({
+                      ...prev,
+                      poolTablesQty: prev.poolTablesQty + 1
+                    }))}
+                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                  >
+                    +
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  name="poolTablesDetails"
+                  value={formData.poolTablesDetails}
                   onChange={handleInputChange}
                   placeholder="Details"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
