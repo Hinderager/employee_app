@@ -1218,12 +1218,12 @@ export default function MoveWalkthrough() {
 
     const options = {
       componentRestrictions: { country: 'us' },
-      fields: ['address_components', 'formatted_address'],
+      fields: ['address_components'],
       types: ['address']
     };
 
     // Helper function to parse address components
-    const parseAddressComponents = (place: google.maps.places.PlaceResult, fieldPrefix: 'pickup' | 'delivery' | 'additionalStop') => {
+    const parseAddressComponents = (place: google.maps.places.PlaceResult, fieldPrefix: 'pickup' | 'delivery' | 'additionalStop', inputRef: React.RefObject<HTMLInputElement>) => {
       if (!place.address_components) return;
 
       const addressData: any = {};
@@ -1248,10 +1248,15 @@ export default function MoveWalkthrough() {
         }
       });
 
-      // Build street address
+      // Build street address (only street number and route, NOT city/state/zip)
       const streetAddress = [addressData.streetNumber, addressData.route].filter(Boolean).join(' ');
 
-      // Update form data
+      // Manually set the input field value to only the street address
+      if (inputRef.current) {
+        inputRef.current.value = streetAddress;
+      }
+
+      // Update form data with parsed components
       setFormData(prev => ({
         ...prev,
         [`${fieldPrefix}Address`]: streetAddress || '',
@@ -1282,7 +1287,7 @@ export default function MoveWalkthrough() {
       pickupAutocompleteRef.current = new google.maps.places.Autocomplete(pickupAddressRef.current, options);
       pickupAutocompleteRef.current.addListener('place_changed', () => {
         const place = pickupAutocompleteRef.current?.getPlace();
-        if (place) parseAddressComponents(place, 'pickup');
+        if (place) parseAddressComponents(place, 'pickup', pickupAddressRef);
       });
     }
 
@@ -1291,7 +1296,7 @@ export default function MoveWalkthrough() {
       deliveryAutocompleteRef.current = new google.maps.places.Autocomplete(deliveryAddressRef.current, options);
       deliveryAutocompleteRef.current.addListener('place_changed', () => {
         const place = deliveryAutocompleteRef.current?.getPlace();
-        if (place) parseAddressComponents(place, 'delivery');
+        if (place) parseAddressComponents(place, 'delivery', deliveryAddressRef);
       });
     }
 
@@ -1300,7 +1305,7 @@ export default function MoveWalkthrough() {
       additionalStopAutocompleteRef.current = new google.maps.places.Autocomplete(additionalStopAddressRef.current, options);
       additionalStopAutocompleteRef.current.addListener('place_changed', () => {
         const place = additionalStopAutocompleteRef.current?.getPlace();
-        if (place) parseAddressComponents(place, 'additionalStop');
+        if (place) parseAddressComponents(place, 'additionalStop', additionalStopAddressRef);
       });
     }
   };
