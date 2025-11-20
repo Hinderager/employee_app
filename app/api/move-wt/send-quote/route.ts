@@ -162,9 +162,41 @@ async function upsertGHLContact(contactData: {
   }
 }
 
-// Create GHL opportunity
-async function createGHLOpportunity(contactId: string, quoteNumber: string, quoteTotal: number) {
-  const payload = {
+// Search for existing GHL opportunity by contact ID
+async function findGHLOpportunity(contactId: string) {
+  const response = await fetch(
+    `${GHL_API_BASE}/opportunities/search?location_id=${GHL_LOCATION_ID}&contact_id=${contactId}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${GHL_API_KEY}`,
+        'Version': '2021-07-28',
+        'Content-Type': 'application/json',
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    console.error('[send-quote] Search opportunity error:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorBody,
+    });
+    // Don't throw error - just return null if search fails
+    return null;
+  }
+
+  const data = await response.json();
+  // Return the first opportunity found, or null if none exist
+  return data.opportunities && data.opportunities.length > 0 ? data.opportunities[0] : null;
+}
+
+// Create or update GHL opportunity
+async function upsertGHLOpportunity(contactId: string, quoteNumber: string, quoteTotal: number) {
+  // First, search for existing opportunity
+  const existingOpportunity = await findGHLOpportunity(contactId);
+
+  const payload: any = {
     pipelineId: GHL_PIPELINE_ID,
     locationId: GHL_LOCATION_ID,
     name: `Moving Quote ${quoteNumber}`,
@@ -174,36 +206,66 @@ async function createGHLOpportunity(contactId: string, quoteNumber: string, quot
     monetaryValue: Math.round(quoteTotal),
   };
 
-  console.log('[send-quote] Creating opportunity with payload:', payload);
+  if (existingOpportunity) {
+    // Update existing opportunity
+    console.log('[send-quote] Updating existing opportunity:', existingOpportunity.id, 'with payload:', payload);
+    const response = await fetch(
+      `${GHL_API_BASE}/opportunities/${existingOpportunity.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${GHL_API_KEY}`,
+          'Version': '2021-07-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }
+    );
 
-  const response = await fetch(
-    `${GHL_API_BASE}/opportunities/`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GHL_API_KEY}`,
-        'Version': '2021-07-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(payload),
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('[send-quote] Update opportunity error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorBody,
+        payload: payload,
+      });
+      throw new Error(`Failed to update GHL opportunity: ${response.statusText} - ${errorBody}`);
     }
-  );
 
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error('[send-quote] Create opportunity error:', {
-      status: response.status,
-      statusText: response.statusText,
-      body: errorBody,
-      payload: payload,
-      pipelineId: GHL_PIPELINE_ID,
-      locationId: GHL_LOCATION_ID,
-      stageId: GHL_QUOTE_SENT_STAGE_ID,
-    });
-    throw new Error(`Failed to create GHL opportunity: ${response.statusText} - ${errorBody}`);
+    return await response.json();
+  } else {
+    // Create new opportunity
+    console.log('[send-quote] Creating new opportunity with payload:', payload);
+    const response = await fetch(
+      `${GHL_API_BASE}/opportunities/`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GHL_API_KEY}`,
+          'Version': '2021-07-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      }
+    );
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      console.error('[send-quote] Create opportunity error:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: errorBody,
+        payload: payload,
+        pipelineId: GHL_PIPELINE_ID,
+        locationId: GHL_LOCATION_ID,
+        stageId: GHL_QUOTE_SENT_STAGE_ID,
+      });
+      throw new Error(`Failed to create GHL opportunity: ${response.statusText} - ${errorBody}`);
+    }
+
+    return await response.json();
   }
-
-  return await response.json();
 }
 
 // Send SMS via GHL
@@ -353,11 +415,11 @@ export async function POST(request: NextRequest) {
     const contactId = contact.contact?.id || contact.id;
     console.log(`[send-quote] GHL Contact ID: ${contactId}`);
 
-    // Step 2: Create GHL Opportunity
-    console.log(`[send-quote] Creating GHL opportunity with value: $${quoteTotal || 0}`);
+    // Step 2: Create/Update GHL Opportunity
+    console.log(`[send-quote] Upserting GHL opportunity with value: $${quoteTotal || 0}`);
 
-    const opportunity = await createGHLOpportunity(contactId, quoteNumber, quoteTotal || 0);
-    console.log(`[send-quote] Created opportunity: ${opportunity.id}`);
+    const opportunity = await upsertGHLOpportunity(contactId, quoteNumber, quoteTotal || 0);
+    console.log(`[send-quote] Opportunity ID: ${opportunity.id}`);
 
     // Step 3: Send SMS
     const smsMessage = `Hi ${firstName}, your moving quote is ready! View it here: ${fullQuoteUrl}`;
