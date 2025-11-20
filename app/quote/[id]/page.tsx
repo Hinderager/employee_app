@@ -404,6 +404,17 @@ export default function QuotePage({ params }: QuotePageProps) {
               Thank You For Your Business
             </h2>
           </div>
+
+          {/* Moving Truck Image */}
+          <div style={{ textAlign: "center", marginTop: "30px", marginBottom: "20px" }}>
+            <Image
+              src="/images/moving-truck.png"
+              alt="Top Shelf Moving Truck"
+              width={120}
+              height={60}
+              style={{ display: "inline-block" }}
+            />
+          </div>
         </div>
       </div>
     </div>
