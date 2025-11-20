@@ -1218,7 +1218,7 @@ export default function MoveWalkthrough() {
 
     const options = {
       componentRestrictions: { country: 'us' },
-      fields: ['address_components'],
+      fields: ['address_components', 'formatted_address'],
       types: ['address']
     };
 
