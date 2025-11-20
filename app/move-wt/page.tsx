@@ -1926,9 +1926,13 @@ export default function MoveWalkthrough() {
     const minimumLaborCost = 2 * 1 * hourlyRatePerPerson;
 
     if (movingLaborBudget < minimumLaborCost) {
+      // Calculate minimum budget: fixedCosts + minimumLabor + materials (5% of labor)
+      // Using formula: minimumBudget = fixedCosts + (minimumLabor * 1.05)
+      const minimumBudget = Math.ceil(fixedCosts + (minimumLaborCost * 1.05));
+
       return {
         viable: false,
-        message: "We are sorry, this budget does not cover the cost for this move"
+        message: `We are sorry, this budget does not cover the cost for this move. The minimum budget required is $${minimumBudget.toLocaleString()} (includes fixed costs of $${Math.round(fixedCosts).toLocaleString()} plus minimum 2 people for 1 hour at $${minimumLaborCost} plus materials).`
       };
     }
 
@@ -1955,9 +1959,12 @@ export default function MoveWalkthrough() {
     }
 
     if (options.length === 0) {
+      // Calculate minimum budget for viable crew configuration
+      const minimumBudget = Math.ceil(fixedCosts + (minimumLaborCost * 1.05));
+
       return {
         viable: false,
-        message: "We are sorry, this budget does not cover the cost for this move"
+        message: `We are sorry, this budget does not cover the cost for this move. The minimum budget required is $${minimumBudget.toLocaleString()} (includes fixed costs of $${Math.round(fixedCosts).toLocaleString()} plus minimum 2 people for 1 hour at $${minimumLaborCost} plus materials).`
       };
     }
 
