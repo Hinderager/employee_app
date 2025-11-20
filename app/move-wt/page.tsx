@@ -342,7 +342,7 @@ export default function MoveWalkthrough() {
   // Extract save logic into a reusable function
   const saveFormData = async (showSuccessMessage: boolean = false) => {
     // Require at least phone number and pickup address
-    const phoneNumber = formData?.phone;
+    const phoneNumber = phones[0]?.number || formData?.phone;
     const pickupAddress = formData?.pickupAddress;
 
     if (!phoneNumber || phoneNumber.trim() === '') {
@@ -415,8 +415,8 @@ export default function MoveWalkthrough() {
       return;
     }
 
-    // Skip if no phone number is entered
-    const phoneNumber = formData?.phone;
+    // Skip if no phone number is entered (check first phone in phones array)
+    const phoneNumber = phones[0]?.number || formData?.phone;
     if (!phoneNumber || phoneNumber.trim() === '') {
       return;
     }
