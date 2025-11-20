@@ -248,11 +248,11 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
               {groupedItems.map((section, index) => (
                 <div key={index} style={{ marginBottom: "20px" }}>
                   {/* Category Header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px" }}>
-                    <h3 style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, margin: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "10px", gap: "20px" }}>
+                    <h3 style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, margin: 0, flex: 1 }}>
                       {section.category}
                     </h3>
-                    <span style={{ fontSize: "15px", fontWeight: "700", color: colors.dark }}>
+                    <span style={{ fontSize: "15px", fontWeight: "700", color: colors.dark, minWidth: "80px", textAlign: "right" }}>
                       {formatCurrency(section.total)}
                     </span>
                   </div>
@@ -261,11 +261,11 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
                   {section.items.length > 1 && (
                     <div style={{ paddingLeft: "20px" }}>
                       {section.items.map((item: any, itemIndex: number) => (
-                        <div key={itemIndex} style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                          <span style={{ fontSize: "13px", color: colors.gray }}>
+                        <div key={itemIndex} style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px", gap: "20px" }}>
+                          <span style={{ fontSize: "13px", color: colors.gray, flex: 1 }}>
                             {item.description}
                           </span>
-                          <span style={{ fontSize: "13px", color: colors.primary, fontWeight: "600" }}>
+                          <span style={{ fontSize: "13px", color: colors.primary, fontWeight: "600", minWidth: "80px", textAlign: "right" }}>
                             {formatCurrency(item.amount)}
                           </span>
                         </div>
@@ -287,8 +287,8 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
               <div style={{ height: "3px", background: colors.success, margin: "20px 0" }}></div>
 
               {/* Estimated Total */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-                <h2 style={{ fontSize: "20px", fontWeight: "700", color: colors.dark, margin: 0 }}>
+              <div style={{ textAlign: "center", marginBottom: "12px" }}>
+                <h2 style={{ fontSize: "20px", fontWeight: "700", color: colors.dark, margin: "0 0 8px 0" }}>
                   Estimated Total:
                 </h2>
                 <span style={{ fontSize: "32px", fontWeight: "700", color: colors.success }}>
