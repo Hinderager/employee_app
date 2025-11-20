@@ -1932,15 +1932,20 @@ export default function MoveWalkthrough() {
       };
     }
 
-    // Calculate viable crew configurations (2-10 people, max 5 hours per person)
+    // Calculate viable crew configurations
+    // 2 people: 1-5 hours per person
+    // 3+ people: 3-5 hours per person (don't allow too many people finishing too quickly)
     const options: Array<{ crewSize: number; hours: number; totalHours: number; laborCost: number; totalCost: number }> = [];
 
     for (let crewSize = 2; crewSize <= 10; crewSize++) {
       // Calculate max hours this crew can work within moving labor budget
       const maxHours = movingLaborBudget / (crewSize * hourlyRatePerPerson);
 
-      // Only include if hours per person <= 5
-      if (maxHours > 0 && maxHours <= 5) {
+      // Determine minimum hours based on crew size
+      const minHours = crewSize === 2 ? 1 : 3;
+
+      // Only include if hours per person is between min and 5 hours
+      if (maxHours >= minHours && maxHours <= 5) {
         const totalHours = crewSize * maxHours;
         const laborCost = crewSize * maxHours * hourlyRatePerPerson;
         const materialsCost = laborCost * 0.05;
@@ -4581,7 +4586,7 @@ export default function MoveWalkthrough() {
                         </div>
 
                         <p className="text-sm font-medium text-gray-700 mb-2">
-                          Viable Crew Configurations (max 5 hours per person):
+                          Viable Crew Configurations (3-5 hours per person):
                         </p>
                         <div className="space-y-2">
                           {budgetCrewOptions.options.map((option, index) => (
