@@ -104,7 +104,7 @@ export default function MoveWalkthrough() {
     emailName: "",
 
     // Customer Home Address Indicator
-    customerHomeAddressType: "" as "" | "pickup" | "delivery",
+    customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
 
     // Addresses - Pickup
     pickupAddress: "",
@@ -944,7 +944,7 @@ export default function MoveWalkthrough() {
       phoneName: "",
       email: "",
       emailName: "",
-      customerHomeAddressType: "",
+      customerHomeAddressType: "pickup",
 
       // Addresses - Pickup
       pickupAddress: "",
