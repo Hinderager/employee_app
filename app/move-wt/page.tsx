@@ -530,10 +530,32 @@ export default function MoveWalkthrough() {
       processedValue = value.replace(/,/g, '');
     }
 
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : processedValue
-    }));
+    // Clear all additional stop fields when clicking the additional stop checkbox
+    if (name === 'hasAdditionalStop' && type === 'checkbox') {
+      setFormData(prev => ({
+        ...prev,
+        hasAdditionalStop: checked,
+        additionalStopAddress: "",
+        additionalStopUnit: "",
+        additionalStopCity: "",
+        additionalStopState: "",
+        additionalStopZip: "",
+        additionalStopLocationType: "house",
+        additionalStopLocationOther: "",
+        additionalStopHouseSquareFeet: "",
+        additionalStopZestimate: "",
+        additionalStopHowFurnished: 80,
+        additionalStopApartmentBedBath: "",
+        additionalStopStorageUnitQuantity: 1,
+        additionalStopStorageUnitSizes: [""],
+        additionalStopNotes: ""
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'checkbox' ? checked : processedValue
+      }));
+    }
   };
 
   // Handle phone number input with auto-formatting
