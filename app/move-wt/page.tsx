@@ -1966,7 +1966,7 @@ export default function MoveWalkthrough() {
 
       return {
         viable: false,
-        message: `With your address locations and requested services, the minimum budget for 2 people to work at least 1 hour is $${minimumBudget.toLocaleString()}`
+        message: `With your address locations and requested services, the minimum budget for 2 movers to work at least 1 hour is $${minimumBudget.toLocaleString()}`
       };
     }
 
@@ -1998,7 +1998,7 @@ export default function MoveWalkthrough() {
 
       return {
         viable: false,
-        message: `With your address locations and requested services, the minimum budget for 2 people to work at least 1 hour is $${minimumBudget.toLocaleString()}`
+        message: `With your address locations and requested services, the minimum budget for 2 movers to work at least 1 hour is $${minimumBudget.toLocaleString()}`
       };
     }
 
@@ -4699,7 +4699,7 @@ export default function MoveWalkthrough() {
                               >
                                 <div className="flex justify-between items-center">
                                   <span className="font-semibold text-gray-900">
-                                    {option.crewSize} {option.crewSize === 1 ? 'person' : 'people'} for {formatHoursMinutes(option.hours)}
+                                    {option.crewSize} {option.crewSize === 1 ? 'mover' : 'movers'} for {formatHoursMinutes(option.hours)}
                                     {isSelected && <span className="ml-2 text-green-600">✓ Selected</span>}
                                   </span>
                                   <span className="text-sm text-gray-600">
