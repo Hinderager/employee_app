@@ -68,7 +68,8 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
         discount: item.discount,
         items: item.subItems.map(sub => ({
           description: sub.description,
-          amount: sub.amount
+          amount: sub.amount,
+          details: sub.details
         }))
       });
     } else {
@@ -179,15 +180,15 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
               <table style={{ marginLeft: "auto", fontSize: "12px", borderCollapse: "collapse" }}>
                 <tbody>
                   <tr>
-                    <td style={{ padding: "4px 12px 4px 0", color: colors.gray, fontWeight: "600" }}>Estimate #</td>
+                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600" }}>Estimate #</td>
                     <td style={{ padding: "4px 0", color: colors.primary, textAlign: "right", fontWeight: "700" }}>{jobNumber || "DRAFT"}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: "4px 12px 4px 0", color: colors.gray, fontWeight: "600" }}>Date</td>
+                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600" }}>Date</td>
                     <td style={{ padding: "4px 0", color: colors.dark, textAlign: "right" }}>{currentDate}</td>
                   </tr>
                   <tr>
-                    <td style={{ padding: "4px 12px 4px 0", color: colors.gray, fontWeight: "600" }}>Total</td>
+                    <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600" }}>Total</td>
                     <td style={{ padding: "4px 0", color: colors.success, textAlign: "right", fontWeight: "700", fontSize: "14px" }}>{formatCurrency(quote.total)}</td>
                   </tr>
                 </tbody>
@@ -249,13 +250,13 @@ export default function QuotePreview({ isOpen, onClose, formData, quote, jobNumb
               </h3>
               <div style={{ fontSize: "12px", color: colors.gray, lineHeight: "1.5" }}>
                 <p style={{ margin: "3px 0", fontWeight: "600", color: colors.dark }}>
-                  {formData.deliveryAddress || formData.pickupAddress || "TBD"}
+                  {formData.deliveryAddress || "TBD"}
                 </p>
-                <p style={{ margin: "3px 0" }}>
-                  {formData.deliveryCity && formData.deliveryState ?
-                    `${formData.deliveryCity}, ${formData.deliveryState} ${formData.deliveryZip || ''}` :
-                    (formData.pickupCity && formData.pickupState ? `${formData.pickupCity}, ${formData.pickupState} ${formData.pickupZip || ''}` : '')}
-                </p>
+                {formData.deliveryCity && formData.deliveryState && (
+                  <p style={{ margin: "3px 0" }}>
+                    {formData.deliveryCity}, {formData.deliveryState} {formData.deliveryZip || ''}
+                  </p>
+                )}
               </div>
             </div>
           </div>
