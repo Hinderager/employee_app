@@ -4672,76 +4672,64 @@ export default function MoveWalkthrough() {
             </div>
 
             {/* Budget Input Field */}
-            {formData.fixedBudgetRequested && (() => {
-              // Calculate minimum budget for placeholder
-              let fixedCosts = 0;
-              quote.items.forEach(item => {
-                if (item.description !== 'Moving') {
-                  fixedCosts += item.amount;
-                }
-              });
-              const minimumMovingLabor = 170; // 2 movers * 1 hour * $85
-              const minimumBudget = Math.ceil(fixedCosts + (minimumMovingLabor * 1.05));
-
-              return (
-                <div>
-                  <label htmlFor="desiredBudget" className="block text-sm font-medium text-gray-700 mb-1">
-                    Desired Budget
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-2 text-gray-500">$</span>
-                    <input
-                      type="number"
-                      id="desiredBudget"
-                      name="desiredBudget"
-                      value={formData.desiredBudget}
-                      onChange={handleInputChange}
-                      placeholder={`Minimum: $${minimumBudget.toLocaleString()}`}
-                      min="0"
-                      step="1"
-                      className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  {/* Budget Crew Options */}
-                  {budgetCrewOptions && (
-                    <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                      {budgetCrewOptions.viable ? (
-                        <div>
-                          <div className="mb-3">
-                            <p className="text-sm font-medium text-gray-700 mb-1">
-                              Budget Breakdown:
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Desired Budget: <span className="font-semibold">${budgetCrewOptions.desiredBudget.toLocaleString()}</span>
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Fixed Costs (Travel, Packing, Stairs, etc.): <span className="font-semibold">${Math.round(budgetCrewOptions.fixedCosts).toLocaleString()}</span>
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Available for Moving Labor: <span className="font-semibold text-green-600">${Math.round(budgetCrewOptions.movingLaborBudget).toLocaleString()}</span>
-                            </p>
-                            <p className="text-sm text-gray-600">
-                              Moving Materials (5%): <span className="font-semibold">${Math.round(budgetCrewOptions.movingMaterialsBudget).toLocaleString()}</span>
-                            </p>
-                          </div>
-
-                          <p className="text-sm text-gray-700 italic mt-3">
-                            Crew configuration will be determined based on availability
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="text-center p-4">
-                          <p className="text-red-600 font-semibold">
-                            {budgetCrewOptions.message}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
+            {formData.fixedBudgetRequested && (
+              <div>
+                <label htmlFor="desiredBudget" className="block text-sm font-medium text-gray-700 mb-1">
+                  Desired Budget
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2 text-gray-500">$</span>
+                  <input
+                    type="number"
+                    id="desiredBudget"
+                    name="desiredBudget"
+                    value={formData.desiredBudget}
+                    onChange={handleInputChange}
+                    placeholder="Enter budget amount"
+                    min="0"
+                    step="1"
+                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
                 </div>
-              );
-            })()}
+
+                {/* Budget Crew Options */}
+                {budgetCrewOptions && (
+                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
+                    {budgetCrewOptions.viable ? (
+                      <div>
+                        <div className="mb-3">
+                          <p className="text-sm font-medium text-gray-700 mb-1">
+                            Budget Breakdown:
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Desired Budget: <span className="font-semibold">${budgetCrewOptions.desiredBudget.toLocaleString()}</span>
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Fixed Costs (Travel, Packing, Stairs, etc.): <span className="font-semibold">${Math.round(budgetCrewOptions.fixedCosts).toLocaleString()}</span>
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Available for Moving Labor: <span className="font-semibold text-green-600">${Math.round(budgetCrewOptions.movingLaborBudget).toLocaleString()}</span>
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            Moving Materials (5%): <span className="font-semibold">${Math.round(budgetCrewOptions.movingMaterialsBudget).toLocaleString()}</span>
+                          </p>
+                        </div>
+
+                        <p className="text-sm text-gray-700 italic mt-3">
+                          Crew configuration will be determined based on availability
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="text-center p-4">
+                        <p className="text-red-600 font-semibold">
+                          {budgetCrewOptions.message}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Additional Notes */}
             <div>
