@@ -392,22 +392,12 @@ export default function QuotePage({ params }: QuotePageProps) {
                 *Quoted rates are estimates. Final charges reflect actual hours worked, including drive time and additional labor if required.
               </p>
 
-              {/* Important Notes */}
+              {/* Important Notes - only for items without explicit line items in the quote */}
               {(() => {
                 const alerts: string[] = [];
 
-                // Collect alerts from quote items
-                quoteItems.forEach((item: any) => {
-                  if (item.subItems) {
-                    item.subItems.forEach((subItem: any) => {
-                      if (subItem.alert && !alerts.includes(subItem.alert)) {
-                        alerts.push(subItem.alert);
-                      }
-                    });
-                  }
-                });
-
-                // Add alerts from formData items that don't have costs
+                // Only add alerts from formData items that don't have explicit line items
+                // (alerts from quote items are shown inline with the item)
                 if (formData.applianceFridge && !alerts.includes('Fridge doors cannot be fully removed to fit through narrow spaces')) {
                   alerts.push('Fridge doors cannot be fully removed to fit through narrow spaces');
                 }
