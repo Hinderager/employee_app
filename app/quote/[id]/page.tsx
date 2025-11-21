@@ -384,6 +384,43 @@ export default function QuotePage({ params }: QuotePageProps) {
               <p style={{ fontSize: "11px", color: colors.gray, fontStyle: "italic", textAlign: "center", margin: 0 }}>
                 *Quoted rates are estimates. Final charges reflect actual hours worked, including drive time and additional labor if required.
               </p>
+
+              {/* Important Notes */}
+              {(() => {
+                const alerts: string[] = [];
+
+                // Collect alerts from quote items
+                quoteItems.forEach((item: any) => {
+                  if (item.subItems) {
+                    item.subItems.forEach((subItem: any) => {
+                      if (subItem.alert && !alerts.includes(subItem.alert)) {
+                        alerts.push(subItem.alert);
+                      }
+                    });
+                  }
+                });
+
+                // Add alerts from formData items that don't have costs
+                if (formData.applianceFridge && !alerts.includes('Fridge doors cannot be fully removed to fit through narrow spaces')) {
+                  alerts.push('Fridge doors cannot be fully removed to fit through narrow spaces');
+                }
+                if (formData.treadmills && !alerts.includes('Treadmills cannot be disassembled')) {
+                  alerts.push('Treadmills cannot be disassembled');
+                }
+
+                return alerts.length > 0 ? (
+                  <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: `2px solid ${colors.gray}` }}>
+                    <h3 style={{ fontSize: "14px", fontWeight: "700", color: "#DC2626", marginBottom: "8px" }}>Important Notes:</h3>
+                    <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                      {alerts.map((alert: string, idx: number) => (
+                        <li key={idx} style={{ fontSize: "13px", color: "#DC2626", marginBottom: "4px" }}>
+                          <span style={{ fontWeight: "700" }}>* </span>{alert}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null;
+              })()}
             </div>
           ) : (
             <div style={{
