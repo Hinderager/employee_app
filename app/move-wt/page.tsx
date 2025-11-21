@@ -1637,21 +1637,21 @@ export default function MoveWalkthrough() {
       movingLabor = pickupSquareFeet * (calculationPercentage / 100) * 0.8;
 
       // Apply parking distance factor
-      // short = 0%, medium = 10%, long = 20%
+      // short = 0%, medium = 5%, long = 10%
       let parkingFactor = 1.0;
 
       // Pickup parking distance
       if (formData.pickupParkingDistance === 'medium') {
-        parkingFactor += 0.10;
+        parkingFactor += 0.05;
       } else if (formData.pickupParkingDistance === 'far' || formData.pickupParkingDistance === 'long') {
-        parkingFactor += 0.20;
+        parkingFactor += 0.10;
       }
 
       // Delivery parking distance
       if (formData.deliveryParkingDistance === 'medium') {
-        parkingFactor += 0.10;
+        parkingFactor += 0.05;
       } else if (formData.deliveryParkingDistance === 'far' || formData.deliveryParkingDistance === 'long') {
-        parkingFactor += 0.20;
+        parkingFactor += 0.10;
       }
 
       movingLabor = movingLabor * parkingFactor;
