@@ -1825,7 +1825,7 @@ export default function MoveWalkthrough() {
       heavyItems.push({
         description: `Piano${pianoCount > 1 ? ` (${pianoCount})` : ''}`,
         amount: pianoCharge,
-        alert: 'must be on ground level with no more than 2 steps'
+        alert: 'Must be on ground level with no more than 2 steps'
       });
     }
 
@@ -1835,7 +1835,7 @@ export default function MoveWalkthrough() {
       heavyItems.push({
         description: `Pool Table${poolTableCount > 1 ? ` (${poolTableCount})` : ''}`,
         amount: poolTableCharge,
-        alert: 'must be on ground level with no more than 2 steps'
+        alert: 'Must be on ground level with no more than 2 steps'
       });
     }
 
@@ -1845,7 +1845,7 @@ export default function MoveWalkthrough() {
       heavyItems.push({
         description: `Gun Safe${gunSafeCount > 1 ? ` (${gunSafeCount})` : ''}`,
         amount: gunSafeCharge,
-        alert: 'must be on ground level with no more than 2 steps'
+        alert: 'Must be on ground level with no more than 2 steps'
       });
     }
 
@@ -3670,7 +3670,7 @@ export default function MoveWalkthrough() {
 
             {formData.gunSafes && (
               <div className="ml-6 text-xs text-red-600 italic">
-                *must be on ground level with no more than 2 steps
+                *Must be on ground level with no more than 2 steps
               </div>
             )}
 
@@ -3725,7 +3725,7 @@ export default function MoveWalkthrough() {
 
             {formData.pianos && (
               <div className="ml-6 text-xs text-red-600 italic">
-                *must be on ground level with no more than 2 steps
+                *Must be on ground level with no more than 2 steps
               </div>
             )}
 
@@ -3780,7 +3780,7 @@ export default function MoveWalkthrough() {
 
             {formData.poolTables && (
               <div className="ml-6 text-xs text-red-600 italic">
-                *must be on ground level with no more than 2 steps
+                *Must be on ground level with no more than 2 steps
               </div>
             )}
 
@@ -3910,7 +3910,7 @@ export default function MoveWalkthrough() {
 
             {formData.treadmills && (
               <div className="ml-6 text-xs text-red-600 italic">
-                *treadmills cannot be disassembled
+                *Treadmills cannot be disassembled
               </div>
             )}
 
@@ -5090,8 +5090,8 @@ export default function MoveWalkthrough() {
               if (formData.applianceFridge && !alerts.includes('Fridge doors cannot be fully removed to fit through narrow spaces')) {
                 alerts.push('Fridge doors cannot be fully removed to fit through narrow spaces');
               }
-              if (formData.treadmills && !alerts.includes('treadmills cannot be disassembled')) {
-                alerts.push('treadmills cannot be disassembled');
+              if (formData.treadmills && !alerts.includes('Treadmills cannot be disassembled')) {
+                alerts.push('Treadmills cannot be disassembled');
               }
 
               return alerts.length > 0 ? (
