@@ -5039,12 +5039,15 @@ export default function MoveWalkthrough() {
                     )}
                     {item.subItems && item.subItems.map((subItem, subIndex) => (
                       <div key={`${index}-${subIndex}`} className="py-1 pl-6 text-sm">
-                        <div className="flex justify-between items-center">
-                          <span className="text-gray-600">
-                            {subItem.alert && <span className="text-red-600 font-bold">* </span>}
-                            {subItem.description} {subItem.details && <span className="text-gray-500 text-xs ml-1">{subItem.details}</span>}
-                          </span>
-                          <span className="text-gray-700">${Math.round(subItem.amount).toLocaleString()}</span>
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="text-gray-600">
+                              {subItem.alert && <span className="text-red-600 font-bold">* </span>}
+                              {subItem.description}
+                            </div>
+                            {subItem.details && <div className="text-gray-500 text-xs mt-0.5">{subItem.details}</div>}
+                          </div>
+                          <span className="text-gray-700 ml-2 flex-shrink-0">${Math.round(subItem.amount).toLocaleString()}</span>
                         </div>
                         {subItem.description === 'Materials and Supplies' && (
                           <div className="text-xs text-gray-500 italic mt-0.5">
