@@ -5014,7 +5014,7 @@ export default function MoveWalkthrough() {
                     {item.subItems && item.subItems.map((subItem, subIndex) => (
                       <div key={`${index}-${subIndex}`} className="py-1 pl-6 text-sm">
                         <div className="flex justify-between items-center">
-                          <span className="text-gray-600">{subItem.description}</span>
+                          <span className="text-gray-600">{subItem.description} {subItem.details && <span className="text-gray-500 text-xs ml-1">{subItem.details}</span>}</span>
                           <span className="text-gray-700">${Math.round(subItem.amount).toLocaleString()}</span>
                         </div>
                         {subItem.description === 'Materials and Supplies' && (
