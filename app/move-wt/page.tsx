@@ -1883,13 +1883,27 @@ export default function MoveWalkthrough() {
       const discountedCharge = junkRemovalCharge * 0.8;
 
       if (junkRemovalCharge > 0) {
+        // Format junk removal amount for display
+        let displayAmount = amount;
+        if (amount === 'up to 1/4') {
+          displayAmount = 'Up to 1/4 Truckload';
+        } else if (amount === '1/4-1/2') {
+          displayAmount = '1/4-1/2 Truckload';
+        } else if (amount === '1/2-3/4') {
+          displayAmount = '1/2-3/4 Truckload';
+        } else if (amount === '3/4-full') {
+          displayAmount = '3/4-Full Truckload';
+        } else if (amount === 'full+') {
+          displayAmount = 'Full+ Truckload';
+        }
+
         items.push({
           description: 'Junk Removal',
           amount: discountedCharge,
           discount: '*20% off w/move',
           subItems: [
             {
-              description: amount,
+              description: displayAmount,
               amount: discountedCharge
             }
           ]
