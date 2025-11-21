@@ -2930,7 +2930,7 @@ export default function MoveWalkthrough() {
                   toolCustom3: "",
                 }));
                 setDistanceData(null);
-                setQuote(null);
+                setQuote({ baseRate: 0, items: [], total: 0 });
               }
             }}
             className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
