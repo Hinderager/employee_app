@@ -161,7 +161,8 @@ export default function QuotePage({ params }: QuotePageProps) {
         items: item.subItems.map((sub: any) => ({
           description: sub.description,
           amount: sub.amount,
-          details: sub.details
+          details: sub.details,
+          alert: sub.alert
         }))
       });
     } else {
