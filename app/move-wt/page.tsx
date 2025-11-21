@@ -3041,7 +3041,39 @@ export default function MoveWalkthrough() {
                     name="deliveryAddressUnknown"
                     checked={formData.deliveryAddressUnknown}
                     disabled={formData.customerHomeAddressType === "delivery"}
-                    onChange={(e) => setFormData(prev => ({ ...prev, deliveryAddressUnknown: e.target.checked }))}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        // Clear all delivery address fields when Unknown is checked
+                        setFormData(prev => ({
+                          ...prev,
+                          deliveryAddressUnknown: true,
+                          deliveryAddress: "",
+                          deliveryUnit: "",
+                          deliveryCity: "",
+                          deliveryState: "",
+                          deliveryZip: "",
+                          deliveryLocationType: "house",
+                          deliveryLocationOther: "",
+                          deliveryHouseSquareFeet: "",
+                          deliveryZestimate: "",
+                          deliveryApartmentSquareFeet: "",
+                          deliveryApartmentBedBath: "",
+                          deliveryApartmentHowFurnished: 80,
+                          deliveryStorageUnitQuantity: 1,
+                          deliveryStorageUnitSizes: [""],
+                          deliveryPODQuantity: 1,
+                          deliveryPODSize: "",
+                          deliveryTruckLength: "",
+                          deliveryStairs: 1,
+                          deliveryNarrowDoorways: false,
+                          deliveryElevator: false,
+                          deliveryParkingDistance: "close",
+                          deliveryAccessNotes: ""
+                        }));
+                      } else {
+                        setFormData(prev => ({ ...prev, deliveryAddressUnknown: false }));
+                      }
+                    }}
                     className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                   <span className={`text-sm ${formData.customerHomeAddressType === "delivery" ? 'text-gray-400' : 'text-gray-700'}`}>Unknown</span>
