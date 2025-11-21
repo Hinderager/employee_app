@@ -9,7 +9,8 @@ import {
   MapIcon,
   CameraIcon,
   DocumentTextIcon,
-  TruckIcon
+  TruckIcon,
+  ClipboardDocumentListIcon
 } from "@heroicons/react/24/outline";
 
 const menuItems = [
@@ -61,6 +62,13 @@ const menuItems = [
     href: "/move-wt",
     icon: TruckIcon,
     color: "bg-red-500",
+  },
+  {
+    title: "Move Jobs",
+    description: "View move jobs",
+    href: "/move-jobs",
+    icon: ClipboardDocumentListIcon,
+    color: "bg-teal-500",
   },
 ];
 

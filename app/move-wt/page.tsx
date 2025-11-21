@@ -20,6 +20,17 @@ export default function MoveWalkthrough() {
   const [isLoadingPickupProperty, setIsLoadingPickupProperty] = useState(false);
   const [isLoadingDeliveryProperty, setIsLoadingDeliveryProperty] = useState(false);
 
+  // Recent forms for quick-link buttons
+  const [recentForms, setRecentForms] = useState<Array<{
+    id: string;
+    quoteNumber: string;
+    jobNumber: string;
+    phoneNumber: string;
+    displayName: string;
+    displayDate: string;
+  }>>([]);
+  const [isLoadingRecentForms, setIsLoadingRecentForms] = useState(true);
+
   // Dynamic phone and email arrays
   const [phones, setPhones] = useState<Array<{ number: string; name: string }>>([{ number: "", name: "" }]);
   const [emails, setEmails] = useState<Array<{ email: string; name: string }>>([{ email: "", name: "" }]);
@@ -64,6 +75,24 @@ export default function MoveWalkthrough() {
     return () => {
       document.head.removeChild(style);
     };
+  }, []);
+
+  // Fetch recent forms on mount
+  useEffect(() => {
+    const fetchRecentForms = async () => {
+      try {
+        const response = await fetch('/api/move-wt/recent-forms?limit=6');
+        const data = await response.json();
+        if (data.success && data.forms) {
+          setRecentForms(data.forms);
+        }
+      } catch (error) {
+        console.error('Failed to fetch recent forms:', error);
+      } finally {
+        setIsLoadingRecentForms(false);
+      }
+    };
+    fetchRecentForms();
   }, []);
 
   // Refs for autocomplete inputs
@@ -1038,6 +1067,76 @@ export default function MoveWalkthrough() {
     } catch (error) {
       console.error('Load job error:', error);
       alert(error instanceof Error ? error.message : 'Failed to load job. Please try again.');
+    } finally {
+      setIsLoadingJob(false);
+    }
+  };
+
+  // Handler to load a recent form by phone number
+  const handleLoadRecentForm = async (phoneNumber: string) => {
+    if (!phoneNumber) return;
+
+    setIsLoadingJob(true);
+    setSearchPhone(phoneNumber);
+    setJobNumber('');
+
+    try {
+      const response = await fetch('/api/move-wt/load-job', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ phoneNumber: normalizePhoneNumber(phoneNumber) }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to load job');
+      }
+
+      // If multiple forms, load the first one (most recent)
+      if (result.forms && result.forms.length > 0) {
+        const selectedForm = result.forms[0];
+        setAddress(selectedForm.address);
+        setJobNumber(selectedForm.jobNumber);
+        setFolderUrl(selectedForm.folderUrl || '');
+        setIsFolderLinkCopied(false);
+        setIsFormSaved(true);
+
+        if (selectedForm.quoteNumber) {
+          setQuoteNumber(selectedForm.quoteNumber);
+        }
+
+        if (result.customerInfo) {
+          setFormData(prev => ({
+            ...prev,
+            firstName: result.customerInfo.firstName || prev.firstName,
+            lastName: result.customerInfo.lastName || prev.lastName,
+            phone: result.customerInfo.phone || prev.phone,
+            email: result.customerInfo.email || prev.email,
+            pickupAddress: result.customerInfo.pickupAddress || prev.pickupAddress,
+            pickupUnit: result.customerInfo.pickupUnit || prev.pickupUnit,
+            pickupCity: result.customerInfo.pickupCity || prev.pickupCity,
+            pickupState: result.customerInfo.pickupState || prev.pickupState,
+            pickupZip: result.customerInfo.pickupZip || prev.pickupZip,
+          }));
+        }
+
+        if (selectedForm.formData) {
+          const { phones: savedPhones, emails: savedEmails, ...restFormData } = selectedForm.formData;
+          setFormData(prev => ({ ...prev, ...restFormData }));
+          if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
+            setPhones(savedPhones);
+          }
+          if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
+            setEmails(savedEmails);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Load recent form error:', error);
+      alert(error instanceof Error ? error.message : 'Failed to load form. Please try again.');
     } finally {
       setIsLoadingJob(false);
     }
@@ -2651,6 +2750,28 @@ export default function MoveWalkthrough() {
           </div>
         </div>
       </header>
+
+      {/* Recent Forms Quick Links */}
+      {recentForms.length > 0 && (
+        <div className="px-4 py-3 bg-gray-100 border-b border-gray-200">
+          <p className="text-xs text-gray-500 mb-2 text-center">Recent Walk-Throughs</p>
+          <div className="grid grid-cols-2 gap-2">
+            {recentForms.map((form) => (
+              <button
+                key={form.id}
+                onClick={() => handleLoadRecentForm(form.phoneNumber)}
+                disabled={isLoadingJob}
+                className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm text-left"
+              >
+                <div className="font-semibold truncate">{form.displayName || 'Unknown'}</div>
+                {form.displayDate && (
+                  <div className="text-gray-400 text-xs">{form.displayDate}</div>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="px-6 py-8 space-y-6">
         {/* Search Section */}
@@ -5848,16 +5969,16 @@ export default function MoveWalkthrough() {
                             Budget Breakdown:
                           </p>
                           <p className="text-sm text-gray-600">
-                            Desired Budget: <span className="font-semibold">${budgetCrewOptions.desiredBudget?.toLocaleString() || '0'}</span>
+                            Desired Budget: <div className="font-semibold truncate">${budgetCrewOptions.desiredBudget?.toLocaleString() || '0'}</span>
                           </p>
                           <p className="text-sm text-gray-600">
-                            Fixed Costs (Travel, Packing, Stairs, etc.): <span className="font-semibold">${Math.round(budgetCrewOptions.fixedCosts || 0).toLocaleString()}</span>
+                            Fixed Costs (Travel, Packing, Stairs, etc.): <div className="font-semibold truncate">${Math.round(budgetCrewOptions.fixedCosts || 0).toLocaleString()}</span>
                           </p>
                           <p className="text-sm text-gray-600">
                             Available for Moving Labor: <span className="font-semibold text-green-600">${Math.round(budgetCrewOptions.movingLaborBudget || 0).toLocaleString()}</span>
                           </p>
                           <p className="text-sm text-gray-600">
-                            Moving Materials (5%): <span className="font-semibold">${Math.round(budgetCrewOptions.movingMaterialsBudget || 0).toLocaleString()}</span>
+                            Moving Materials (5%): <div className="font-semibold truncate">${Math.round(budgetCrewOptions.movingMaterialsBudget || 0).toLocaleString()}</span>
                           </p>
                         </div>
 
