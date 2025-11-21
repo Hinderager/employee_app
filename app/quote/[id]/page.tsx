@@ -336,9 +336,10 @@ export default function QuotePage({ params }: QuotePageProps) {
                   {(section.items.length > 1 || (section.items.length === 1 && section.items[0].description !== section.category)) && (
                     <div style={{ paddingLeft: "20px", marginBottom: "8px" }}>
                       {section.items.map((item: any, itemIndex: number) => (
-                        <div key={itemIndex} style={{ marginBottom: item.details ? "10px" : "6px" }}>
+                        <div key={itemIndex} style={{ marginBottom: item.details || item.alert ? "10px" : "6px" }}>
                           <div style={{ display: "flex", justifyContent: "space-between", gap: "20px" }}>
                             <span style={{ fontSize: "13px", color: colors.gray, flex: 1 }}>
+                              {item.alert && <span style={{ color: "#DC2626", fontWeight: "700" }}>* </span>}
                               {item.description}
                             </span>
                             <span style={{ fontSize: "13px", color: colors.primary, fontWeight: "600", minWidth: "80px", textAlign: "right" }}>
@@ -348,6 +349,11 @@ export default function QuotePage({ params }: QuotePageProps) {
                           {item.details && (
                             <div style={{ fontSize: "11px", color: colors.gray, fontStyle: "italic", marginTop: "2px" }}>
                               {item.details}
+                            </div>
+                          )}
+                          {item.alert && (
+                            <div style={{ fontSize: "11px", color: "#DC2626", fontStyle: "italic", marginTop: "2px" }}>
+                              *{item.alert}
                             </div>
                           )}
                         </div>
