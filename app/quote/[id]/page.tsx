@@ -276,18 +276,18 @@ export default function QuotePage({ params }: QuotePageProps) {
               </div>
             </div>
 
-            {/* Additional Stop - only show if delivery address exists and is different */}
-            {formData.deliveryAddress && formData.deliveryAddress !== formData.pickupAddress && (
+            {/* Additional Stop - only show if hasAdditionalStop is true */}
+            {formData.hasAdditionalStop && formData.additionalStopAddress && (
               <div style={{ padding: "16px", background: "#FEF3C7", borderLeft: `4px solid #F59E0B`, borderRadius: "4px" }}>
                 <h3 style={{ fontSize: "13px", fontWeight: "700", color: colors.dark, marginBottom: "10px" }}>
                   Additional Stop:
                 </h3>
                 <div style={{ fontSize: "12px", color: colors.gray, lineHeight: "1.5" }}>
                   <p style={{ margin: "3px 0", fontWeight: "600", color: colors.dark }}>
-                    {formData.deliveryAddress}
+                    {formData.additionalStopAddress}
                   </p>
                   <p style={{ margin: "3px 0" }}>
-                    {formData.deliveryCity && formData.deliveryState ? `${formData.deliveryCity}, ${formData.deliveryState} ${formData.deliveryZip || ''}` : ''}
+                    {formData.additionalStopCity && formData.additionalStopState ? `${formData.additionalStopCity}, ${formData.additionalStopState} ${formData.additionalStopZip || ''}` : ''}
                   </p>
                 </div>
               </div>
