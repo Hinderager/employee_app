@@ -1620,7 +1620,7 @@ export default function MoveWalkthrough() {
     let movingLabor = MINIMUM_LABOR;
 
     // If no square feet or slider value is very low (barely anything), just use minimum labor
-    if (pickupSquareFeet === 0 || sliderValue <= 20) {
+    if (pickupSquareFeet === 0 || sliderValue < 20) {
       movingLabor = MINIMUM_LABOR;
     } else {
       // Convert slider value to calculation percentage
