@@ -2669,10 +2669,18 @@ export default function MoveWalkthrough() {
                       type="checkbox"
                       checked={formData.customerHomeAddressType === "pickup"}
                       onChange={() => {
-                        setFormData(prev => ({
-                          ...prev,
-                          customerHomeAddressType: prev.customerHomeAddressType === "pickup" ? "" : "pickup"
-                        }));
+                        setFormData(prev => {
+                          const newType = prev.customerHomeAddressType === "pickup" ? "" : "pickup";
+                          // If setting pickup as customer home and service type is truck, reset invalid delivery/additional stop locations
+                          const invalidLocationTypes = ['pod', 'truck'];
+                          const shouldResetLocations = newType === "pickup" && prev.serviceType === 'truck';
+                          return {
+                            ...prev,
+                            customerHomeAddressType: newType,
+                            deliveryLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.deliveryLocationType) ? "storage-unit" : prev.deliveryLocationType,
+                            additionalStopLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.additionalStopLocationType) ? "storage-unit" : prev.additionalStopLocationType
+                          };
+                        });
                       }}
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
@@ -3029,8 +3037,12 @@ export default function MoveWalkthrough() {
                   <option value="house">House</option>
                   <option value="apartment">Apartment</option>
                   <option value="storage-unit">Storage Unit</option>
-                  <option value="pod">POD</option>
-                  <option value="truck">Truck</option>
+                  {!(formData.serviceType === 'truck' && formData.customerHomeAddressType === 'pickup') && (
+                    <>
+                      <option value="pod">POD</option>
+                      <option value="truck">Truck</option>
+                    </>
+                  )}
                   <option value="other">Other</option>
                 </select>
 
@@ -3348,8 +3360,12 @@ export default function MoveWalkthrough() {
                     <option value="house">House</option>
                     <option value="apartment">Apartment</option>
                     <option value="storage-unit">Storage Unit</option>
-                    <option value="truck">Truck</option>
-                    <option value="pod">POD</option>
+                    {!(formData.serviceType === 'truck' && formData.customerHomeAddressType === 'pickup') && (
+                      <>
+                        <option value="truck">Truck</option>
+                        <option value="pod">POD</option>
+                      </>
+                    )}
                     <option value="other">Other</option>
                   </select>
 
