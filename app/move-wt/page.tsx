@@ -2770,6 +2770,7 @@ export default function MoveWalkthrough() {
                     <>
                       <option value="house">House</option>
                       <option value="apartment">Apartment</option>
+                      <option value="storage-unit">Storage Unit</option>
                       <option value="business">Business</option>
                       <option value="other">Other</option>
                     </>
