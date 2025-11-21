@@ -135,6 +135,9 @@ export default function MoveWalkthrough() {
     pickupStorageUnitSizes: [""],
     pickupStorageUnitHowFull: [""],
     pickupStorageUnitConditioned: [""],
+    pickupTruckPodLength: "",
+    pickupTruckPodWidth: "",
+    pickupTruckPodHowFull: 100,
 
     // Addresses - Delivery
     deliveryAddress: "",
@@ -516,6 +519,11 @@ export default function MoveWalkthrough() {
     } else if (formData.pickupLocationType === 'apartment') {
       squareFeet = parseFloat(formData.pickupApartmentSquareFeet) || 0;
       furnishedPercent = formData.pickupHowFurnished || 80;
+    } else if (formData.pickupLocationType === 'unloading-truck-pod') {
+      const length = parseFloat(formData.pickupTruckPodLength) || 0;
+      const width = parseFloat(formData.pickupTruckPodWidth) || 0;
+      squareFeet = length * width;
+      furnishedPercent = formData.pickupTruckPodHowFull || 100;
     }
 
     // Calculate effective square footage (sqft × percentage/100)
@@ -545,7 +553,10 @@ export default function MoveWalkthrough() {
     formData.pickupLocationType,
     formData.pickupHouseSquareFeet,
     formData.pickupApartmentSquareFeet,
-    formData.pickupHowFurnished
+    formData.pickupHowFurnished,
+    formData.pickupTruckPodLength,
+    formData.pickupTruckPodWidth,
+    formData.pickupTruckPodHowFull
   ]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -1290,6 +1301,9 @@ export default function MoveWalkthrough() {
       pickupStorageUnitSizes: [""],
       pickupStorageUnitHowFull: [""],
       pickupStorageUnitConditioned: [""],
+      pickupTruckPodLength: "",
+      pickupTruckPodWidth: "",
+      pickupTruckPodHowFull: 100,
 
       // Addresses - Delivery
       deliveryAddress: "",
@@ -1839,6 +1853,14 @@ export default function MoveWalkthrough() {
       console.log('[Storage Labor] totalStorageLabor:', totalStorageLabor, 'MINIMUM_LABOR:', MINIMUM_LABOR);
       movingLabor = totalStorageLabor > MINIMUM_LABOR ? totalStorageLabor : MINIMUM_LABOR;
       console.log('[Storage Labor] Final movingLabor:', movingLabor);
+    } else if (formData.pickupLocationType === 'unloading-truck-pod') {
+      // Unloading truck/POD labor calculation: L × W × % × 4 / (26 × 8)
+      const length = parseFloat(formData.pickupTruckPodLength) || 0;
+      const width = parseFloat(formData.pickupTruckPodWidth) || 0;
+      const howFullPercent = (formData.pickupTruckPodHowFull || 100) / 100;
+      const truckPodLabor = (length * width * howFullPercent * 4) / (26 * 8);
+      console.log('[Truck/POD Labor] L:', length, 'W:', width, '%:', howFullPercent, 'Labor:', truckPodLabor);
+      movingLabor = truckPodLabor > MINIMUM_LABOR ? truckPodLabor : MINIMUM_LABOR;
     } else if (pickupSquareFeet === 0 || sliderValue < 20) {
       // If no square feet or slider value is very low (barely anything), just use minimum labor
       movingLabor = MINIMUM_LABOR;
@@ -2770,6 +2792,9 @@ export default function MoveWalkthrough() {
                   pickupStorageUnitSizes: [""],
                   pickupStorageUnitHowFull: [""],
                   pickupStorageUnitConditioned: [""],
+                  pickupTruckPodLength: "",
+                  pickupTruckPodWidth: "",
+                  pickupTruckPodHowFull: 100,
 
                   // Addresses - Delivery (clear all)
                   deliveryAddress: "",
@@ -3459,6 +3484,59 @@ export default function MoveWalkthrough() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+
+                {formData.pickupLocationType === 'unloading-truck-pod' && (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Length (ft)
+                        </label>
+                        <input
+                          type="text"
+                          name="pickupTruckPodLength"
+                          value={formData.pickupTruckPodLength}
+                          onChange={handleInputChange}
+                          placeholder="Length"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Width (ft)
+                        </label>
+                        <input
+                          type="text"
+                          name="pickupTruckPodWidth"
+                          value={formData.pickupTruckPodWidth}
+                          onChange={handleInputChange}
+                          placeholder="Width"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        How full is the truck/POD?
+                      </label>
+                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
+                        <input
+                          type="range"
+                          name="pickupTruckPodHowFull"
+                          min="20"
+                          max="100"
+                          step="20"
+                          value={formData.pickupTruckPodHowFull}
+                          onChange={handleInputChange}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium text-blue-700 min-w-[60px]">
+                          {formData.pickupTruckPodHowFull}%
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 )}
 
