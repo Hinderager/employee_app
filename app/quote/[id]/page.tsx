@@ -229,7 +229,7 @@ export default function QuotePage({ params }: QuotePageProps) {
                     <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Date</td>
                     <td style={{ padding: "4px 0", color: colors.dark, textAlign: "right" }}>{currentDate}</td>
                   </tr>
-                  {formData.preferredDate && !formData.moveDateUnknown && (
+                  {formData.preferredDate && (
                     <tr>
                       <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Move Date</td>
                       <td style={{ padding: "4px 0", color: colors.primary, textAlign: "right", fontWeight: "600" }}>
