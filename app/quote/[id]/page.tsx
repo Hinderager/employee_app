@@ -127,9 +127,6 @@ export default function QuotePage({ params }: QuotePageProps) {
   const quoteItems = formData.quoteItems || [];
   const total = formData.total || 0;
 
-  // Debug: log preferredDate value
-  console.log('[Customer Quote] preferredDate:', formData.preferredDate, 'type:', typeof formData.preferredDate);
-
   // Customer info
   const customerName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || 'Customer';
   const customerEmail = formData.email || formData.emails?.[0]?.email || '';
@@ -232,14 +229,6 @@ export default function QuotePage({ params }: QuotePageProps) {
                     <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Date</td>
                     <td style={{ padding: "4px 0", color: colors.dark, textAlign: "right" }}>{currentDate}</td>
                   </tr>
-                  {formData.preferredDate && formData.preferredDate.length > 0 && (
-                    <tr>
-                      <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Move Date</td>
-                      <td style={{ padding: "4px 0", color: colors.primary, textAlign: "right", fontWeight: "600" }}>
-                        {new Date(formData.preferredDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
-                      </td>
-                    </tr>
-                  )}
                   <tr>
                     <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Total</td>
                     <td style={{ padding: "4px 0", color: colors.success, textAlign: "right", fontWeight: "700", fontSize: "14px" }}>{formatCurrency(total)}</td>
@@ -323,9 +312,23 @@ export default function QuotePage({ params }: QuotePageProps) {
               background: colors.white,
               marginBottom: "24px"
             }}>
-              <h2 style={{ fontSize: "24px", fontWeight: "700", color: colors.dark, marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "24px", fontWeight: "700", color: colors.dark, marginBottom: "8px" }}>
                 Move Estimate
               </h2>
+
+              {/* Move Date Display */}
+              {(formData.preferredDate || formData.moveDateUnknown) && (
+                <div style={{ fontSize: "14px", color: colors.gray, marginBottom: "16px" }}>
+                  {formData.moveDateUnknown ? (
+                    <span style={{ fontWeight: "500" }}>Move Date Unknown</span>
+                  ) : (
+                    <span style={{ fontWeight: "500" }}>
+                      Move date {new Date(formData.preferredDate + 'T00:00:00').toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                      {formData.timeFlexible && ' (flexible)'}
+                    </span>
+                  )}
+                </div>
+              )}
 
               {/* Quote Items */}
               {groupedItems.map((section, index) => (
