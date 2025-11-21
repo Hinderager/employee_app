@@ -1723,7 +1723,7 @@ export default function MoveWalkthrough() {
     let movingLabor = MINIMUM_LABOR;
 
     // Storage unit labor calculation
-    if (formData.pickupLocationType === 'storage') {
+    if (formData.pickupLocationType === 'storage-unit') {
       // Calculate labor for each storage unit
       let totalStorageLabor = 0;
 
