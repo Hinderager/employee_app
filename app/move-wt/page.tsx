@@ -108,7 +108,7 @@ export default function MoveWalkthrough() {
     email: "",
     emailName: "",
 
-    // Customer Home or Business Indicator
+    // Current Home or Business Indicator
     customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
     
     // Labor Only - same address checkbox
@@ -122,6 +122,9 @@ export default function MoveWalkthrough() {
     pickupZip: "",
     pickupLocationType: "house",
     pickupLocationOther: "",
+    pickupBusinessName: "",
+    pickupBusinessSquareFeet: "",
+    pickupOtherSquareFeet: "",
     pickupHouseSquareFeet: "",
     pickupZestimate: "",
     pickupHowFurnished: 80,
@@ -140,8 +143,10 @@ export default function MoveWalkthrough() {
     deliveryZip: "",
     deliveryLocationType: "house",
     deliveryLocationOther: "",
+    deliveryBusinessName: "",
     deliveryHouseSquareFeet: "",
     deliveryZestimate: "",
+    deliveryHowFurnished: 80,
     deliveryApartmentSquareFeet: "",
     deliveryApartmentBedBath: "",
     deliveryApartmentHowFurnished: 80,
@@ -161,6 +166,7 @@ export default function MoveWalkthrough() {
     additionalStopZip: "",
     additionalStopLocationType: "house",
     additionalStopLocationOther: "",
+    additionalStopBusinessName: "",
     additionalStopHouseSquareFeet: "",
     additionalStopZestimate: "",
     additionalStopHowFurnished: 80,
@@ -307,6 +313,19 @@ export default function MoveWalkthrough() {
       case 80: return 'Whole house';
       case 100: return "It's Loaded!";
       default: return `${percentage}% of the house`;
+    }
+  };
+
+  // Get text for storage unit slider (percentage-based)
+  const getStorageUnitSliderText = (percentage: number): string => {
+    switch (percentage) {
+      case 0: return 'Barely anything';
+      case 20: return '20%';
+      case 40: return '40%';
+      case 60: return '60%';
+      case 80: return '80%';
+      case 100: return '100%';
+      default: return `${percentage}%`;
     }
   };
 
@@ -493,7 +512,7 @@ export default function MoveWalkthrough() {
       furnishedPercent = formData.pickupHowFurnished || 80;
     } else if (formData.pickupLocationType === 'apartment') {
       squareFeet = parseFloat(formData.pickupApartmentSquareFeet) || 0;
-      furnishedPercent = formData.pickupApartmentHowFurnished || 80;
+      furnishedPercent = formData.pickupHowFurnished || 80;
     }
 
     // Calculate effective square footage (sqft × percentage/100)
@@ -523,8 +542,7 @@ export default function MoveWalkthrough() {
     formData.pickupLocationType,
     formData.pickupHouseSquareFeet,
     formData.pickupApartmentSquareFeet,
-    formData.pickupHowFurnished,
-    formData.pickupApartmentHowFurnished
+    formData.pickupHowFurnished
   ]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -573,6 +591,7 @@ export default function MoveWalkthrough() {
         deliveryLocationOther: "",
         deliveryHouseSquareFeet: "",
         deliveryZestimate: "",
+        deliveryHowFurnished: 80,
         deliveryApartmentSquareFeet: "",
         deliveryApartmentBedBath: "",
         deliveryApartmentHowFurnished: 80,
@@ -1193,6 +1212,7 @@ export default function MoveWalkthrough() {
       deliveryLocationOther: "",
       deliveryHouseSquareFeet: "",
       deliveryZestimate: "",
+      deliveryHowFurnished: 80,
       deliveryApartmentSquareFeet: "",
       deliveryApartmentBedBath: "",
       deliveryApartmentHowFurnished: 80,
@@ -1672,17 +1692,17 @@ export default function MoveWalkthrough() {
       pickupSquareFeet = parseInt(formData.pickupHouseSquareFeet.replace(/,/g, ''));
     } else if (formData.pickupLocationType === 'apartment' && formData.pickupApartmentSquareFeet) {
       pickupSquareFeet = parseInt(formData.pickupApartmentSquareFeet.replace(/,/g, ''));
+    } else if (formData.pickupLocationType === 'business' && formData.pickupBusinessSquareFeet) {
+      pickupSquareFeet = parseInt(formData.pickupBusinessSquareFeet.replace(/,/g, ''));
     }
 
-    // Get "how much is getting moved" slider value
+    // Get "how much is getting moved" slider value (unified for house, apartment, and business)
     let sliderValue = 0;
-    if (formData.pickupLocationType === 'house') {
+    if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'apartment' || formData.pickupLocationType === 'business') {
       sliderValue = formData.pickupHowFurnished || 80;
-    } else if (formData.pickupLocationType === 'apartment') {
-      sliderValue = formData.pickupApartmentHowFurnished || 80;
     }
 
-    const MINIMUM_LABOR = 170;
+    const MINIMUM_LABOR = formData.serviceType === 'truck' ? 100 : 170;
     let movingLabor = MINIMUM_LABOR;
 
     // If no square feet or slider value is very low (barely anything), just use minimum labor
@@ -1722,7 +1742,7 @@ export default function MoveWalkthrough() {
 
       movingLabor = movingLabor * parkingFactor;
 
-      // Enforce minimum labor of $170
+      // Enforce base minimum labor ($100 for truck, $170 otherwise)
       if (movingLabor < MINIMUM_LABOR) {
         movingLabor = MINIMUM_LABOR;
       }
@@ -1737,7 +1757,7 @@ export default function MoveWalkthrough() {
         amount: Math.round(totalMovingCharge),
         subItems: [
           {
-            description: 'Labor',
+            description: 'Loading/Unloading Labor',
             amount: Math.round(movingLabor)
           },
           {
@@ -1977,6 +1997,44 @@ export default function MoveWalkthrough() {
       }
     }
 
+        // Enforce combined minimum for truck service ($510 for Moving Labor + Move Travel Time)
+    if (formData.serviceType === 'truck' && distanceData?.pickupToDelivery) {
+      const COMBINED_MINIMUM = 510;
+      // Calculate move travel TIME charge only (not mileage)
+      const moveTravelTimeOnlyCharge = (distanceData.pickupToDelivery.minutes / 60) * 170;
+
+      // Find Moving item
+      const movingItem = items.find(item => item.description === 'Moving');
+
+      if (movingItem) {
+        const movingLaborSubItem = movingItem.subItems?.find(sub => sub.description === 'Loading/Unloading Labor');
+        const currentLaborAmount = movingLaborSubItem?.amount || 0;
+
+        // Combined = labor + move travel time
+        const currentCombined = currentLaborAmount + moveTravelTimeOnlyCharge;
+
+        if (currentCombined < COMBINED_MINIMUM) {
+          // Need to increase moving labor to meet combined minimum
+          const shortfall = COMBINED_MINIMUM - currentCombined;
+
+          if (movingLaborSubItem) {
+            // Increase labor by shortfall
+            const newLabor = movingLaborSubItem.amount + shortfall;
+            movingLaborSubItem.amount = Math.round(newLabor);
+
+            // Recalculate materials (5% of new labor)
+            const materialsSubItem = movingItem.subItems?.find(sub => sub.description === 'Materials and Supplies');
+            if (materialsSubItem) {
+              materialsSubItem.amount = Math.round(newLabor * 0.05);
+            }
+
+            // Update moving total
+            movingItem.amount = Math.round(newLabor) + (materialsSubItem?.amount || Math.round(newLabor * 0.05));
+          }
+        }
+      }
+    }
+
     // Packing and Boxing
     if (formData.needsPacking) {
       const packingStatus = formData.packingStatus;
@@ -2010,15 +2068,15 @@ export default function MoveWalkthrough() {
             startSquareFeet = parseInt(formData.pickupHouseSquareFeet.replace(/,/g, ''));
           } else if (formData.pickupLocationType === 'apartment' && formData.pickupApartmentSquareFeet) {
             startSquareFeet = parseInt(formData.pickupApartmentSquareFeet.replace(/,/g, ''));
+          } else if (formData.pickupLocationType === 'business' && formData.pickupBusinessSquareFeet) {
+            startSquareFeet = parseInt(formData.pickupBusinessSquareFeet.replace(/,/g, ''));
           }
 
           if (startSquareFeet > 0) {
-            // Get "how much is getting moved" slider value and convert to percentage
+            // Get "how much is getting moved" slider value and convert to percentage (unified for house, apartment, and business)
             let sliderValue = 0;
-            if (formData.pickupLocationType === 'house') {
+            if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'apartment' || formData.pickupLocationType === 'business') {
               sliderValue = formData.pickupHowFurnished || 80;
-            } else if (formData.pickupLocationType === 'apartment') {
-              sliderValue = formData.pickupApartmentHowFurnished || 80;
             }
 
             // Convert slider value to calculation percentage
@@ -2750,25 +2808,25 @@ export default function MoveWalkthrough() {
                   ) : (
                     <label className="flex items-center gap-2 cursor-pointer">
                       <input
-                        type="checkbox"
+                        type="radio"
+                        name="customerHomeAddress"
                         checked={formData.customerHomeAddressType === "pickup"}
                         onChange={() => {
                           setFormData(prev => {
-                            const newType = prev.customerHomeAddressType === "pickup" ? "" : "pickup";
                             // If setting pickup as customer home and service type is truck, reset invalid delivery/additional stop locations
                             const invalidLocationTypes = ['pod', 'truck'];
-                            const shouldResetLocations = newType === "pickup" && prev.serviceType === 'truck';
+                            const shouldResetLocations = prev.serviceType === 'truck';
                             return {
                               ...prev,
-                              customerHomeAddressType: newType,
+                              customerHomeAddressType: "pickup",
                               deliveryLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.deliveryLocationType) ? "storage-unit" : prev.deliveryLocationType,
                               additionalStopLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.additionalStopLocationType) ? "storage-unit" : prev.additionalStopLocationType
                             };
                           });
                         }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
                       />
-                      <span className="text-sm text-gray-600">Customer Home or Business</span>
+                      <span className="text-sm text-gray-600">Current Home or Business</span>
                     </label>
                   )}
                 </div>
@@ -2782,13 +2840,23 @@ export default function MoveWalkthrough() {
                 </button>
               </div>
               <div className="space-y-2">
+                {/* Property Type - Hidden for labor-only when Service Address is separate */}
+                {!(formData.serviceType === 'labor-only' && !formData.laborOnlySameAddress) && (
                 <select
                   name="pickupLocationType"
                   value={formData.pickupLocationType}
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  {formData.customerHomeAddressType === 'delivery' ? (
+                  {formData.serviceType === 'labor-only' && formData.laborOnlySameAddress ? (
+                    <>
+                      <option value="moving-between-rooms">Moving items between rooms</option>
+                      <option value="loading-truck-pod">Loading a Truck or POD</option>
+                      <option value="unloading-truck-pod">Unloading a Truck or POD</option>
+                      <option value="business">Business</option>
+                      <option value="other">Other</option>
+                    </>
+                  ) : formData.customerHomeAddressType === 'delivery' ? (
                     <>
                       <option value="house">House</option>
                       <option value="apartment">Apartment</option>
@@ -2814,11 +2882,42 @@ export default function MoveWalkthrough() {
                     </>
                   )}
                 </select>
+                )}
 
+                {/* Business Name field */}
+                {formData.pickupLocationType === 'business' && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Business Name
+                      </label>
+                      <input
+                        type="text"
+                        name="pickupBusinessName"
+                        value={formData.pickupBusinessName}
+                        onChange={handleInputChange}
+                        placeholder="Enter business name"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Square Feet
+                      </label>
+                      <input
+                        type="text"
+                        name="pickupBusinessSquareFeet"
+                        value={formData.pickupBusinessSquareFeet}
+                        onChange={handleInputChange}
+                        placeholder="Enter square feet"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                )}
 
-
-                {/* How Much is Getting Moved Slider - For House */}
-                {formData.pickupLocationType === 'house' && (
+                {/* How Much is Getting Moved Slider - Always visible for Start Address (hidden for labor-only when Service Address is separate) */}
+                {!(formData.serviceType === 'labor-only' && !formData.laborOnlySameAddress) && (
                   <div className="space-y-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       How much is getting moved?
@@ -2835,31 +2934,9 @@ export default function MoveWalkthrough() {
                         className="flex-1"
                       />
                       <span className="text-sm font-medium text-blue-700 min-w-[140px]">
-                        {getHowFurnishedText(Number(formData.pickupHowFurnished))}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {/* How Much is Getting Moved Slider - For Apartment */}
-                {formData.pickupLocationType === 'apartment' && (
-                  <div className="space-y-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      How much is getting moved?
-                    </label>
-                    <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
-                      <input
-                        type="range"
-                        name="pickupApartmentHowFurnished"
-                        min="0"
-                        max="100"
-                        step="20"
-                        value={formData.pickupApartmentHowFurnished}
-                        onChange={handleInputChange}
-                        className="flex-1"
-                      />
-                      <span className="text-sm font-medium text-blue-700 min-w-[140px]">
-                        {getHowFurnishedText(Number(formData.pickupApartmentHowFurnished)).replace('Whole house', 'Whole apartment')}
+                        {formData.pickupLocationType === 'storage-unit'
+                          ? getStorageUnitSliderText(Number(formData.pickupHowFurnished))
+                          : getHowFurnishedText(Number(formData.pickupHowFurnished))}
                       </span>
                     </div>
                   </div>
@@ -2902,17 +2979,22 @@ export default function MoveWalkthrough() {
                     </div>
                     {Array.from({ length: formData.pickupStorageUnitQuantity }).map((_, index) => (
                       <div key={index} className="flex gap-2">
-                        <input
-                          type="text"
+                        <select
                           value={formData.pickupStorageUnitSizes[index] || ""}
                           onChange={(e) => {
                             const newSizes = [...formData.pickupStorageUnitSizes];
                             newSizes[index] = e.target.value;
                             setFormData(prev => ({ ...prev, pickupStorageUnitSizes: newSizes }));
                           }}
-                          placeholder={`Unit ${index + 1} Size`}
                           className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
+                        >
+                          <option value="">Unit {index + 1} Size</option>
+                          <option value="<100sf">&lt;100sf</option>
+                          <option value="100-200sf">100-200sf</option>
+                          <option value="200-300sf">200-300sf</option>
+                          <option value="300-400sf">300-400sf</option>
+                          <option value="400+sf">400+sf</option>
+                        </select>
                         <select
                           value={formData.pickupStorageUnitHowFull[index] || ""}
                           onChange={(e) => {
@@ -2933,15 +3015,30 @@ export default function MoveWalkthrough() {
                 )}
 
                 {formData.pickupLocationType === 'other' && (
-                  <div>
-                    <input
-                      type="text"
-                      name="pickupLocationOther"
-                      value={formData.pickupLocationOther}
-                      onChange={handleInputChange}
-                      placeholder="Specify Location Type"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
+                  <div className="space-y-2">
+                    <div>
+                      <input
+                        type="text"
+                        name="pickupLocationOther"
+                        value={formData.pickupLocationOther}
+                        onChange={handleInputChange}
+                        placeholder="Specify Location Type"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Square Feet
+                      </label>
+                      <input
+                        type="text"
+                        name="pickupOtherSquareFeet"
+                        value={formData.pickupOtherSquareFeet}
+                        onChange={handleInputChange}
+                        placeholder="Enter square feet"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -3015,7 +3112,7 @@ export default function MoveWalkthrough() {
                   />
                 </div>
 
-                {formData.pickupLocationType === 'house' && formData.customerHomeAddressType === 'pickup' && (
+                {formData.pickupLocationType === 'house' && (
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -3047,7 +3144,7 @@ export default function MoveWalkthrough() {
                   </div>
                 )}
 
-                {formData.pickupLocationType === 'apartment' && formData.customerHomeAddressType === 'pickup' && (
+                {formData.pickupLocationType === 'apartment' && (
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -3096,11 +3193,75 @@ export default function MoveWalkthrough() {
                     onChange={handleInputChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option value="house">House</option>
-                    <option value="apartment">Apartment</option>
-                    <option value="business">Business</option>
+                    <option value="storage-to-truck">Storage Unit to Truck</option>
+                    <option value="truck-to-storage">Truck to Storage Unit</option>
                     <option value="other">Other</option>
                   </select>
+
+                  {/* Notes field for Service Address "Other" */}
+                  {formData.deliveryLocationType === 'other' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Notes
+                      </label>
+                      <textarea
+                        name="deliveryLocationOther"
+                        value={formData.deliveryLocationOther}
+                        onChange={handleInputChange}
+                        placeholder="Describe the service location..."
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  )}
+
+                  {/* How Much is Getting Moved Slider - For House (Service Address) - HIDDEN since options changed */}
+                  {false && formData.deliveryLocationType === 'house' && (
+                    <div className="space-y-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        How much is getting moved?
+                      </label>
+                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
+                        <input
+                          type="range"
+                          name="pickupHowFurnished"
+                          min="0"
+                          max="100"
+                          step="20"
+                          value={formData.pickupHowFurnished}
+                          onChange={handleInputChange}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium text-green-700 min-w-[140px]">
+                          {getHowFurnishedText(Number(formData.pickupHowFurnished))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* How Much is Getting Moved Slider - For Apartment (Service Address) - HIDDEN since options changed */}
+                  {false && formData.deliveryLocationType === 'apartment' && (
+                    <div className="space-y-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        How much is getting moved?
+                      </label>
+                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
+                        <input
+                          type="range"
+                          name="pickupApartmentHowFurnished"
+                          min="0"
+                          max="100"
+                          step="20"
+                          value={formData.pickupApartmentHowFurnished}
+                          onChange={handleInputChange}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium text-green-700 min-w-[140px]">
+                          {getHowFurnishedText(Number(formData.pickupApartmentHowFurnished)).replace('Whole house', 'Whole apartment')}
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-3 gap-2">
                     <div className="col-span-2">
@@ -3211,6 +3372,23 @@ export default function MoveWalkthrough() {
                     <option value="business">Business</option>
                       <option value="other">Other</option>
                   </select>
+
+                  {/* Business Name field */}
+                  {formData.additionalStopLocationType === 'business' && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Business Name
+                      </label>
+                      <input
+                        type="text"
+                        name="additionalStopBusinessName"
+                        value={formData.additionalStopBusinessName}
+                        onChange={handleInputChange}
+                        placeholder="Enter business name"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  )}
 
                   {formData.additionalStopLocationType === 'apartment' && (
                     <div className="mt-2">
@@ -3406,25 +3584,25 @@ export default function MoveWalkthrough() {
                 <h3 className="text-lg font-semibold text-green-900">Delivery Address</h3>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
-                    type="checkbox"
+                    type="radio"
+                    name="customerHomeAddress"
                     checked={formData.customerHomeAddressType === "delivery"}
                     disabled={formData.deliveryAddressUnknown}
                     onChange={() => {
                       setFormData(prev => {
-                        const newType = prev.customerHomeAddressType === "delivery" ? "" : "delivery";
                         // If setting delivery as customer home, reset pickup location to valid option (house, apartment, other)
                         const invalidPickupTypes = ['storage-unit', 'truck', 'pod'];
-                        const needsReset = newType === "delivery" && invalidPickupTypes.includes(prev.pickupLocationType);
+                        const needsReset = invalidPickupTypes.includes(prev.pickupLocationType);
                         return {
                           ...prev,
-                          customerHomeAddressType: newType,
+                          customerHomeAddressType: "delivery",
                           pickupLocationType: needsReset ? "house" : prev.pickupLocationType
                         };
                       });
                     }}
-                    className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <span className={`text-sm ${formData.deliveryAddressUnknown ? 'text-gray-400' : 'text-gray-600'}`}>Customer Home or Business</span>
+                  <span className={`text-sm ${formData.deliveryAddressUnknown ? 'text-gray-400' : 'text-gray-600'}`}>Current Home or Business</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
@@ -3447,6 +3625,7 @@ export default function MoveWalkthrough() {
                           deliveryLocationOther: "",
                           deliveryHouseSquareFeet: "",
                           deliveryZestimate: "",
+                          deliveryHowFurnished: 80,
                           deliveryApartmentSquareFeet: "",
                           deliveryApartmentBedBath: "",
                           deliveryApartmentHowFurnished: 80,
@@ -3492,7 +3671,22 @@ export default function MoveWalkthrough() {
                       <option value="other">Other</option>
                 </select>
 
-
+                {/* Business Name field */}
+                {formData.deliveryLocationType === 'business' && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Business Name
+                    </label>
+                    <input
+                      type="text"
+                      name="deliveryBusinessName"
+                      value={formData.deliveryBusinessName}
+                      onChange={handleInputChange}
+                      placeholder="Enter business name"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                )}
 
                 {formData.deliveryLocationType === 'truck' && (
                   <input
@@ -3503,30 +3697,6 @@ export default function MoveWalkthrough() {
                     placeholder="Truck Length (ft)"
                     className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
-                )}
-
-                {/* How Much is Getting Moved Slider - For Apartment */}
-                {formData.deliveryLocationType === 'apartment' && (
-                  <div className="space-y-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      How much is getting moved?
-                    </label>
-                    <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
-                      <input
-                        type="range"
-                        name="deliveryApartmentHowFurnished"
-                        min="0"
-                        max="100"
-                        step="20"
-                        value={formData.deliveryApartmentHowFurnished}
-                        onChange={handleInputChange}
-                        className="flex-1"
-                      />
-                      <span className="text-sm font-medium text-green-700 min-w-[140px]">
-                        {getHowFurnishedText(Number(formData.deliveryApartmentHowFurnished)).replace('Whole house', 'Whole apartment')}
-                      </span>
-                    </div>
-                  </div>
                 )}
 
                 {formData.deliveryLocationType === 'storage-unit' && (
