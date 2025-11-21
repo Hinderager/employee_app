@@ -1190,6 +1190,9 @@ export default function MoveWalkthrough() {
       emailName: "",
       customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
 
+      // Labor Only - same address checkbox
+      laborOnlySameAddress: true,
+
       // Addresses - Pickup
       pickupAddress: "",
       pickupUnit: "",
@@ -1198,6 +1201,9 @@ export default function MoveWalkthrough() {
       pickupZip: "",
       pickupLocationType: "house",
       pickupLocationOther: "",
+      pickupBusinessName: "",
+      pickupBusinessSquareFeet: "",
+      pickupOtherSquareFeet: "",
       pickupHouseSquareFeet: "",
       pickupZestimate: "",
       pickupHowFurnished: 80,
@@ -1207,6 +1213,7 @@ export default function MoveWalkthrough() {
       pickupStorageUnitQuantity: 1,
       pickupStorageUnitSizes: [""],
       pickupStorageUnitHowFull: [""],
+      pickupStorageUnitConditioned: [""],
 
       // Addresses - Delivery
       deliveryAddress: "",
@@ -1216,6 +1223,7 @@ export default function MoveWalkthrough() {
       deliveryZip: "",
       deliveryLocationType: "house",
       deliveryLocationOther: "",
+      deliveryBusinessName: "",
       deliveryHouseSquareFeet: "",
       deliveryZestimate: "",
       deliveryHowFurnished: 80,
@@ -1239,6 +1247,7 @@ export default function MoveWalkthrough() {
       additionalStopZip: "",
       additionalStopLocationType: "house",
       additionalStopLocationOther: "",
+      additionalStopBusinessName: "",
       additionalStopHouseSquareFeet: "",
       additionalStopZestimate: "",
       additionalStopHowFurnished: 80,
