@@ -1817,24 +1817,36 @@ export default function MoveWalkthrough() {
     }
 
     // Heavy/Special Items
-    const heavyItems: Array<{ description: string; amount: number }> = [];
+    const heavyItems: Array<{ description: string; amount: number; alert?: string }> = [];
 
     if (formData.pianos) {
       const pianoCount = formData.pianosQty || 1;
       const pianoCharge = 100 * pianoCount;
-      heavyItems.push({ description: `Piano${pianoCount > 1 ? ` (${pianoCount})` : ''}`, amount: pianoCharge });
+      heavyItems.push({
+        description: `Piano${pianoCount > 1 ? ` (${pianoCount})` : ''}`,
+        amount: pianoCharge,
+        alert: 'must be on ground level with no more than 2 steps'
+      });
     }
 
     if (formData.poolTables) {
       const poolTableCount = formData.poolTablesQty || 1;
       const poolTableCharge = 100 * poolTableCount;
-      heavyItems.push({ description: `Pool Table${poolTableCount > 1 ? ` (${poolTableCount})` : ''}`, amount: poolTableCharge });
+      heavyItems.push({
+        description: `Pool Table${poolTableCount > 1 ? ` (${poolTableCount})` : ''}`,
+        amount: poolTableCharge,
+        alert: 'must be on ground level with no more than 2 steps'
+      });
     }
 
     if (formData.gunSafes) {
       const gunSafeCount = formData.gunSafesQty || 1;
       const gunSafeCharge = 100 * gunSafeCount;
-      heavyItems.push({ description: `Gun Safe${gunSafeCount > 1 ? ` (${gunSafeCount})` : ''}`, amount: gunSafeCharge });
+      heavyItems.push({
+        description: `Gun Safe${gunSafeCount > 1 ? ` (${gunSafeCount})` : ''}`,
+        amount: gunSafeCharge,
+        alert: 'must be on ground level with no more than 2 steps'
+      });
     }
 
     if (formData.largeTVs) {
@@ -5014,7 +5026,10 @@ export default function MoveWalkthrough() {
                     {item.subItems && item.subItems.map((subItem, subIndex) => (
                       <div key={`${index}-${subIndex}`} className="py-1 pl-6 text-sm">
                         <div className="flex justify-between items-center">
-                          <span className="text-gray-600">{subItem.description} {subItem.details && <span className="text-gray-500 text-xs ml-1">{subItem.details}</span>}</span>
+                          <span className="text-gray-600">
+                            {subItem.alert && <span className="text-red-600 font-bold">* </span>}
+                            {subItem.description} {subItem.details && <span className="text-gray-500 text-xs ml-1">{subItem.details}</span>}
+                          </span>
                           <span className="text-gray-700">${Math.round(subItem.amount).toLocaleString()}</span>
                         </div>
                         {subItem.description === 'Materials and Supplies' && (
@@ -5038,6 +5053,32 @@ export default function MoveWalkthrough() {
                 *Estimate based on provided information. Final price may vary.
               </p>
             </div>
+
+            {/* Important Alerts */}
+            {(() => {
+              const alerts: string[] = [];
+              quote.items.forEach(item => {
+                if (item.subItems) {
+                  item.subItems.forEach(subItem => {
+                    if (subItem.alert && !alerts.includes(subItem.alert)) {
+                      alerts.push(subItem.alert);
+                    }
+                  });
+                }
+              });
+              return alerts.length > 0 ? (
+                <div className="mt-4 pt-4 border-t border-gray-300">
+                  <h3 className="text-sm font-semibold text-red-600 mb-2">Important Notes:</h3>
+                  <ul className="space-y-1">
+                    {alerts.map((alert, idx) => (
+                      <li key={idx} className="text-sm text-red-600">
+                        <span className="font-bold">* </span>{alert}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null;
+            })()}
           </section>
         )}
 
