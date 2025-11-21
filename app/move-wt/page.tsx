@@ -5016,6 +5016,20 @@ export default function MoveWalkthrough() {
               Moving Estimate
             </h2>
 
+            {/* Move Date Display */}
+            {formData.preferredDate && (
+              <div className="text-sm text-gray-700 mb-4">
+                {formData.moveDateUnknown ? (
+                  <span className="font-medium">Move Date Unknown</span>
+                ) : (
+                  <span className="font-medium">
+                    Move date {new Date(formData.preferredDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
+                    {formData.timeFlexible && ' (flexible)'}
+                  </span>
+                )}
+              </div>
+            )}
+
             <div className="space-y-2 mb-4">
               {quote.items.map((item, index) => {
                 // Split description to make parenthetical text italic
