@@ -127,6 +127,9 @@ export default function QuotePage({ params }: QuotePageProps) {
   const quoteItems = formData.quoteItems || [];
   const total = formData.total || 0;
 
+  // Debug: log preferredDate value
+  console.log('[Customer Quote] preferredDate:', formData.preferredDate, 'type:', typeof formData.preferredDate);
+
   // Customer info
   const customerName = `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || 'Customer';
   const customerEmail = formData.email || formData.emails?.[0]?.email || '';
