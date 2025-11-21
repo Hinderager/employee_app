@@ -108,7 +108,7 @@ export default function MoveWalkthrough() {
     email: "",
     emailName: "",
 
-    // Customer Home Address Indicator
+    // Customer Home or Business Indicator
     customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
 
     // Addresses - Pickup
@@ -2697,7 +2697,7 @@ export default function MoveWalkthrough() {
                       }}
                       className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                     />
-                    <span className="text-sm text-gray-600">Customer Home Address</span>
+                    <span className="text-sm text-gray-600">Customer Home or Business</span>
                   </label>
                 </div>
                 <button
@@ -3031,7 +3031,7 @@ export default function MoveWalkthrough() {
                     }}
                     className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <span className={`text-sm ${formData.deliveryAddressUnknown ? 'text-gray-400' : 'text-gray-600'}`}>Customer Home Address</span>
+                  <span className={`text-sm ${formData.deliveryAddressUnknown ? 'text-gray-400' : 'text-gray-600'}`}>Customer Home or Business</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input
