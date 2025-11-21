@@ -4118,7 +4118,7 @@ export default function MoveWalkthrough() {
         </section>
 
         {/* Pickup Location Access */}
-        {formData.serviceType !== 'labor-only' && (
+        {formData.serviceType !== 'labor-only' && formData.pickupLocationType !== 'storage-unit' && (
         <section className="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
           <h2 className="text-xl font-bold text-amber-900 mb-4">Pickup Location Access</h2>
 
