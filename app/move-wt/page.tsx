@@ -1708,8 +1708,8 @@ export default function MoveWalkthrough() {
       if (formData.serviceType === 'labor-only') {
         const avgMiles = (distanceData.toPickup.miles + distanceData.fromDelivery.miles) / 2;
         const avgMinutes = (distanceData.toPickup.minutes + distanceData.fromDelivery.minutes) / 2;
-        adjustedToPickup = { miles: avgMiles, minutes: avgMinutes };
-        adjustedFromDelivery = { miles: avgMiles, minutes: avgMinutes };
+        adjustedToPickup = { miles: avgMiles, minutes: avgMinutes, charge: 0 };
+        adjustedFromDelivery = { miles: avgMiles, minutes: avgMinutes, charge: 0 };
       }
 
       // Apply free miles sequentially: Travel to Start -> Move Travel -> Return Travel
