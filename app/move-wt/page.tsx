@@ -1754,8 +1754,8 @@ export default function MoveWalkthrough() {
         // Conditioned factor (130% if conditioned)
         const conditionedFactor = conditioned === 'yes' ? 1.3 : 1.0;
 
-        // Formula: SF × howFull% × conditioned factor × 2.2
-        const unitLabor = avgSF * howFullPercent * conditionedFactor * 2.2;
+        // Formula: SF × howFull% × conditioned factor × 2.6
+        const unitLabor = avgSF * howFullPercent * conditionedFactor * 2.6;
         console.log(`[Storage Labor] Unit ${i}: avgSF=${avgSF}, howFullPercent=${howFullPercent}, conditionedFactor=${conditionedFactor}, unitLabor=${unitLabor}`);
         totalStorageLabor += unitLabor;
       }
