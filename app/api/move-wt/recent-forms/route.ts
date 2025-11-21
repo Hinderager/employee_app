@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Force dynamic rendering (uses request.url)
+export const dynamic = 'force-dynamic';
+
 // Initialize Supabase client
 const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
 const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;

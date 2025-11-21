@@ -5969,16 +5969,16 @@ export default function MoveWalkthrough() {
                             Budget Breakdown:
                           </p>
                           <p className="text-sm text-gray-600">
-                            Desired Budget: <div className="font-semibold truncate">${budgetCrewOptions.desiredBudget?.toLocaleString() || '0'}</span>
+                            Desired Budget: <span className="font-semibold">${budgetCrewOptions.desiredBudget?.toLocaleString() || '0'}</span>
                           </p>
                           <p className="text-sm text-gray-600">
-                            Fixed Costs (Travel, Packing, Stairs, etc.): <div className="font-semibold truncate">${Math.round(budgetCrewOptions.fixedCosts || 0).toLocaleString()}</span>
+                            Fixed Costs (Travel, Packing, Stairs, etc.): <span className="font-semibold">${Math.round(budgetCrewOptions.fixedCosts || 0).toLocaleString()}</span>
                           </p>
                           <p className="text-sm text-gray-600">
                             Available for Moving Labor: <span className="font-semibold text-green-600">${Math.round(budgetCrewOptions.movingLaborBudget || 0).toLocaleString()}</span>
                           </p>
                           <p className="text-sm text-gray-600">
-                            Moving Materials (5%): <div className="font-semibold truncate">${Math.round(budgetCrewOptions.movingMaterialsBudget || 0).toLocaleString()}</span>
+                            Moving Materials (5%): <span className="font-semibold">${Math.round(budgetCrewOptions.movingMaterialsBudget || 0).toLocaleString()}</span>
                           </p>
                         </div>
 
