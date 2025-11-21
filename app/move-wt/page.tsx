@@ -2777,7 +2777,9 @@ export default function MoveWalkthrough() {
                     <>
                       <option value="house">House</option>
                       <option value="apartment">Apartment</option>
-                      <option value="storage-unit">Storage Unit</option>
+                      {!(formData.serviceType === 'truck' && formData.customerHomeAddressType === 'pickup') && (
+                        <option value="storage-unit">Storage Unit</option>
+                      )}
                       {formData.serviceType !== 'truck' && (
                         <>
                           <option value="truck">Truck</option>
