@@ -110,6 +110,9 @@ export default function MoveWalkthrough() {
 
     // Customer Home or Business Indicator
     customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
+    
+    // Labor Only - same address checkbox
+    laborOnlySameAddress: true,
 
     // Addresses - Pickup
     pickupAddress: "",
@@ -2722,33 +2725,52 @@ export default function MoveWalkthrough() {
           <h2 className="text-xl font-bold text-slate-900 mb-4">Addresses</h2>
 
           <div className="space-y-6">
-            {/* Start Address Section */}
+            {/* Start Address / Customer Address Section */}
             <div className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded-r-lg">
               <div className="flex items-center justify-between mb-3">
                 <div className="flex items-center gap-3">
-                  <h3 className="text-lg font-semibold text-blue-900">Start Address</h3>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={formData.customerHomeAddressType === "pickup"}
-                      onChange={() => {
-                        setFormData(prev => {
-                          const newType = prev.customerHomeAddressType === "pickup" ? "" : "pickup";
-                          // If setting pickup as customer home and service type is truck, reset invalid delivery/additional stop locations
-                          const invalidLocationTypes = ['pod', 'truck'];
-                          const shouldResetLocations = newType === "pickup" && prev.serviceType === 'truck';
-                          return {
+                  <h3 className="text-lg font-semibold text-blue-900">
+                    {formData.serviceType === 'labor-only' ? 'Customer Address' : 'Start Address'}
+                  </h3>
+                  {formData.serviceType === 'labor-only' ? (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.laborOnlySameAddress}
+                        onChange={() => {
+                          setFormData(prev => ({
                             ...prev,
-                            customerHomeAddressType: newType,
-                            deliveryLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.deliveryLocationType) ? "storage-unit" : prev.deliveryLocationType,
-                            additionalStopLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.additionalStopLocationType) ? "storage-unit" : prev.additionalStopLocationType
-                          };
-                        });
-                      }}
-                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                    />
-                    <span className="text-sm text-gray-600">Customer Home or Business</span>
-                  </label>
+                            laborOnlySameAddress: !prev.laborOnlySameAddress
+                          }));
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-600">Same as Service Address</span>
+                    </label>
+                  ) : (
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.customerHomeAddressType === "pickup"}
+                        onChange={() => {
+                          setFormData(prev => {
+                            const newType = prev.customerHomeAddressType === "pickup" ? "" : "pickup";
+                            // If setting pickup as customer home and service type is truck, reset invalid delivery/additional stop locations
+                            const invalidLocationTypes = ['pod', 'truck'];
+                            const shouldResetLocations = newType === "pickup" && prev.serviceType === 'truck';
+                            return {
+                              ...prev,
+                              customerHomeAddressType: newType,
+                              deliveryLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.deliveryLocationType) ? "storage-unit" : prev.deliveryLocationType,
+                              additionalStopLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.additionalStopLocationType) ? "storage-unit" : prev.additionalStopLocationType
+                            };
+                          });
+                        }}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm text-gray-600">Customer Home or Business</span>
+                    </label>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -3060,6 +3082,98 @@ export default function MoveWalkthrough() {
                 )}
               </div>
             </div>
+
+            {/* Service Address Section - Labor Only */}
+            {formData.serviceType === 'labor-only' && !formData.laborOnlySameAddress && (
+              <div className="border-l-4 border-green-500 bg-green-50 p-4 rounded-r-lg">
+                <div className="mb-3">
+                  <h3 className="text-lg font-semibold text-green-900">Service Address</h3>
+                </div>
+                <div className="space-y-2">
+                  <select
+                    name="deliveryLocationType"
+                    value={formData.deliveryLocationType}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="house">House</option>
+                    <option value="apartment">Apartment</option>
+                    <option value="business">Business</option>
+                    <option value="other">Other</option>
+                  </select>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Street Address
+                      </label>
+                      <input
+                        ref={deliveryAddressRef}
+                        type="text"
+                        name="deliveryAddress"
+                        value={formData.deliveryAddress}
+                        onChange={handleInputChange}
+                        autoComplete="off"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Unit/Apt #
+                      </label>
+                      <input
+                        type="text"
+                        name="deliveryUnit"
+                        value={formData.deliveryUnit}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        City
+                      </label>
+                      <input
+                        type="text"
+                        name="deliveryCity"
+                        value={formData.deliveryCity}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        State
+                      </label>
+                      <input
+                        type="text"
+                        name="deliveryState"
+                        value={formData.deliveryState}
+                        onChange={handleInputChange}
+                        maxLength={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      ZIP Code
+                    </label>
+                    <input
+                      type="text"
+                      name="deliveryZip"
+                      value={formData.deliveryZip}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Additional Stop Section */}
             {formData.serviceType !== 'labor-only' && (
