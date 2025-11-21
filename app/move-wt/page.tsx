@@ -1713,8 +1713,41 @@ export default function MoveWalkthrough() {
     const MINIMUM_LABOR = formData.serviceType === 'truck' ? 100 : 170;
     let movingLabor = MINIMUM_LABOR;
 
-    // If no square feet or slider value is very low (barely anything), just use minimum labor
-    if (pickupSquareFeet === 0 || sliderValue < 20) {
+    // Storage unit labor calculation
+    if (formData.pickupLocationType === 'storage') {
+      // Calculate labor for each storage unit
+      let totalStorageLabor = 0;
+
+      for (let i = 0; i < formData.pickupStorageUnitQuantity; i++) {
+        const sizeValue = formData.pickupStorageUnitSizes[i] || '';
+        const howFull = formData.pickupStorageUnitHowFull[i] || '';
+        const conditioned = formData.pickupStorageUnitConditioned[i] || '';
+
+        // Map size to average square footage
+        let avgSF = 0;
+        if (sizeValue === '<100sf') avgSF = 75;
+        else if (sizeValue === '100-200sf') avgSF = 150;
+        else if (sizeValue === '200-300sf') avgSF = 250;
+        else if (sizeValue === '300-400sf') avgSF = 350;
+        else if (sizeValue === '400+sf') avgSF = 500;
+
+        // Map "how full" to percentage
+        let howFullPercent = 0;
+        if (howFull === 'light') howFullPercent = 0.25;
+        else if (howFull === 'medium') howFullPercent = 0.60;
+        else if (howFull === 'packed') howFullPercent = 1.0;
+
+        // Conditioned factor (130% if conditioned)
+        const conditionedFactor = conditioned === 'yes' ? 1.3 : 1.0;
+
+        // Formula: SF × howFull% × conditioned factor × 1.7 (2/100*85)
+        const unitLabor = avgSF * howFullPercent * conditionedFactor * 1.7;
+        totalStorageLabor += unitLabor;
+      }
+
+      movingLabor = totalStorageLabor > MINIMUM_LABOR ? totalStorageLabor : MINIMUM_LABOR;
+    } else if (pickupSquareFeet === 0 || sliderValue < 20) {
+      // If no square feet or slider value is very low (barely anything), just use minimum labor
       movingLabor = MINIMUM_LABOR;
     } else {
       // Convert slider value to calculation percentage
