@@ -229,6 +229,14 @@ export default function QuotePage({ params }: QuotePageProps) {
                     <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Date</td>
                     <td style={{ padding: "4px 0", color: colors.dark, textAlign: "right" }}>{currentDate}</td>
                   </tr>
+                  {formData.preferredDate && !formData.moveDateUnknown && (
+                    <tr>
+                      <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Move Date</td>
+                      <td style={{ padding: "4px 0", color: colors.primary, textAlign: "right", fontWeight: "600" }}>
+                        {new Date(formData.preferredDate + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                      </td>
+                    </tr>
+                  )}
                   <tr>
                     <td style={{ padding: "4px 24px 4px 0", color: colors.gray, fontWeight: "600", textAlign: "left" }}>Total</td>
                     <td style={{ padding: "4px 0", color: colors.success, textAlign: "right", fontWeight: "700", fontSize: "14px" }}>{formatCurrency(total)}</td>
