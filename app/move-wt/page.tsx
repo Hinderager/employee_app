@@ -1854,11 +1854,11 @@ export default function MoveWalkthrough() {
       movingLabor = totalStorageLabor > MINIMUM_LABOR ? totalStorageLabor : MINIMUM_LABOR;
       console.log('[Storage Labor] Final movingLabor:', movingLabor);
     } else if (formData.pickupLocationType === 'unloading-truck-pod') {
-      // Unloading truck/POD labor calculation: L × W × % × 4 / (26 × 8)
+      // Unloading truck/POD labor calculation: L × W × % × 4 / (26 × 8) × 85
       const length = parseFloat(formData.pickupTruckPodLength) || 0;
       const width = parseFloat(formData.pickupTruckPodWidth) || 0;
       const howFullPercent = (formData.pickupTruckPodHowFull || 100) / 100;
-      const truckPodLabor = (length * width * howFullPercent * 4) / (26 * 8);
+      const truckPodLabor = (length * width * howFullPercent * 4) / (26 * 8) * 85;
       console.log('[Truck/POD Labor] L:', length, 'W:', width, '%:', howFullPercent, 'Labor:', truckPodLabor);
       movingLabor = truckPodLabor > MINIMUM_LABOR ? truckPodLabor : MINIMUM_LABOR;
     } else if (pickupSquareFeet === 0 || sliderValue < 20) {
