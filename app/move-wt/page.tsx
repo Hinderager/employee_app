@@ -3354,8 +3354,8 @@ export default function MoveWalkthrough() {
                   </div>
                 )}
 
-                {/* How Much is Getting Moved Slider - Always visible for Start Address (hidden for labor-only when Service Address is separate) */}
-                {!(formData.serviceType === 'labor-only' && !formData.laborOnlySameAddress) && (
+                {/* How Much is Getting Moved Slider - Always visible for Start Address (hidden for labor-only when Service Address is separate, and for unloading-truck-pod) */}
+                {!(formData.serviceType === 'labor-only' && !formData.laborOnlySameAddress) && formData.pickupLocationType !== 'unloading-truck-pod' && (
                   <div className="space-y-1">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       How much is getting moved?
