@@ -2695,12 +2695,21 @@ export default function MoveWalkthrough() {
                   onChange={handleInputChange}
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
-                  <option value="house">House</option>
-                  <option value="apartment">Apartment</option>
-                  <option value="storage-unit">Storage Unit</option>
-                  <option value="truck">Truck</option>
-                  <option value="pod">POD</option>
-                  <option value="other">Other</option>
+                  {formData.customerHomeAddressType === 'delivery' ? (
+                    <>
+                      <option value="storage-unit">Storage Unit</option>
+                      <option value="other">Other</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="house">House</option>
+                      <option value="apartment">Apartment</option>
+                      <option value="storage-unit">Storage Unit</option>
+                      <option value="truck">Truck</option>
+                      <option value="pod">POD</option>
+                      <option value="other">Other</option>
+                    </>
+                  )}
                 </select>
 
 
@@ -2982,10 +2991,17 @@ export default function MoveWalkthrough() {
                     checked={formData.customerHomeAddressType === "delivery"}
                     disabled={formData.deliveryAddressUnknown}
                     onChange={() => {
-                      setFormData(prev => ({
-                        ...prev,
-                        customerHomeAddressType: prev.customerHomeAddressType === "delivery" ? "" : "delivery"
-                      }));
+                      setFormData(prev => {
+                        const newType = prev.customerHomeAddressType === "delivery" ? "" : "delivery";
+                        // If setting delivery as customer home, reset pickup location to valid option
+                        const invalidPickupTypes = ['house', 'apartment', 'truck', 'pod'];
+                        const needsReset = newType === "delivery" && invalidPickupTypes.includes(prev.pickupLocationType);
+                        return {
+                          ...prev,
+                          customerHomeAddressType: newType,
+                          pickupLocationType: needsReset ? "storage-unit" : prev.pickupLocationType
+                        };
+                      });
                     }}
                     className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
