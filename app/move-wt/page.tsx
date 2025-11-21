@@ -3058,6 +3058,230 @@ export default function MoveWalkthrough() {
               </div>
             </div>
 
+            {/* Additional Stop Section */}
+            {formData.serviceType !== 'labor-only' && (
+            <div className="border-l-4 border-purple-500 bg-purple-50 p-4 rounded-r-lg">
+              <div className="flex items-center mb-3">
+                <input
+                  type="checkbox"
+                  name="hasAdditionalStop"
+                  checked={formData.hasAdditionalStop}
+                  onChange={handleInputChange}
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                />
+                <label className="ml-2 text-lg font-semibold text-purple-900">
+                  Additional Stop
+                </label>
+              </div>
+
+              {formData.hasAdditionalStop && (
+                <div className="space-y-2">
+                  <select
+                    name="additionalStopLocationType"
+                    value={formData.additionalStopLocationType}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="house">House</option>
+                    <option value="apartment">Apartment</option>
+                    <option value="storage-unit">Storage Unit</option>
+                    {formData.serviceType !== 'truck' && (
+                      <>
+                        <option value="truck">Truck</option>
+                        <option value="pod">POD</option>
+                      </>
+                    )}
+                    <option value="business">Business</option>
+                      <option value="other">Other</option>
+                  </select>
+
+                  {formData.additionalStopLocationType === 'apartment' && (
+                    <div className="mt-2">
+                      <input
+                        type="text"
+                        name="additionalStopApartmentBedBath"
+                        value={formData.additionalStopApartmentBedBath}
+                        onChange={handleInputChange}
+                        placeholder="Bed/Bath"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  )}
+
+                  {/* How Much is Getting Added or Dropped Off Slider - Only for House */}
+                  {formData.additionalStopLocationType === 'house' && (
+                    <div className="space-y-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        How much is getting added or dropped off?
+                      </label>
+                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
+                        <input
+                          type="range"
+                          name="additionalStopHowFurnished"
+                          min="0"
+                          max="100"
+                          step="20"
+                          value={formData.additionalStopHowFurnished}
+                          onChange={handleInputChange}
+                          className="flex-1"
+                        />
+                        <span className="text-sm font-medium text-purple-700 min-w-[140px]">
+                          {getAdditionalStopText(Number(formData.additionalStopHowFurnished))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.additionalStopLocationType === 'storage-unit' && (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-700">Quantity:</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newQty = Math.max(1, formData.additionalStopStorageUnitQuantity - 1);
+                            setFormData(prev => ({
+                              ...prev,
+                              additionalStopStorageUnitQuantity: newQty,
+                              additionalStopStorageUnitSizes: prev.additionalStopStorageUnitSizes.slice(0, newQty)
+                            }));
+                          }}
+                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
+                        >
+                          -
+                        </button>
+                        <span className="w-12 text-center font-semibold">{formData.additionalStopStorageUnitQuantity}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFormData(prev => ({
+                              ...prev,
+                              additionalStopStorageUnitQuantity: prev.additionalStopStorageUnitQuantity + 1,
+                              additionalStopStorageUnitSizes: [...prev.additionalStopStorageUnitSizes, ""]
+                            }));
+                          }}
+                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
+                        >
+                          +
+                        </button>
+                      </div>
+                      {Array.from({ length: formData.additionalStopStorageUnitQuantity }).map((_, index) => (
+                        <input
+                          key={index}
+                          type="text"
+                          value={formData.additionalStopStorageUnitSizes[index] || ""}
+                          onChange={(e) => {
+                            const newSizes = [...formData.additionalStopStorageUnitSizes];
+                            newSizes[index] = e.target.value;
+                            setFormData(prev => ({ ...prev, additionalStopStorageUnitSizes: newSizes }));
+                          }}
+                          placeholder={`Unit ${index + 1} Size`}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      ))}
+                    </div>
+                  )}
+
+                  {formData.additionalStopLocationType === 'other' && (
+                    <div>
+                      <input
+                        type="text"
+                        name="additionalStopLocationOther"
+                        value={formData.additionalStopLocationOther}
+                        onChange={handleInputChange}
+                        placeholder="Specify Location Type"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Street Address
+                      </label>
+                      <input
+                        ref={additionalStopAddressRef}
+                        type="text"
+                        name="additionalStopAddress"
+                        value={formData.additionalStopAddress}
+                        onChange={handleInputChange}
+                        autoComplete="off"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Unit/Apt #
+                      </label>
+                      <input
+                        type="text"
+                        name="additionalStopUnit"
+                        value={formData.additionalStopUnit}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        City
+                      </label>
+                      <input
+                        type="text"
+                        name="additionalStopCity"
+                        value={formData.additionalStopCity}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        State
+                      </label>
+                      <input
+                        type="text"
+                        name="additionalStopState"
+                        value={formData.additionalStopState}
+                        onChange={handleInputChange}
+                        maxLength={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      ZIP Code
+                    </label>
+                    <input
+                      type="text"
+                      name="additionalStopZip"
+                      value={formData.additionalStopZip}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Notes
+                    </label>
+                    <textarea
+                      name="additionalStopNotes"
+                      value={formData.additionalStopNotes}
+                      onChange={handleInputChange}
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            )}
+
             {/* Delivery Address Section */}
             {formData.serviceType !== 'labor-only' && (
             <div className="border-l-4 border-green-500 bg-green-50 p-4 rounded-r-lg">
@@ -3433,230 +3657,6 @@ export default function MoveWalkthrough() {
                   </>
                 )}
               </div>
-            </div>
-            )}
-
-            {/* Additional Stop Section */}
-            {formData.serviceType !== 'labor-only' && (
-            <div className="border-l-4 border-purple-500 bg-purple-50 p-4 rounded-r-lg">
-              <div className="flex items-center mb-3">
-                <input
-                  type="checkbox"
-                  name="hasAdditionalStop"
-                  checked={formData.hasAdditionalStop}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-lg font-semibold text-purple-900">
-                  Additional Stop
-                </label>
-              </div>
-
-              {formData.hasAdditionalStop && (
-                <div className="space-y-2">
-                  <select
-                    name="additionalStopLocationType"
-                    value={formData.additionalStopLocationType}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="house">House</option>
-                    <option value="apartment">Apartment</option>
-                    <option value="storage-unit">Storage Unit</option>
-                    {formData.serviceType !== 'truck' && (
-                      <>
-                        <option value="truck">Truck</option>
-                        <option value="pod">POD</option>
-                      </>
-                    )}
-                    <option value="business">Business</option>
-                      <option value="other">Other</option>
-                  </select>
-
-                  {formData.additionalStopLocationType === 'apartment' && (
-                    <div className="mt-2">
-                      <input
-                        type="text"
-                        name="additionalStopApartmentBedBath"
-                        value={formData.additionalStopApartmentBedBath}
-                        onChange={handleInputChange}
-                        placeholder="Bed/Bath"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  )}
-
-                  {/* How Much is Getting Added or Dropped Off Slider - Only for House */}
-                  {formData.additionalStopLocationType === 'house' && (
-                    <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        How much is getting added or dropped off?
-                      </label>
-                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
-                        <input
-                          type="range"
-                          name="additionalStopHowFurnished"
-                          min="0"
-                          max="100"
-                          step="20"
-                          value={formData.additionalStopHowFurnished}
-                          onChange={handleInputChange}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium text-purple-700 min-w-[140px]">
-                          {getAdditionalStopText(Number(formData.additionalStopHowFurnished))}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {formData.additionalStopLocationType === 'storage-unit' && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-700">Quantity:</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const newQty = Math.max(1, formData.additionalStopStorageUnitQuantity - 1);
-                            setFormData(prev => ({
-                              ...prev,
-                              additionalStopStorageUnitQuantity: newQty,
-                              additionalStopStorageUnitSizes: prev.additionalStopStorageUnitSizes.slice(0, newQty)
-                            }));
-                          }}
-                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                        >
-                          -
-                        </button>
-                        <span className="w-12 text-center font-semibold">{formData.additionalStopStorageUnitQuantity}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              additionalStopStorageUnitQuantity: prev.additionalStopStorageUnitQuantity + 1,
-                              additionalStopStorageUnitSizes: [...prev.additionalStopStorageUnitSizes, ""]
-                            }));
-                          }}
-                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                        >
-                          +
-                        </button>
-                      </div>
-                      {Array.from({ length: formData.additionalStopStorageUnitQuantity }).map((_, index) => (
-                        <input
-                          key={index}
-                          type="text"
-                          value={formData.additionalStopStorageUnitSizes[index] || ""}
-                          onChange={(e) => {
-                            const newSizes = [...formData.additionalStopStorageUnitSizes];
-                            newSizes[index] = e.target.value;
-                            setFormData(prev => ({ ...prev, additionalStopStorageUnitSizes: newSizes }));
-                          }}
-                          placeholder={`Unit ${index + 1} Size`}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      ))}
-                    </div>
-                  )}
-
-                  {formData.additionalStopLocationType === 'other' && (
-                    <div>
-                      <input
-                        type="text"
-                        name="additionalStopLocationOther"
-                        value={formData.additionalStopLocationOther}
-                        onChange={handleInputChange}
-                        placeholder="Specify Location Type"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Street Address
-                      </label>
-                      <input
-                        ref={additionalStopAddressRef}
-                        type="text"
-                        name="additionalStopAddress"
-                        value={formData.additionalStopAddress}
-                        onChange={handleInputChange}
-                        autoComplete="off"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Unit/Apt #
-                      </label>
-                      <input
-                        type="text"
-                        name="additionalStopUnit"
-                        value={formData.additionalStopUnit}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        City
-                      </label>
-                      <input
-                        type="text"
-                        name="additionalStopCity"
-                        value={formData.additionalStopCity}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        State
-                      </label>
-                      <input
-                        type="text"
-                        name="additionalStopState"
-                        value={formData.additionalStopState}
-                        onChange={handleInputChange}
-                        maxLength={2}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      ZIP Code
-                    </label>
-                    <input
-                      type="text"
-                      name="additionalStopZip"
-                      value={formData.additionalStopZip}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <textarea
-                      name="additionalStopNotes"
-                      value={formData.additionalStopNotes}
-                      onChange={handleInputChange}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-              )}
             </div>
             )}
           </div>
