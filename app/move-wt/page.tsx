@@ -5057,6 +5057,8 @@ export default function MoveWalkthrough() {
             {/* Important Alerts */}
             {(() => {
               const alerts: string[] = [];
+
+              // Collect alerts from quote items
               quote.items.forEach(item => {
                 if (item.subItems) {
                   item.subItems.forEach(subItem => {
@@ -5066,6 +5068,15 @@ export default function MoveWalkthrough() {
                   });
                 }
               });
+
+              // Add alerts from formData items that don't have costs
+              if (formData.applianceFridge && !alerts.includes('Fridge doors cannot be fully removed to fit through narrow spaces')) {
+                alerts.push('Fridge doors cannot be fully removed to fit through narrow spaces');
+              }
+              if (formData.treadmills && !alerts.includes('treadmills cannot be disassembled')) {
+                alerts.push('treadmills cannot be disassembled');
+              }
+
               return alerts.length > 0 ? (
                 <div className="mt-4 pt-4 border-t border-gray-300">
                   <h3 className="text-sm font-semibold text-red-600 mb-2">Important Notes:</h3>
