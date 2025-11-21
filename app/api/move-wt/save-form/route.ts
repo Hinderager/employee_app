@@ -58,6 +58,8 @@ export async function POST(request: NextRequest) {
     const normalizedPhone = normalizePhoneNumber(phoneNumber);
 
     console.log(`[move-wt/save-form] Saving form for job: ${jobNumber}, customer home address: ${customerHomeAddress || 'Not Set'}, phone: ${normalizedPhone}`);
+    console.log(`[move-wt/save-form] preferredDate in formData: "${formData?.preferredDate || 'NOT SET'}"`);
+    console.log(`[move-wt/save-form] firstName: "${formData?.firstName}", lastName: "${formData?.lastName}"`);
 
     // If customer home address is set, use address-based UPSERT
     if (customerHomeAddress && customerHomeAddress.trim()) {
@@ -120,6 +122,7 @@ export async function POST(request: NextRequest) {
             phone_numbers: newPhoneNumbers,
             address: address, // Legacy field
             form_data: formData,
+            move_date: formData?.preferredDate || null,
             updated_at: new Date().toISOString(),
           })
           .eq('customer_home_address', customerHomeAddress)
@@ -164,6 +167,7 @@ export async function POST(request: NextRequest) {
               address: address,
               phone_number: normalizedPhone,
               form_data: formData,
+              move_date: formData?.preferredDate || null,
               updated_at: new Date().toISOString(),
             })
             .eq('job_number', jobNumber)
@@ -197,6 +201,7 @@ export async function POST(request: NextRequest) {
               phone_number: normalizedPhone,
               phone_numbers: normalizedPhone ? [normalizedPhone] : [],
               form_data: formData,
+              move_date: formData?.preferredDate || null,
               updated_at: new Date().toISOString(),
             })
             .select();
@@ -233,6 +238,7 @@ export async function POST(request: NextRequest) {
             phone_number: normalizedPhone,
             phone_numbers: normalizedPhone ? [normalizedPhone] : [],
             form_data: formData,
+            move_date: formData?.preferredDate || null,
             updated_at: new Date().toISOString(),
           },
           {

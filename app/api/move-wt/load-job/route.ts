@@ -332,6 +332,25 @@ export async function POST(request: NextRequest) {
 
       console.log(`[move-wt/load-job] Found ${formRecords?.length || 0} saved form(s)`);
 
+      // Debug: Log each record found
+      if (formRecords && formRecords.length > 0) {
+        formRecords.forEach((record: any, index: number) => {
+          const formData = record.form_data || {};
+          console.log(`[move-wt/load-job] Record ${index + 1}:`, {
+            id: record.id,
+            job_number: record.job_number,
+            customer_home_address: record.customer_home_address,
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            hasFormData: !!record.form_data,
+            gunSafes: formData.gunSafes,
+            pianos: formData.pianos,
+          });
+        });
+      } else {
+        console.log(`[move-wt/load-job] NO records found for phone: ${normalizedPhone}`);
+      }
+
       // If only 1 record found, auto-load it directly
       if (formRecords && formRecords.length === 1) {
         const record = formRecords[0];

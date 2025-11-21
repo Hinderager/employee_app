@@ -42,6 +42,13 @@ function generateQuoteUrl(address: string): string {
   return `/quote/${addressSlug}-${randomString}`;
 }
 
+// Generate unique mover sheet URL path with address and short hash
+function generateMoverSheetUrl(address: string): string {
+  const addressSlug = createAddressSlug(address);
+  const randomString = crypto.randomBytes(4).toString('hex');
+  return `/mover-sheet/${addressSlug}-${randomString}`;
+}
+
 // Helper function to normalize phone numbers
 const normalizePhoneNumber = (phone: string): string => {
   if (!phone) return '';
@@ -377,36 +384,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate unique quote URL if not already exists
+    // Generate unique quote URL and mover sheet URL if not already exists
     let quoteUrl = quoteData.quote_url;
-    if (!quoteUrl) {
+    let moverSheetUrl = quoteData.mover_sheet_url;
+
+    if (!quoteUrl || !moverSheetUrl) {
       // Use pickup address if available, otherwise use customer home address
       const addressForUrl = formData.pickupAddress || customerHomeAddress;
-      quoteUrl = generateQuoteUrl(addressForUrl);
+
+      if (!quoteUrl) {
+        quoteUrl = generateQuoteUrl(addressForUrl);
+      }
+      if (!moverSheetUrl) {
+        moverSheetUrl = generateMoverSheetUrl(addressForUrl);
+      }
 
       // Calculate expiration date (2 months from now)
       const expiresAt = new Date();
       expiresAt.setMonth(expiresAt.getMonth() + 2);
 
-      // Update quote with the URL and expiration
+      // Update quote with the URLs and expiration
       const { error: updateError } = await supabase
         .from('move_quote')
         .update({
           quote_url: quoteUrl,
+          mover_sheet_url: moverSheetUrl,
           quote_url_expires_at: expiresAt.toISOString()
         })
         .eq('quote_number', quoteNumber);
 
       if (updateError) {
-        console.error('[send-quote] Error updating quote URL:', updateError);
+        console.error('[send-quote] Error updating quote/mover sheet URLs:', updateError);
       }
     }
 
-    // Build full quote URL
+    // Build full URLs
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://employeeapp.topshelfpros.com';
     const fullQuoteUrl = `${baseUrl}${quoteUrl}`;
+    const fullMoverSheetUrl = `${baseUrl}${moverSheetUrl}`;
 
     console.log(`[send-quote] Quote URL: ${fullQuoteUrl}`);
+    console.log(`[send-quote] Mover Sheet URL: ${fullMoverSheetUrl}`);
 
     // Step 1: Create/Update GHL Contact
     console.log(`[send-quote] Upserting GHL contact for ${firstName} ${lastName}`);
@@ -456,6 +474,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: 'Quote sent to customer',
       quoteUrl: fullQuoteUrl,
+      moverSheetUrl: fullMoverSheetUrl,
       contactId: contactId,
       opportunityId: opportunity.id,
     });

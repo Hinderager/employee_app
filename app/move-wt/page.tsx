@@ -429,9 +429,9 @@ export default function MoveWalkthrough() {
           address: effectiveAddress,
           formData: {
             ...normalizedFormData,
-            quoteItems: quote.items,
-            total: quote.total,
-            baseRate: quote.baseRate
+            quoteItems: quote?.items || [],
+            total: quote?.total || 0,
+            baseRate: quote?.baseRate || 0
           },
           folderUrl: folderUrl,
           isTemporary: !jobNumber || jobNumber.trim() === '',
@@ -636,22 +636,98 @@ export default function MoveWalkthrough() {
       setFormData(prev => ({
         ...prev,
         hasAdditionalStop: checked,
-        additionalStopAddress: "",
-        additionalStopUnit: "",
-        additionalStopCity: "",
-        additionalStopState: "",
-        additionalStopZip: "",
-        additionalStopLocationType: "house",
-        additionalStopLocationOther: "",
-        additionalStopHouseSquareFeet: "",
-        additionalStopZestimate: "",
-        additionalStopHowFurnished: 80,
-        additionalStopApartmentBedBath: "",
-        additionalStopStorageUnitQuantity: 1,
-        additionalStopStorageUnitSizes: [""],
-    additionalStopStorageUnitConditioned: [""],
-        additionalStopNotes: ""
+        ...(checked ? {} : {
+          additionalStopAddress: "",
+          additionalStopUnit: "",
+          additionalStopCity: "",
+          additionalStopState: "",
+          additionalStopZip: "",
+          additionalStopLocationType: "house",
+          additionalStopLocationOther: "",
+          additionalStopHouseSquareFeet: "",
+          additionalStopZestimate: "",
+          additionalStopHowFurnished: 80,
+          additionalStopApartmentBedBath: "",
+          additionalStopStorageUnitQuantity: 1,
+          additionalStopStorageUnitSizes: [""],
+          additionalStopStorageUnitConditioned: [""],
+          additionalStopNotes: ""
+        })
       }));
+      return;
+    }
+    // Clear all appliance fields when Large Appliances is unchecked
+    if (name === 'largeAppliances' && type === 'checkbox' && !checked) {
+      setFormData(prev => ({
+        ...prev,
+        largeAppliances: false,
+        applianceFridge: false,
+        applianceFridgeQty: 1,
+        applianceWasher: false,
+        applianceWasherQty: 1,
+        applianceDryer: false,
+        applianceDryerQty: 1,
+        applianceOven: false,
+        applianceOvenQty: 1,
+        applianceDishwasher: false,
+        applianceDishwasherQty: 1,
+        applianceOtherDetails: ""
+      }));
+      return;
+    }
+    // Clear all packing fields when Packing is unchecked
+    if (name === 'needsPacking' && type === 'checkbox' && !checked) {
+      setFormData(prev => ({
+        ...prev,
+        needsPacking: false,
+        packingStatus: "moderate",
+        packingKitchen: false,
+        packingGarage: false,
+        packingAttic: false,
+        packingWardrobeBoxes: false,
+        packingFragileItems: false
+      }));
+      return;
+    }
+    // Clear junk removal fields when Junk Removal is unchecked
+    if (name === 'junkRemovalNeeded' && type === 'checkbox' && !checked) {
+      setFormData(prev => ({
+        ...prev,
+        junkRemovalNeeded: false,
+        junkRemovalAmount: "",
+        junkRemovalDetails: ""
+      }));
+      return;
+    }
+    // Clear qty/details when individual heavy items or appliances are unchecked
+    if (type === 'checkbox' && !checked) {
+      const itemClearMap: Record<string, Record<string, any>> = {
+        // Heavy/Special Items
+        gunSafes: { gunSafesQty: 1, gunSafesDetails: "" },
+        pianos: { pianosQty: 1, pianosDetails: "" },
+        poolTables: { poolTablesQty: 1, poolTablesDetails: "" },
+        largeTVs: { largeTVsQty: 1, largeTVsDetails: "" },
+        treadmills: { treadmillsDetails: "" },
+        // Special Disassembly
+        trampoline: { trampolineQty: 1, trampolineDetails: "" },
+        bunkBeds: { bunkBedsQty: 1, bunkBedsDetails: "" },
+        gymEquipment: { gymEquipmentQty: 1, gymEquipmentDetails: "" },
+        sauna: { saunaQty: 1, saunaDetails: "" },
+        // Appliances
+        applianceFridge: { applianceFridgeQty: 1 },
+        applianceWasher: { applianceWasherQty: 1 },
+        applianceDryer: { applianceDryerQty: 1 },
+        applianceOven: { applianceOvenQty: 1 },
+        applianceDishwasher: { applianceDishwasherQty: 1 }
+      };
+      if (itemClearMap[name]) {
+        setFormData(prev => ({
+          ...prev,
+          [name]: false,
+          ...itemClearMap[name]
+        }));
+        return;
+      }
     }
     // Auto-check Safe Dolly if Piano or Gun Safe is checked
     else if ((name === 'pianos' || name === 'gunSafes') && type === 'checkbox' && checked) {
@@ -2257,7 +2333,7 @@ export default function MoveWalkthrough() {
 
   // Calculate crew configurations for fixed budget (applies to Moving labor only)
   const calculateBudgetCrewOptions = () => {
-    if (!formData.fixedBudgetRequested || !formData.desiredBudget) {
+    if (!formData.fixedBudgetRequested || !formData.desiredBudget || !quote) {
       return null;
     }
 
@@ -2643,6 +2719,285 @@ export default function MoveWalkthrough() {
       </div>
 
       <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 space-y-6 md:pb-24">
+
+        {/* Clear Job Details Button */}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => {
+              if (confirm('Are you sure you want to clear all job details? Customer info will be preserved.')) {
+                // Keep customer info, clear everything else
+                const preservedData = {
+                  firstName: formData.firstName,
+                  lastName: formData.lastName,
+                  company: formData.company,
+                  phone: formData.phone,
+                  phoneName: formData.phoneName,
+                  email: formData.email,
+                  emailName: formData.emailName,
+                };
+                setFormData(prev => ({
+                  // Service Type - reset to defaults
+                  serviceType: "truck",
+                  travelBilling: "local",
+                  travelCost: "",
+
+                  // Customer Information - PRESERVE
+                  ...preservedData,
+                  customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
+
+                  // Labor Only
+                  laborOnlySameAddress: true,
+
+                  // Addresses - Pickup (clear all)
+                  pickupAddress: "",
+                  pickupUnit: "",
+                  pickupCity: "",
+                  pickupState: "",
+                  pickupZip: "",
+                  pickupLocationType: "house",
+                  pickupLocationOther: "",
+                  pickupBusinessName: "",
+                  pickupBusinessSquareFeet: "",
+                  pickupOtherSquareFeet: "",
+                  pickupHouseSquareFeet: "",
+                  pickupZestimate: "",
+                  pickupHowFurnished: 80,
+                  pickupApartmentSquareFeet: "",
+                  pickupApartmentBedBath: "",
+                  pickupApartmentHowFurnished: 80,
+                  pickupStorageUnitQuantity: 1,
+                  pickupStorageUnitSizes: [""],
+                  pickupStorageUnitHowFull: [""],
+                  pickupStorageUnitConditioned: [""],
+
+                  // Addresses - Delivery (clear all)
+                  deliveryAddress: "",
+                  deliveryUnit: "",
+                  deliveryCity: "",
+                  deliveryState: "",
+                  deliveryZip: "",
+                  deliveryLocationType: "house",
+                  deliveryLocationOther: "",
+                  deliveryBusinessName: "",
+                  deliveryHouseSquareFeet: "",
+                  deliveryZestimate: "",
+                  deliveryHowFurnished: 80,
+                  deliveryApartmentSquareFeet: "",
+                  deliveryApartmentBedBath: "",
+                  deliveryApartmentHowFurnished: 80,
+                  deliveryStorageUnitQuantity: 1,
+                  deliveryStorageUnitSizes: [""],
+                  deliveryStorageUnitConditioned: [""],
+                  deliveryPODQuantity: 1,
+                  deliveryPODSize: "",
+                  deliveryTruckLength: "",
+                  deliveryAddressUnknown: false,
+
+                  // Additional Stop (clear all)
+                  hasAdditionalStop: false,
+                  additionalStopAddress: "",
+                  additionalStopUnit: "",
+                  additionalStopCity: "",
+                  additionalStopState: "",
+                  additionalStopZip: "",
+                  additionalStopLocationType: "house",
+                  additionalStopLocationOther: "",
+                  additionalStopBusinessName: "",
+                  additionalStopHouseSquareFeet: "",
+                  additionalStopZestimate: "",
+                  additionalStopHowFurnished: 80,
+                  additionalStopApartmentBedBath: "",
+                  additionalStopStorageUnitQuantity: 1,
+                  additionalStopStorageUnitSizes: [""],
+                  additionalStopStorageUnitConditioned: [""],
+                  additionalStopNotes: "",
+
+                  // Pickup Access (clear all)
+                  pickupStairs: 1,
+                  pickupNarrowDoorways: false,
+                  pickupElevator: false,
+                  pickupParkingDistance: "close",
+                  pickupAccessNotes: "",
+
+                  // Delivery Access (clear all)
+                  deliveryStairs: 1,
+                  deliveryNarrowDoorways: false,
+                  deliveryElevator: false,
+                  deliveryParkingDistance: "close",
+                  deliveryAccessNotes: "",
+
+                  // Heavy/Special Items (clear all)
+                  gunSafes: false,
+                  gunSafesQty: 1,
+                  gunSafesDetails: "",
+                  pianos: false,
+                  pianosQty: 1,
+                  pianosDetails: "",
+                  poolTables: false,
+                  poolTablesQty: 1,
+                  poolTablesDetails: "",
+                  otherHeavyItems: false,
+                  otherHeavyItemsDetails: "",
+                  largeTVs: false,
+                  largeTVsQty: 1,
+                  largeTVsDetails: "",
+                  purpleGreenMattress: false,
+                  purpleGreenMattressDetails: "",
+                  treadmills: false,
+                  treadmillsDetails: "",
+                  largeAppliances: false,
+                  applianceFridge: false,
+                  applianceFridgeQty: 1,
+                  applianceWasher: false,
+                  applianceWasherQty: 1,
+                  applianceDryer: false,
+                  applianceDryerQty: 1,
+                  applianceOven: false,
+                  applianceOvenQty: 1,
+                  applianceDishwasher: false,
+                  applianceDishwasherQty: 1,
+                  applianceOtherDetails: "",
+                  plants: false,
+                  plantsDetails: "",
+                  bunkBeds: false,
+                  bunkBedsQty: 1,
+                  bunkBedsDetails: "",
+                  trampoline: false,
+                  trampolineQty: 1,
+                  trampolineDetails: "",
+                  tableSaw: false,
+                  tableSawQty: 1,
+                  tableSawDetails: "",
+                  gymEquipment: false,
+                  gymEquipmentQty: 1,
+                  gymEquipmentDetails: "",
+                  sauna: false,
+                  saunaQty: 1,
+                  saunaDetails: "",
+                  playsets: false,
+                  playsetsQty: 1,
+                  playsetsDetails: "",
+                  specialDisassemblyOther: false,
+                  specialDisassemblyOtherDetails: "",
+
+                  // Pets
+                  catsPresent: false,
+
+                  // Packing (clear all)
+                  packingStatus: "moderate",
+                  needsPacking: false,
+                  packingKitchen: false,
+                  packingGarage: false,
+                  packingAttic: false,
+                  packingWardrobeBoxes: false,
+                  packingFragileItems: false,
+                  junkRemovalNeeded: false,
+                  junkRemovalAmount: "",
+                  junkRemovalDetails: "",
+
+                  // Insurance
+                  needsInsurance: false,
+                  estimatedValue: "",
+
+                  // Timing (clear)
+                  preferredDate: "",
+                  moveDateUnknown: false,
+                  timeFlexible: false,
+                  readyToSchedule: false,
+                  timingNotes: "",
+
+                  // Estimates
+                  estimatedCrewSize: "2-3",
+                  crewSizeNotes: "",
+
+                  // Special Notes (clear)
+                  specialRequests: "",
+                  fixedBudgetRequested: false,
+                  desiredBudget: "",
+
+                  // House Quality Rating
+                  houseQuality: 3,
+
+                  // Tools Needed (clear all)
+                  hd4Wheel: false,
+                  airSled: false,
+                  applianceDolly: false,
+                  socketWrenches: false,
+                  safeDolly: false,
+                  toolCustom1: "",
+                  toolCustom2: "",
+                  toolCustom3: "",
+                }));
+                setDistanceData(null);
+                setQuote(null);
+              }
+            }}
+            className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+          >
+            Clear Job Details
+          </button>
+        </div>
+
+        {/* Timing & Scheduling */}
+        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-pink-500">
+          <h2 className="text-xl font-bold text-pink-900 mb-4">Timing & Scheduling</h2>
+
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Preferred Move Date
+              </label>
+              <input
+                type="date"
+                name="preferredDate"
+                value={formData.preferredDate}
+                onChange={handleInputChange}
+                className="max-w-sm bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                name="moveDateUnknown"
+                checked={formData.moveDateUnknown}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label className="ml-2 text-sm text-gray-700">
+                Move date is unknown
+              </label>
+            </div>
+
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                name="timeFlexible"
+                checked={formData.timeFlexible}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label className="ml-2 text-sm text-gray-700">
+                Move date is flexible
+              </label>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Additional Notes
+              </label>
+              <textarea
+                name="timingNotes"
+                value={formData.timingNotes}
+                onChange={handleInputChange}
+                rows={3}
+                placeholder="Additional notes about timing and scheduling"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+          </div>
+        </section>
 
         {/* Service Type */}
         <section className="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500">
@@ -5328,66 +5683,6 @@ export default function MoveWalkthrough() {
           </div>
         </section>
 
-        {/* Timing & Scheduling */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-pink-500">
-          <h2 className="text-xl font-bold text-pink-900 mb-4">Timing & Scheduling</h2>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Preferred Move Date
-              </label>
-              <input
-                type="date"
-                name="preferredDate"
-                value={formData.preferredDate}
-                onChange={handleInputChange}
-                className="max-w-sm bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="moveDateUnknown"
-                checked={formData.moveDateUnknown}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Move date is unknown
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="timeFlexible"
-                checked={formData.timeFlexible}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Move date is flexible
-              </label>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Additional Notes
-              </label>
-              <textarea
-                name="timingNotes"
-                value={formData.timingNotes}
-                onChange={handleInputChange}
-                rows={3}
-                placeholder="Additional notes about timing and scheduling"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </section>
-
         {/* Recommended Crew Size */}
         <section className="bg-white rounded-lg shadow p-4 border-l-4 border-violet-500">
           <h2 className="text-xl font-bold text-violet-900 mb-4">Recommended Crew Size</h2>
@@ -5663,7 +5958,7 @@ export default function MoveWalkthrough() {
         </section>
 
         {/* Quote Display */}
-        {quote.total > 0 && (
+        {quote && quote.total > 0 && (
           <section id="quote-section" className={`rounded-lg shadow-lg p-6 border-2 ${
             isBudgetInsufficient
               ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-300'
@@ -5782,7 +6077,7 @@ export default function MoveWalkthrough() {
         )}
 
         {/* Quote Action Buttons */}
-        {quote.total > 0 && (
+        {quote && quote.total > 0 && (
           <section className="mb-6">
             <div className="grid grid-cols-2 gap-4">
               <button
@@ -5916,7 +6211,7 @@ export default function MoveWalkthrough() {
       </form>
 
       {/* Floating See Quote Button */}
-      {quote.total > 0 && (
+      {quote && quote.total > 0 && (
         <button
           onClick={() => {
             const quoteSection = document.getElementById('quote-section');
