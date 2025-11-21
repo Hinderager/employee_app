@@ -2903,7 +2903,7 @@ export default function MoveWalkthrough() {
                   />
                 </div>
 
-                {formData.pickupLocationType === 'house' && (
+                {formData.pickupLocationType === 'house' && formData.customerHomeAddressType === 'pickup' && (
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -2935,7 +2935,7 @@ export default function MoveWalkthrough() {
                   </div>
                 )}
 
-                {formData.pickupLocationType === 'apartment' && (
+                {formData.pickupLocationType === 'apartment' && formData.customerHomeAddressType === 'pickup' && (
                   <div className="flex gap-2">
                     <input
                       type="text"
@@ -3233,6 +3233,72 @@ export default function MoveWalkthrough() {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
+
+                    {formData.deliveryLocationType === 'house' && formData.customerHomeAddressType === 'delivery' && (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          name="deliveryHouseSquareFeet"
+                          value={isLoadingDeliveryProperty ? '' : formatNumberWithCommas(formData.deliveryHouseSquareFeet)}
+                          onChange={handleInputChange}
+                          placeholder={isLoadingDeliveryProperty ? "Loading..." : "Square Feet"}
+                          disabled={isLoadingDeliveryProperty}
+                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        />
+                        <input
+                          type="text"
+                          name="deliveryZestimate"
+                          value={isLoadingDeliveryProperty ? '' : formatNumberWithCommas(formData.deliveryZestimate)}
+                          onChange={handleInputChange}
+                          placeholder={isLoadingDeliveryProperty ? "Loading..." : "Value"}
+                          disabled={isLoadingDeliveryProperty}
+                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        />
+                        <button
+                          type="button"
+                          onClick={fetchDeliveryPropertyData}
+                          disabled={isLoadingDeliveryProperty}
+                          className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                          title="Fetch property data from Zillow"
+                        >
+                          $
+                        </button>
+                      </div>
+                    )}
+
+                    {formData.deliveryLocationType === 'apartment' && formData.customerHomeAddressType === 'delivery' && (
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          name="deliveryApartmentSquareFeet"
+                          value={isLoadingDeliveryProperty ? '' : formatNumberWithCommas(formData.deliveryApartmentSquareFeet)}
+                          onChange={handleInputChange}
+                          placeholder={isLoadingDeliveryProperty ? "Loading..." : "Square Feet"}
+                          disabled={isLoadingDeliveryProperty}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                        />
+                        <div className="flex-1 flex gap-1 min-w-0">
+                          <input
+                            type="text"
+                            name="deliveryApartmentBedBath"
+                            value={isLoadingDeliveryProperty ? '' : formData.deliveryApartmentBedBath}
+                            onChange={handleInputChange}
+                            placeholder={isLoadingDeliveryProperty ? "Loading..." : "Bed/Bath"}
+                            disabled={isLoadingDeliveryProperty}
+                            className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          />
+                          <button
+                            type="button"
+                            onClick={fetchDeliveryPropertyData}
+                            disabled={isLoadingDeliveryProperty}
+                            className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                            title="Fetch property data from Zillow"
+                          >
+                            sf
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
               </div>
