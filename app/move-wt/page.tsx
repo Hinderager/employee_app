@@ -1723,9 +1723,14 @@ export default function MoveWalkthrough() {
     let movingLabor = MINIMUM_LABOR;
 
     // Storage unit labor calculation
+    console.log('[Storage Labor] pickupLocationType:', formData.pickupLocationType);
     if (formData.pickupLocationType === 'storage-unit') {
       // Calculate labor for each storage unit
       let totalStorageLabor = 0;
+      console.log('[Storage Labor] Quantity:', formData.pickupStorageUnitQuantity);
+      console.log('[Storage Labor] Sizes:', formData.pickupStorageUnitSizes);
+      console.log('[Storage Labor] HowFull:', formData.pickupStorageUnitHowFull);
+      console.log('[Storage Labor] Conditioned:', formData.pickupStorageUnitConditioned);
 
       for (let i = 0; i < formData.pickupStorageUnitQuantity; i++) {
         const sizeValue = formData.pickupStorageUnitSizes[i] || '';
@@ -1751,10 +1756,13 @@ export default function MoveWalkthrough() {
 
         // Formula: SF × howFull% × conditioned factor × 1.7 (2/100*85)
         const unitLabor = avgSF * howFullPercent * conditionedFactor * 1.7;
+        console.log(`[Storage Labor] Unit ${i}: avgSF=${avgSF}, howFullPercent=${howFullPercent}, conditionedFactor=${conditionedFactor}, unitLabor=${unitLabor}`);
         totalStorageLabor += unitLabor;
       }
 
+      console.log('[Storage Labor] totalStorageLabor:', totalStorageLabor, 'MINIMUM_LABOR:', MINIMUM_LABOR);
       movingLabor = totalStorageLabor > MINIMUM_LABOR ? totalStorageLabor : MINIMUM_LABOR;
+      console.log('[Storage Labor] Final movingLabor:', movingLabor);
     } else if (pickupSquareFeet === 0 || sliderValue < 20) {
       // If no square feet or slider value is very low (barely anything), just use minimum labor
       movingLabor = MINIMUM_LABOR;
