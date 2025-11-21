@@ -510,7 +510,7 @@ export default function MoveWalkthrough() {
     let furnishedPercent = 0;
 
     // Get the appropriate square footage and percentage based on location type
-    if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'truck' || formData.pickupLocationType === 'pod') {
+    if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'loading-truck-pod') {
       squareFeet = parseFloat(formData.pickupHouseSquareFeet) || 0;
       furnishedPercent = formData.pickupHowFurnished || 80;
     } else if (formData.pickupLocationType === 'apartment') {
@@ -1781,7 +1781,7 @@ export default function MoveWalkthrough() {
     // Moving Labor - calculate based on square footage and how much is getting moved
     // Get pickup location square footage
     let pickupSquareFeet = 0;
-    if ((formData.pickupLocationType === 'house' || formData.pickupLocationType === 'truck' || formData.pickupLocationType === 'pod') && formData.pickupHouseSquareFeet) {
+    if ((formData.pickupLocationType === 'house' || formData.pickupLocationType === 'loading-truck-pod') && formData.pickupHouseSquareFeet) {
       pickupSquareFeet = parseInt(formData.pickupHouseSquareFeet.replace(/,/g, ''));
     } else if (formData.pickupLocationType === 'apartment' && formData.pickupApartmentSquareFeet) {
       pickupSquareFeet = parseInt(formData.pickupApartmentSquareFeet.replace(/,/g, ''));
@@ -1789,9 +1789,9 @@ export default function MoveWalkthrough() {
       pickupSquareFeet = parseInt(formData.pickupBusinessSquareFeet.replace(/,/g, ''));
     }
 
-    // Get "how much is getting moved" slider value (unified for house, apartment, business, truck, and pod)
+    // Get "how much is getting moved" slider value (unified for house, apartment, business, and loading-truck-pod)
     let sliderValue = 0;
-    if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'apartment' || formData.pickupLocationType === 'business' || formData.pickupLocationType === 'truck' || formData.pickupLocationType === 'pod') {
+    if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'apartment' || formData.pickupLocationType === 'business' || formData.pickupLocationType === 'loading-truck-pod') {
       sliderValue = formData.pickupHowFurnished || 80;
     }
 
@@ -2198,7 +2198,7 @@ export default function MoveWalkthrough() {
         if (packingFactor > 0) {
           // Get start address square feet
           let startSquareFeet = 0;
-          if ((formData.pickupLocationType === 'house' || formData.pickupLocationType === 'truck' || formData.pickupLocationType === 'pod') && formData.pickupHouseSquareFeet) {
+          if ((formData.pickupLocationType === 'house' || formData.pickupLocationType === 'loading-truck-pod') && formData.pickupHouseSquareFeet) {
             startSquareFeet = parseInt(formData.pickupHouseSquareFeet.replace(/,/g, ''));
           } else if (formData.pickupLocationType === 'apartment' && formData.pickupApartmentSquareFeet) {
             startSquareFeet = parseInt(formData.pickupApartmentSquareFeet.replace(/,/g, ''));
@@ -2207,9 +2207,9 @@ export default function MoveWalkthrough() {
           }
 
           if (startSquareFeet > 0) {
-            // Get "how much is getting moved" slider value and convert to percentage (unified for house, apartment, business, truck, and pod)
+            // Get "how much is getting moved" slider value and convert to percentage (unified for house, apartment, business, and loading-truck-pod)
             let sliderValue = 0;
-            if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'apartment' || formData.pickupLocationType === 'business' || formData.pickupLocationType === 'truck' || formData.pickupLocationType === 'pod') {
+            if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'apartment' || formData.pickupLocationType === 'business' || formData.pickupLocationType === 'loading-truck-pod') {
               sliderValue = formData.pickupHowFurnished || 80;
             }
 
@@ -3560,7 +3560,7 @@ export default function MoveWalkthrough() {
                   />
                 </div>
 
-                {(formData.pickupLocationType === 'house' || formData.pickupLocationType === 'truck' || formData.pickupLocationType === 'pod') && (
+                {(formData.pickupLocationType === 'house' || formData.pickupLocationType === 'loading-truck-pod') && (
                   <div className="flex gap-2">
                     <input
                       type="text"
