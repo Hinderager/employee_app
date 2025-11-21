@@ -1683,7 +1683,7 @@ export default function MoveWalkthrough() {
     }
 
     // Travel billing - use calculated distance data
-    if (distanceData && distanceData.totalCharge > 0) {
+    if (distanceData) {
       const FREE_MILES = 15; // Total free miles to distribute across all legs
       let remainingFreeMiles = FREE_MILES;
 
