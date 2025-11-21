@@ -80,7 +80,7 @@ export default function MoveWalkthrough() {
       description: string;
       amount: number;
       discount?: string;
-      subItems?: Array<{ description: string; amount: number }>;
+      subItems?: Array<{ description: string; amount: number; details?: string; alert?: string }>;
     }>,
     total: 0
   });
@@ -1594,7 +1594,7 @@ export default function MoveWalkthrough() {
     const items: Array<{
       description: string;
       amount: number;
-      subItems?: Array<{ description: string; amount: number }>;
+      subItems?: Array<{ description: string; amount: number; details?: string; alert?: string }>;
       discount?: string;
     }> = [];
     let baseRate = 0;
