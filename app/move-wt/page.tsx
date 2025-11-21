@@ -134,6 +134,7 @@ export default function MoveWalkthrough() {
     pickupStorageUnitQuantity: 1,
     pickupStorageUnitSizes: [""],
     pickupStorageUnitHowFull: [""],
+    pickupStorageUnitConditioned: [""],
 
     // Addresses - Delivery
     deliveryAddress: "",
@@ -152,6 +153,7 @@ export default function MoveWalkthrough() {
     deliveryApartmentHowFurnished: 80,
     deliveryStorageUnitQuantity: 1,
     deliveryStorageUnitSizes: [""],
+    deliveryStorageUnitConditioned: [""],
     deliveryPODQuantity: 1,
     deliveryPODSize: "",
     deliveryTruckLength: "",
@@ -173,6 +175,7 @@ export default function MoveWalkthrough() {
     additionalStopApartmentBedBath: "",
     additionalStopStorageUnitQuantity: 1,
     additionalStopStorageUnitSizes: [""],
+    additionalStopStorageUnitConditioned: [""],
     additionalStopNotes: "",
 
     // Property Access - Pickup
@@ -597,6 +600,7 @@ export default function MoveWalkthrough() {
         deliveryApartmentHowFurnished: 80,
         deliveryStorageUnitQuantity: 1,
         deliveryStorageUnitSizes: [""],
+    deliveryStorageUnitConditioned: [""],
         deliveryPODQuantity: 1,
         deliveryPODSize: "",
         deliveryTruckLength: "",
@@ -621,6 +625,7 @@ export default function MoveWalkthrough() {
         additionalStopApartmentBedBath: "",
         additionalStopStorageUnitQuantity: 1,
         additionalStopStorageUnitSizes: [""],
+    additionalStopStorageUnitConditioned: [""],
         additionalStopNotes: ""
       }));
       return;
@@ -644,6 +649,7 @@ export default function MoveWalkthrough() {
         additionalStopApartmentBedBath: "",
         additionalStopStorageUnitQuantity: 1,
         additionalStopStorageUnitSizes: [""],
+    additionalStopStorageUnitConditioned: [""],
         additionalStopNotes: ""
       }));
     }
@@ -1182,7 +1188,7 @@ export default function MoveWalkthrough() {
       phoneName: "",
       email: "",
       emailName: "",
-      customerHomeAddressType: "pickup",
+      customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
 
       // Addresses - Pickup
       pickupAddress: "",
@@ -1218,6 +1224,7 @@ export default function MoveWalkthrough() {
       deliveryApartmentHowFurnished: 80,
       deliveryStorageUnitQuantity: 1,
       deliveryStorageUnitSizes: [""],
+    deliveryStorageUnitConditioned: [""],
       deliveryPODQuantity: 1,
       deliveryPODSize: "",
       deliveryTruckLength: "",
@@ -1238,6 +1245,7 @@ export default function MoveWalkthrough() {
       additionalStopApartmentBedBath: "",
       additionalStopStorageUnitQuantity: 1,
       additionalStopStorageUnitSizes: [""],
+    additionalStopStorageUnitConditioned: [""],
       additionalStopNotes: "",
 
       // Property Access - Pickup
@@ -2954,7 +2962,8 @@ export default function MoveWalkthrough() {
                             ...prev,
                             pickupStorageUnitQuantity: newQty,
                             pickupStorageUnitSizes: prev.pickupStorageUnitSizes.slice(0, newQty),
-                            pickupStorageUnitHowFull: prev.pickupStorageUnitHowFull.slice(0, newQty)
+                            pickupStorageUnitHowFull: prev.pickupStorageUnitHowFull.slice(0, newQty),
+                            pickupStorageUnitConditioned: prev.pickupStorageUnitConditioned.slice(0, newQty)
                           }));
                         }}
                         className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
@@ -2969,7 +2978,8 @@ export default function MoveWalkthrough() {
                             ...prev,
                             pickupStorageUnitQuantity: prev.pickupStorageUnitQuantity + 1,
                             pickupStorageUnitSizes: [...prev.pickupStorageUnitSizes, ""],
-                            pickupStorageUnitHowFull: [...prev.pickupStorageUnitHowFull, ""]
+                            pickupStorageUnitHowFull: [...prev.pickupStorageUnitHowFull, ""],
+                            pickupStorageUnitConditioned: [...prev.pickupStorageUnitConditioned, ""]
                           }));
                         }}
                         className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
@@ -2978,7 +2988,7 @@ export default function MoveWalkthrough() {
                       </button>
                     </div>
                     {Array.from({ length: formData.pickupStorageUnitQuantity }).map((_, index) => (
-                      <div key={index} className="flex gap-2">
+                      <div key={index} className="grid grid-cols-3 gap-2">
                         <select
                           value={formData.pickupStorageUnitSizes[index] || ""}
                           onChange={(e) => {
@@ -2986,9 +2996,9 @@ export default function MoveWalkthrough() {
                             newSizes[index] = e.target.value;
                             setFormData(prev => ({ ...prev, pickupStorageUnitSizes: newSizes }));
                           }}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
-                          <option value="">Unit {index + 1} Size</option>
+                          <option value="">Size</option>
                           <option value="<100sf">&lt;100sf</option>
                           <option value="100-200sf">100-200sf</option>
                           <option value="200-300sf">200-300sf</option>
@@ -3002,13 +3012,46 @@ export default function MoveWalkthrough() {
                             newHowFull[index] = e.target.value;
                             setFormData(prev => ({ ...prev, pickupStorageUnitHowFull: newHowFull }));
                           }}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                         >
                           <option value="">How Full</option>
                           <option value="light">Light</option>
                           <option value="medium">Medium</option>
                           <option value="packed">Packed</option>
                         </select>
+                        <div className="flex flex-col items-center justify-center">
+                          <span className="text-sm font-medium text-gray-700 mb-1">Conditioned</span>
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`pickupStorageConditioned-${index}`}
+                                checked={formData.pickupStorageUnitConditioned[index] === "yes"}
+                                onChange={() => {
+                                  const newConditioned = [...formData.pickupStorageUnitConditioned];
+                                  newConditioned[index] = "yes";
+                                  setFormData(prev => ({ ...prev, pickupStorageUnitConditioned: newConditioned }));
+                                }}
+                                className="w-3 h-3 text-blue-600"
+                              />
+                              <span className="text-xs">Yes</span>
+                            </label>
+                            <label className="flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`pickupStorageConditioned-${index}`}
+                                checked={formData.pickupStorageUnitConditioned[index] === "no"}
+                                onChange={() => {
+                                  const newConditioned = [...formData.pickupStorageUnitConditioned];
+                                  newConditioned[index] = "no";
+                                  setFormData(prev => ({ ...prev, pickupStorageUnitConditioned: newConditioned }));
+                                }}
+                                className="w-3 h-3 text-blue-600"
+                              />
+                              <span className="text-xs">No</span>
+                            </label>
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -3438,7 +3481,8 @@ export default function MoveWalkthrough() {
                             setFormData(prev => ({
                               ...prev,
                               additionalStopStorageUnitQuantity: newQty,
-                              additionalStopStorageUnitSizes: prev.additionalStopStorageUnitSizes.slice(0, newQty)
+                              additionalStopStorageUnitSizes: prev.additionalStopStorageUnitSizes.slice(0, newQty),
+                              additionalStopStorageUnitConditioned: prev.additionalStopStorageUnitConditioned.slice(0, newQty)
                             }));
                           }}
                           className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
@@ -3452,7 +3496,8 @@ export default function MoveWalkthrough() {
                             setFormData(prev => ({
                               ...prev,
                               additionalStopStorageUnitQuantity: prev.additionalStopStorageUnitQuantity + 1,
-                              additionalStopStorageUnitSizes: [...prev.additionalStopStorageUnitSizes, ""]
+                              additionalStopStorageUnitSizes: [...prev.additionalStopStorageUnitSizes, ""],
+                              additionalStopStorageUnitConditioned: [...prev.additionalStopStorageUnitConditioned, ""]
                             }));
                           }}
                           className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
@@ -3461,18 +3506,52 @@ export default function MoveWalkthrough() {
                         </button>
                       </div>
                       {Array.from({ length: formData.additionalStopStorageUnitQuantity }).map((_, index) => (
-                        <input
-                          key={index}
-                          type="text"
-                          value={formData.additionalStopStorageUnitSizes[index] || ""}
-                          onChange={(e) => {
-                            const newSizes = [...formData.additionalStopStorageUnitSizes];
-                            newSizes[index] = e.target.value;
-                            setFormData(prev => ({ ...prev, additionalStopStorageUnitSizes: newSizes }));
-                          }}
-                          placeholder={`Unit ${index + 1} Size`}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
+                        <div key={index} className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={formData.additionalStopStorageUnitSizes[index] || ""}
+                            onChange={(e) => {
+                              const newSizes = [...formData.additionalStopStorageUnitSizes];
+                              newSizes[index] = e.target.value;
+                              setFormData(prev => ({ ...prev, additionalStopStorageUnitSizes: newSizes }));
+                            }}
+                            placeholder={`Unit ${index + 1} Size`}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                          <div className="flex flex-col items-center justify-center">
+                            <span className="text-sm font-medium text-gray-700 mb-1">Conditioned</span>
+                            <div className="flex items-center gap-2">
+                              <label className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`additionalStopStorageConditioned-${index}`}
+                                  checked={formData.additionalStopStorageUnitConditioned[index] === "yes"}
+                                  onChange={() => {
+                                    const newConditioned = [...formData.additionalStopStorageUnitConditioned];
+                                    newConditioned[index] = "yes";
+                                    setFormData(prev => ({ ...prev, additionalStopStorageUnitConditioned: newConditioned }));
+                                  }}
+                                  className="w-3 h-3 text-purple-600"
+                                />
+                                <span className="text-xs">Yes</span>
+                              </label>
+                              <label className="flex items-center gap-1 cursor-pointer">
+                                <input
+                                  type="radio"
+                                  name={`additionalStopStorageConditioned-${index}`}
+                                  checked={formData.additionalStopStorageUnitConditioned[index] === "no"}
+                                  onChange={() => {
+                                    const newConditioned = [...formData.additionalStopStorageUnitConditioned];
+                                    newConditioned[index] = "no";
+                                    setFormData(prev => ({ ...prev, additionalStopStorageUnitConditioned: newConditioned }));
+                                  }}
+                                  className="w-3 h-3 text-purple-600"
+                                />
+                                <span className="text-xs">No</span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   )}
@@ -3631,6 +3710,7 @@ export default function MoveWalkthrough() {
                           deliveryApartmentHowFurnished: 80,
                           deliveryStorageUnitQuantity: 1,
                           deliveryStorageUnitSizes: [""],
+    deliveryStorageUnitConditioned: [""],
                           deliveryPODQuantity: 1,
                           deliveryPODSize: "",
                           deliveryTruckLength: "",
@@ -3710,7 +3790,8 @@ export default function MoveWalkthrough() {
                           setFormData(prev => ({
                             ...prev,
                             deliveryStorageUnitQuantity: newQty,
-                            deliveryStorageUnitSizes: prev.deliveryStorageUnitSizes.slice(0, newQty)
+                            deliveryStorageUnitSizes: prev.deliveryStorageUnitSizes.slice(0, newQty),
+                            deliveryStorageUnitConditioned: prev.deliveryStorageUnitConditioned.slice(0, newQty)
                           }));
                         }}
                         className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
@@ -3724,7 +3805,8 @@ export default function MoveWalkthrough() {
                           setFormData(prev => ({
                             ...prev,
                             deliveryStorageUnitQuantity: prev.deliveryStorageUnitQuantity + 1,
-                            deliveryStorageUnitSizes: [...prev.deliveryStorageUnitSizes, ""]
+                            deliveryStorageUnitSizes: [...prev.deliveryStorageUnitSizes, ""],
+                            deliveryStorageUnitConditioned: [...prev.deliveryStorageUnitConditioned, ""]
                           }));
                         }}
                         className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
@@ -3733,18 +3815,52 @@ export default function MoveWalkthrough() {
                       </button>
                     </div>
                     {Array.from({ length: formData.deliveryStorageUnitQuantity }).map((_, index) => (
-                      <input
-                        key={index}
-                        type="text"
-                        value={formData.deliveryStorageUnitSizes[index] || ""}
-                        onChange={(e) => {
-                          const newSizes = [...formData.deliveryStorageUnitSizes];
-                          newSizes[index] = e.target.value;
-                          setFormData(prev => ({ ...prev, deliveryStorageUnitSizes: newSizes }));
-                        }}
-                        placeholder={`Unit ${index + 1} Size`}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
+                      <div key={index} className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={formData.deliveryStorageUnitSizes[index] || ""}
+                          onChange={(e) => {
+                            const newSizes = [...formData.deliveryStorageUnitSizes];
+                            newSizes[index] = e.target.value;
+                            setFormData(prev => ({ ...prev, deliveryStorageUnitSizes: newSizes }));
+                          }}
+                          placeholder={`Unit ${index + 1} Size`}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <div className="flex flex-col items-center justify-center">
+                          <span className="text-sm font-medium text-gray-700 mb-1">Conditioned</span>
+                          <div className="flex items-center gap-2">
+                            <label className="flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`deliveryStorageConditioned-${index}`}
+                                checked={formData.deliveryStorageUnitConditioned[index] === "yes"}
+                                onChange={() => {
+                                  const newConditioned = [...formData.deliveryStorageUnitConditioned];
+                                  newConditioned[index] = "yes";
+                                  setFormData(prev => ({ ...prev, deliveryStorageUnitConditioned: newConditioned }));
+                                }}
+                                className="w-3 h-3 text-green-600"
+                              />
+                              <span className="text-xs">Yes</span>
+                            </label>
+                            <label className="flex items-center gap-1 cursor-pointer">
+                              <input
+                                type="radio"
+                                name={`deliveryStorageConditioned-${index}`}
+                                checked={formData.deliveryStorageUnitConditioned[index] === "no"}
+                                onChange={() => {
+                                  const newConditioned = [...formData.deliveryStorageUnitConditioned];
+                                  newConditioned[index] = "no";
+                                  setFormData(prev => ({ ...prev, deliveryStorageUnitConditioned: newConditioned }));
+                                }}
+                                className="w-3 h-3 text-green-600"
+                              />
+                              <span className="text-xs">No</span>
+                            </label>
+                          </div>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 )}
