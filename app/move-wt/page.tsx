@@ -2720,6 +2720,7 @@ export default function MoveWalkthrough() {
                     <>
                       <option value="house">House</option>
                       <option value="apartment">Apartment</option>
+                      <option value="business">Business</option>
                       <option value="other">Other</option>
                     </>
                   ) : (
@@ -2733,6 +2734,7 @@ export default function MoveWalkthrough() {
                           <option value="pod">POD</option>
                         </>
                       )}
+                      <option value="business">Business</option>
                       <option value="other">Other</option>
                     </>
                   )}
@@ -3061,7 +3063,8 @@ export default function MoveWalkthrough() {
                       <option value="truck">Truck</option>
                     </>
                   )}
-                  <option value="other">Other</option>
+                  <option value="business">Business</option>
+                      <option value="other">Other</option>
                 </select>
 
 
@@ -3384,7 +3387,8 @@ export default function MoveWalkthrough() {
                         <option value="pod">POD</option>
                       </>
                     )}
-                    <option value="other">Other</option>
+                    <option value="business">Business</option>
+                      <option value="other">Other</option>
                   </select>
 
                   {formData.additionalStopLocationType === 'apartment' && (
