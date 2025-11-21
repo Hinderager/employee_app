@@ -554,6 +554,56 @@ export default function MoveWalkthrough() {
       return;
     }
 
+    // Handle service type change to labor-only
+    if (name === 'serviceType' && value === 'labor-only') {
+      setFormData(prev => ({
+        ...prev,
+        serviceType: value,
+        customerHomeAddressType: 'pickup',
+        // Clear delivery address fields
+        deliveryAddress: "",
+        deliveryUnit: "",
+        deliveryCity: "",
+        deliveryState: "",
+        deliveryZip: "",
+        deliveryLocationType: "house",
+        deliveryLocationOther: "",
+        deliveryHouseSquareFeet: "",
+        deliveryZestimate: "",
+        deliveryApartmentSquareFeet: "",
+        deliveryApartmentBedBath: "",
+        deliveryApartmentHowFurnished: 80,
+        deliveryStorageUnitQuantity: 1,
+        deliveryStorageUnitSizes: [""],
+        deliveryPODQuantity: 1,
+        deliveryPODSize: "",
+        deliveryTruckLength: "",
+        deliveryAddressUnknown: false,
+        deliveryStairs: 1,
+        deliveryNarrowDoorways: false,
+        deliveryElevator: false,
+        deliveryParkingDistance: "close",
+        deliveryAccessNotes: "",
+        // Deselect and clear additional stop
+        hasAdditionalStop: false,
+        additionalStopAddress: "",
+        additionalStopUnit: "",
+        additionalStopCity: "",
+        additionalStopState: "",
+        additionalStopZip: "",
+        additionalStopLocationType: "house",
+        additionalStopLocationOther: "",
+        additionalStopHouseSquareFeet: "",
+        additionalStopZestimate: "",
+        additionalStopHowFurnished: 80,
+        additionalStopApartmentBedBath: "",
+        additionalStopStorageUnitQuantity: 1,
+        additionalStopStorageUnitSizes: [""],
+        additionalStopNotes: ""
+      }));
+      return;
+    }
+
     // Clear all additional stop fields when clicking the additional stop checkbox
     if (name === 'hasAdditionalStop' && type === 'checkbox') {
       setFormData(prev => ({
