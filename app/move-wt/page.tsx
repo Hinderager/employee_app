@@ -2754,7 +2754,7 @@ export default function MoveWalkthrough() {
       {/* Recent Forms Quick Links */}
       {recentForms.length > 0 && (
         <div className="px-4 py-3 bg-gray-100 border-b border-gray-200">
-          <p className="text-xs text-gray-500 mb-2 text-center">Recent Walk-Throughs</p>
+          <p className="text-xs text-gray-500 mb-2 text-center">Recent Leads</p>
           <div className="grid grid-cols-2 gap-2">
             {recentForms.map((form) => (
               <button
