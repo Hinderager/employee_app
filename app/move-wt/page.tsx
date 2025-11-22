@@ -3337,7 +3337,7 @@ export default function MoveWalkthrough() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Walk-Through Date
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <div className="relative min-w-0 flex-1 max-w-[140px]">
                   <input
                     type="date"
@@ -3390,7 +3390,7 @@ export default function MoveWalkthrough() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Move Date
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 <div className="relative min-w-0 flex-1 max-w-[140px]">
                   <input
                     type="date"
