@@ -3337,8 +3337,8 @@ export default function MoveWalkthrough() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Walk-Through Date
               </label>
-              <div className="flex items-center gap-3">
-                <div className="relative min-w-0 flex-1 max-w-[140px]">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0 w-[115px]">
                   <input
                     type="date"
                     name="walkThroughDate"
@@ -3350,7 +3350,7 @@ export default function MoveWalkthrough() {
                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">mm/dd/yyyy</span>
                   )}
                 </div>
-                <div className="relative min-w-0 flex-1 max-w-[140px]">
+                <div className="relative flex-shrink-0 w-[115px]">
                   <input
                     type="time"
                     name="walkThroughTime"
@@ -3390,8 +3390,8 @@ export default function MoveWalkthrough() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Move Date
               </label>
-              <div className="flex items-center gap-3">
-                <div className="relative min-w-0 flex-1 max-w-[140px]">
+              <div className="flex items-center gap-4">
+                <div className="relative flex-shrink-0 w-[115px]">
                   <input
                     type="date"
                     name="preferredDate"
@@ -3403,7 +3403,7 @@ export default function MoveWalkthrough() {
                     <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">mm/dd/yyyy</span>
                   )}
                 </div>
-                <div className="relative min-w-0 flex-1 max-w-[140px]">
+                <div className="relative flex-shrink-0 w-[115px]">
                   <input
                     type="time"
                     name="preferredTime"
@@ -3681,7 +3681,7 @@ export default function MoveWalkthrough() {
             {/* Start Address / Customer Address Section */}
             <div className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded-r-lg">
               <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   <h3 className="text-lg font-semibold text-blue-900">
                     {formData.serviceType === 'labor-only' ? 'Customer Address' : 'Start Address'}
                   </h3>
