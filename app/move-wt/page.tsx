@@ -925,7 +925,7 @@ export default function MoveWalkthrough() {
       }
 
       // Check if phone search returned multiple forms
-      if (result.forms && result.forms.length > 0) {
+      if (result.success && result.address) {
         // Show selection dialog for multiple forms
         let message = `Found ${result.forms.length} saved form(s) for this contact:\n\n`;
         result.forms.forEach((form: any, index: number) => {
@@ -972,15 +972,15 @@ export default function MoveWalkthrough() {
         const selectedForm = result.forms[selectedIndex];
 
         // Load the selected form
-        setAddress(selectedForm.address);
-        setJobNumber(selectedForm.jobNumber);
-        setFolderUrl(selectedForm.folderUrl || '');
+        setAddress(result.address);
+        setJobNumber(result.job_number);
+        setFolderUrl(result.folderUrl || '');
         setIsFolderLinkCopied(false);
         setIsFormSaved(true);
 
         // Capture quote number if present
-        if (selectedForm.quoteNumber) {
-          setQuoteNumber(selectedForm.quoteNumber);
+        if (result.quoteNumber) {
+          setQuoteNumber(result.quoteNumber);
         }
 
         // Load customer info if available
@@ -1000,8 +1000,8 @@ export default function MoveWalkthrough() {
         }
 
         // Load form data
-        if (selectedForm.formData) {
-          const { phones: savedPhones, emails: savedEmails, ...restFormData } = selectedForm.formData;
+        if (result.existingFormData) {
+          const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
 
           setFormData(prev => ({
             ...prev,
@@ -1096,16 +1096,16 @@ export default function MoveWalkthrough() {
       }
 
       // If multiple forms, load the first one (most recent)
-      if (result.forms && result.forms.length > 0) {
-        const selectedForm = result.forms[0];
-        setAddress(selectedForm.address);
-        setJobNumber(selectedForm.jobNumber);
-        setFolderUrl(selectedForm.folderUrl || '');
+      if (result.success && result.address) {
+        
+        setAddress(result.address);
+        setJobNumber(result.job_number);
+        setFolderUrl(result.folderUrl || '');
         setIsFolderLinkCopied(false);
         setIsFormSaved(true);
 
-        if (selectedForm.quoteNumber) {
-          setQuoteNumber(selectedForm.quoteNumber);
+        if (result.quoteNumber) {
+          setQuoteNumber(result.quoteNumber);
         }
 
         if (result.customerInfo) {
@@ -1123,8 +1123,8 @@ export default function MoveWalkthrough() {
           }));
         }
 
-        if (selectedForm.formData) {
-          const { phones: savedPhones, emails: savedEmails, ...restFormData } = selectedForm.formData;
+        if (result.existingFormData) {
+          const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
           setFormData(prev => ({ ...prev, ...restFormData }));
           if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
             setPhones(savedPhones);
