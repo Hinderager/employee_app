@@ -3338,26 +3338,30 @@ export default function MoveWalkthrough() {
                 Walk-Through Date
               </label>
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  name="walkThroughDate"
-                  value={formData.walkThroughDate}
-                  onChange={handleInputChange}
-                  placeholder="mm/dd/yyyy"
-                  onFocus={(e) => e.target.type = 'date'}
-                  onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                  className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 flex-1 max-w-[140px]"
-                />
-                <input
-                  type="text"
-                  name="walkThroughTime"
-                  value={formData.walkThroughTime}
-                  onChange={handleInputChange}
-                  placeholder="--:-- --"
-                  onFocus={(e) => e.target.type = 'time'}
-                  onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                  className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 flex-1 max-w-[140px]"
-                />
+                <div className="relative min-w-0 flex-1 max-w-[140px]">
+                  <input
+                    type="date"
+                    name="walkThroughDate"
+                    value={formData.walkThroughDate}
+                    onChange={handleInputChange}
+                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                  />
+                  {!formData.walkThroughDate && (
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">mm/dd/yyyy</span>
+                  )}
+                </div>
+                <div className="relative min-w-0 flex-1 max-w-[140px]">
+                  <input
+                    type="time"
+                    name="walkThroughTime"
+                    value={formData.walkThroughTime}
+                    onChange={handleInputChange}
+                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                  />
+                  {!formData.walkThroughTime && (
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">--:-- --</span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-2 mt-2">
                 <select
@@ -3387,26 +3391,30 @@ export default function MoveWalkthrough() {
                 Move Date
               </label>
               <div className="flex items-center gap-2">
-                <input
-                  type="text"
-                  name="preferredDate"
-                  value={formData.preferredDate}
-                  onChange={handleInputChange}
-                  placeholder="mm/dd/yyyy"
-                  onFocus={(e) => e.target.type = 'date'}
-                  onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                  className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 flex-1 max-w-[140px]"
-                />
-                <input
-                  type="text"
-                  name="preferredTime"
-                  value={formData.preferredTime}
-                  onChange={handleInputChange}
-                  placeholder="--:-- --"
-                  onFocus={(e) => e.target.type = 'time'}
-                  onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                  className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 flex-1 max-w-[140px]"
-                />
+                <div className="relative min-w-0 flex-1 max-w-[140px]">
+                  <input
+                    type="date"
+                    name="preferredDate"
+                    value={formData.preferredDate}
+                    onChange={handleInputChange}
+                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                  />
+                  {!formData.preferredDate && (
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">mm/dd/yyyy</span>
+                  )}
+                </div>
+                <div className="relative min-w-0 flex-1 max-w-[140px]">
+                  <input
+                    type="time"
+                    name="preferredTime"
+                    value={formData.preferredTime}
+                    onChange={handleInputChange}
+                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                  />
+                  {!formData.preferredTime && (
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">--:-- --</span>
+                  )}
+                </div>
               </div>
               <div className="flex items-center gap-2 mt-2">
                 <select
