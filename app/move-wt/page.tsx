@@ -302,6 +302,7 @@ export default function MoveWalkthrough() {
     // Timing
     walkThroughDate: "",
     preferredDate: "",
+    preferredTime: "",
     moveDateUnknown: false,
     timeFlexible: false,
     readyToSchedule: false,
@@ -1265,6 +1266,7 @@ export default function MoveWalkthrough() {
       // Timing
       walkThroughDate: "",
       preferredDate: "",
+    preferredTime: "",
       moveDateUnknown: false,
       timeFlexible: false,
       readyToSchedule: false,
@@ -1759,6 +1761,7 @@ export default function MoveWalkthrough() {
       // Timing
       walkThroughDate: "",
       preferredDate: "",
+    preferredTime: "",
       moveDateUnknown: false,
       timeFlexible: false,
       readyToSchedule: false,
@@ -3275,6 +3278,7 @@ export default function MoveWalkthrough() {
                   // Timing (clear)
                   walkThroughDate: "",
                   preferredDate: "",
+    preferredTime: "",
                   moveDateUnknown: false,
                   timeFlexible: false,
                   readyToSchedule: false,
@@ -3334,13 +3338,31 @@ export default function MoveWalkthrough() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Move Date
               </label>
-              <input
-                type="date"
-                name="preferredDate"
-                value={formData.preferredDate}
-                onChange={handleInputChange}
-                className="max-w-sm bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
+              <div className="flex items-center gap-2">
+                <input
+                  type="date"
+                  name="preferredDate"
+                  value={formData.preferredDate}
+                  onChange={handleInputChange}
+                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <input
+                  type="time"
+                  name="preferredTime"
+                  value={formData.preferredTime}
+                  onChange={handleInputChange}
+                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium"
+                  onClick={() => {
+                    alert('Schedule functionality coming soon');
+                  }}
+                >
+                  Schedule
+                </button>
+              </div>
             </div>
 
             <div className="flex items-center">
