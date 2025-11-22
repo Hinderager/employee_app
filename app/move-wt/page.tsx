@@ -3356,6 +3356,7 @@ export default function MoveWalkthrough() {
                     name="walkThroughTime"
                     value={formData.walkThroughTime}
                     onChange={handleInputChange}
+                    step="900"
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.walkThroughTime && (
@@ -3409,6 +3410,7 @@ export default function MoveWalkthrough() {
                     name="preferredTime"
                     value={formData.preferredTime}
                     onChange={handleInputChange}
+                    step="900"
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.preferredTime && (
