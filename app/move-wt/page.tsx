@@ -289,6 +289,8 @@ export default function MoveWalkthrough() {
     packingAttic: false,
     packingWardrobeBoxes: false,
     packingFragileItems: false,
+    packingBedrooms: false,
+    packingNotes: "",
     junkRemovalNeeded: false,
     junkRemovalAmount: "",
     junkRemovalDetails: "",
@@ -1525,6 +1527,8 @@ export default function MoveWalkthrough() {
       packingAttic: false,
       packingWardrobeBoxes: false,
       packingFragileItems: false,
+    packingBedrooms: false,
+    packingNotes: "",
       junkRemovalNeeded: false,
       junkRemovalAmount: "",
       junkRemovalDetails: "",
@@ -3038,6 +3042,8 @@ export default function MoveWalkthrough() {
                   packingAttic: false,
                   packingWardrobeBoxes: false,
                   packingFragileItems: false,
+    packingBedrooms: false,
+    packingNotes: "",
                   junkRemovalNeeded: false,
                   junkRemovalAmount: "",
                   junkRemovalDetails: "",
@@ -5805,6 +5811,19 @@ export default function MoveWalkthrough() {
                 <div className="flex items-center ml-6">
                   <input
                     type="checkbox"
+                    name="packingBedrooms"
+                    checked={formData.packingBedrooms}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label className="ml-2 text-sm text-gray-700">
+                    Bedrooms
+                  </label>
+                </div>
+
+                <div className="flex items-center ml-6">
+                  <input
+                    type="checkbox"
                     name="packingWardrobeBoxes"
                     checked={formData.packingWardrobeBoxes}
                     onChange={handleInputChange}
@@ -5826,6 +5845,20 @@ export default function MoveWalkthrough() {
                   <label className="ml-2 text-sm text-gray-700">
                     Lots of Fragile Items
                   </label>
+                </div>
+
+                <div className="mt-3 ml-6">
+                  <label className="block text-sm text-gray-700 mb-1">
+                    Packing Notes
+                  </label>
+                  <textarea
+                    name="packingNotes"
+                    value={formData.packingNotes}
+                    onChange={handleInputChange}
+                    rows={2}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="Additional packing details..."
+                  />
                 </div>
               </>
             )}
