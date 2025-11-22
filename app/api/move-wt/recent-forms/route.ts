@@ -3,17 +3,23 @@ import { createClient } from '@supabase/supabase-js';
 
 // Force dynamic rendering (uses request.url)
 export const dynamic = 'force-dynamic';
+// Disable all caching completely
+export const revalidate = 0;
+// Force no store for all fetch requests
+export const fetchCache = 'force-no-store';
 
-// Initialize Supabase client
-const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
-const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function GET(request: NextRequest) {
   try {
     // Get the limit from query params, default to 6
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '6', 10);
+    // Initialize Supabase client inside the function to avoid Vercel env var caching bug
+    // This ensures fresh environment variables on every request
+    const supabaseUrl = process.env.EMPLOYEE_APP_SUPABASE_URL!;
+    const supabaseKey = process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
+
 
     // Fetch the most recent move quotes
     const { data, error } = await supabase
@@ -55,10 +61,21 @@ export async function GET(request: NextRequest) {
       };
     });
 
-    return NextResponse.json({
-      success: true,
-      forms,
-    });
+    // Return with aggressive no-cache headers
+    return NextResponse.json(
+      {
+        success: true,
+        forms,
+      },
+      {
+        headers: {
+          'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+          'Surrogate-Control': 'no-store',
+        },
+      }
+    );
 
   } catch (error) {
     console.error('[recent-forms] Unexpected error:', error);
