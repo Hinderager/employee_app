@@ -2764,8 +2764,8 @@ export default function MoveWalkthrough() {
                 className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm text-left"
               >
                 <div className="font-semibold truncate">{form.displayName || 'Unknown'}</div>
-                {form.displayDate && (
-                  <div className="text-gray-400 text-xs">{form.displayDate}</div>
+                {form.phoneNumber && (
+                  <div className="text-gray-500 text-xs">{form.phoneNumber}</div>
                 )}
               </button>
             ))}
