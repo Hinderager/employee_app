@@ -1263,6 +1263,7 @@ export default function MoveWalkthrough() {
       estimatedValue: "",
 
       // Timing
+      walkThroughDate: "",
       preferredDate: "",
       moveDateUnknown: false,
       timeFlexible: false,
@@ -1756,6 +1757,7 @@ export default function MoveWalkthrough() {
       estimatedValue: "",
 
       // Timing
+      walkThroughDate: "",
       preferredDate: "",
       moveDateUnknown: false,
       timeFlexible: false,
@@ -3271,6 +3273,7 @@ export default function MoveWalkthrough() {
                   estimatedValue: "",
 
                   // Timing (clear)
+                  walkThroughDate: "",
                   preferredDate: "",
                   moveDateUnknown: false,
                   timeFlexible: false,
