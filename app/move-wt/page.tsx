@@ -3347,7 +3347,7 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.walkThroughDate && (
-                    <span className="absolute inset-[1px] flex items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md hidden max-md:flex">mm/dd/yyyy</span>
+                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex md:hidden">mm/dd/yyyy</span>
                   )}
                 </div>
                 <div className="relative flex-shrink-0 w-[105px]">
@@ -3360,7 +3360,7 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.walkThroughTime && (
-                    <span className="absolute inset-[1px] flex items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md hidden max-md:flex">--:-- --</span>
+                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex md:hidden">--:-- --</span>
                   )}
                 </div>
               </div>
@@ -3401,7 +3401,7 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.preferredDate && (
-                    <span className="absolute inset-[1px] flex items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md hidden max-md:flex">mm/dd/yyyy</span>
+                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex md:hidden">mm/dd/yyyy</span>
                   )}
                 </div>
                 <div className="relative flex-shrink-0 w-[105px]">
@@ -3414,7 +3414,7 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.preferredTime && (
-                    <span className="absolute inset-[1px] flex items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md hidden max-md:flex">--:-- --</span>
+                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex md:hidden">--:-- --</span>
                   )}
                 </div>
               </div>
