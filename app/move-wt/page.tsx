@@ -3339,17 +3339,23 @@ export default function MoveWalkthrough() {
               </label>
               <div className="flex items-center gap-2">
                 <input
-                  type="date"
+                  type="text"
                   name="walkThroughDate"
                   value={formData.walkThroughDate}
                   onChange={handleInputChange}
+                  placeholder="mm/dd/yyyy"
+                  onFocus={(e) => e.target.type = 'date'}
+                  onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
                   className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <input
-                  type="time"
+                  type="text"
                   name="walkThroughTime"
                   value={formData.walkThroughTime}
                   onChange={handleInputChange}
+                  placeholder="--:-- --"
+                  onFocus={(e) => e.target.type = 'time'}
+                  onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
                   className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <select
@@ -3380,17 +3386,23 @@ export default function MoveWalkthrough() {
               </label>
               <div className="flex items-center gap-2">
                 <input
-                  type="date"
+                  type="text"
                   name="preferredDate"
                   value={formData.preferredDate}
                   onChange={handleInputChange}
+                  placeholder="mm/dd/yyyy"
+                  onFocus={(e) => e.target.type = 'date'}
+                  onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
                   className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <input
-                  type="time"
+                  type="text"
                   name="preferredTime"
                   value={formData.preferredTime}
                   onChange={handleInputChange}
+                  placeholder="--:-- --"
+                  onFocus={(e) => e.target.type = 'time'}
+                  onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
                   className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 <select
