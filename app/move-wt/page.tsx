@@ -3332,7 +3332,7 @@ export default function MoveWalkthrough() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Preferred Move Date
+                Move Date
               </label>
               <input
                 type="date"
