@@ -3992,9 +3992,14 @@ export default function MoveWalkthrough() {
                   </label>
                   <input
                     type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     name="pickupZip"
                     value={formData.pickupZip}
-                    onChange={handleInputChange}
+                    onChange={(e) => {
+                      const numericValue = e.target.value.replace(/\D/g, '');
+                      setFormData(prev => ({ ...prev, pickupZip: numericValue }));
+                    }}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -4213,9 +4218,14 @@ export default function MoveWalkthrough() {
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       name="deliveryZip"
                       value={formData.deliveryZip}
-                      onChange={handleInputChange}
+                      onChange={(e) => {
+                        const numericValue = e.target.value.replace(/\D/g, '');
+                        setFormData(prev => ({ ...prev, deliveryZip: numericValue }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -4476,9 +4486,14 @@ export default function MoveWalkthrough() {
                     </label>
                     <input
                       type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                       name="additionalStopZip"
                       value={formData.additionalStopZip}
-                      onChange={handleInputChange}
+                      onChange={(e) => {
+                        const numericValue = e.target.value.replace(/\D/g, '');
+                        setFormData(prev => ({ ...prev, additionalStopZip: numericValue }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -4831,9 +4846,14 @@ export default function MoveWalkthrough() {
                       </label>
                       <input
                         type="text"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
                         name="deliveryZip"
                         value={formData.deliveryZip}
-                        onChange={handleInputChange}
+                        onChange={(e) => {
+                          const numericValue = e.target.value.replace(/\D/g, '');
+                          setFormData(prev => ({ ...prev, deliveryZip: numericValue }));
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
