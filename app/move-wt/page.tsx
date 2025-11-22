@@ -3338,7 +3338,7 @@ export default function MoveWalkthrough() {
                 Walk-Through Date
               </label>
               <div className="flex items-center gap-6">
-                <div className="relative flex-shrink-0 w-[105px] lg:w-[160px]">
+                <div className="relative flex-shrink-0 w-[105px] xl:w-[160px]">
                   <input
                     type="date"
                     name="walkThroughDate"
@@ -3347,10 +3347,10 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.walkThroughDate && (
-                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex lg:hidden">mm/dd/yyyy</span>
+                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex xl:hidden">mm/dd/yyyy</span>
                   )}
                 </div>
-                <div className="relative flex-shrink-0 w-[105px] lg:w-[160px]">
+                <div className="relative flex-shrink-0 w-[105px] xl:w-[160px]">
                   <input
                     type="time"
                     name="walkThroughTime"
@@ -3360,7 +3360,7 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.walkThroughTime && (
-                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex lg:hidden">--:-- --</span>
+                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex xl:hidden">--:-- --</span>
                   )}
                 </div>
               </div>
@@ -3392,7 +3392,7 @@ export default function MoveWalkthrough() {
                 Move Date
               </label>
               <div className="flex items-center gap-6">
-                <div className="relative flex-shrink-0 w-[105px] lg:w-[160px]">
+                <div className="relative flex-shrink-0 w-[105px] xl:w-[160px]">
                   <input
                     type="date"
                     name="preferredDate"
@@ -3401,10 +3401,10 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.preferredDate && (
-                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex lg:hidden">mm/dd/yyyy</span>
+                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex xl:hidden">mm/dd/yyyy</span>
                   )}
                 </div>
-                <div className="relative flex-shrink-0 w-[105px] lg:w-[160px]">
+                <div className="relative flex-shrink-0 w-[105px] xl:w-[160px]">
                   <input
                     type="time"
                     name="preferredTime"
@@ -3414,7 +3414,7 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   />
                   {!formData.preferredTime && (
-                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex lg:hidden">--:-- --</span>
+                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex xl:hidden">--:-- --</span>
                   )}
                 </div>
               </div>
