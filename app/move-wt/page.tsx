@@ -3337,7 +3337,7 @@ export default function MoveWalkthrough() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Walk-Through Date
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
                   name="walkThroughDate"
@@ -3346,7 +3346,7 @@ export default function MoveWalkthrough() {
                   placeholder="mm/dd/yyyy"
                   onFocus={(e) => e.target.type = 'date'}
                   onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 flex-shrink"
                 />
                 <input
                   type="text"
@@ -3356,10 +3356,10 @@ export default function MoveWalkthrough() {
                   placeholder="--:-- --"
                   onFocus={(e) => e.target.type = 'time'}
                   onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 flex-shrink"
                 />
               </div>
-              <div className="flex items-center gap-2 justify-end mt-2">
+              <div className="flex items-center gap-2 mt-2">
                 <select
                   name="walkThroughDuration"
                   value={formData.walkThroughDuration}
@@ -3386,7 +3386,7 @@ export default function MoveWalkthrough() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Move Date
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
                   name="preferredDate"
@@ -3395,7 +3395,7 @@ export default function MoveWalkthrough() {
                   placeholder="mm/dd/yyyy"
                   onFocus={(e) => e.target.type = 'date'}
                   onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 flex-shrink"
                 />
                 <input
                   type="text"
@@ -3405,10 +3405,10 @@ export default function MoveWalkthrough() {
                   placeholder="--:-- --"
                   onFocus={(e) => e.target.type = 'time'}
                   onBlur={(e) => { if (!e.target.value) e.target.type = 'text'; }}
-                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-w-0 flex-shrink"
                 />
               </div>
-              <div className="flex items-center gap-2 justify-end mt-2">
+              <div className="flex items-center gap-2 mt-2">
                 <select
                   name="moveDuration"
                   value={formData.moveDuration}
