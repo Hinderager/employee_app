@@ -300,6 +300,7 @@ export default function MoveWalkthrough() {
     estimatedValue: "",
 
     // Timing
+    walkThroughDate: "",
     preferredDate: "",
     moveDateUnknown: false,
     timeFlexible: false,
@@ -1082,6 +1083,219 @@ export default function MoveWalkthrough() {
     setSearchPhone(phoneNumber);
     setJobNumber('');
 
+    // IMPORTANT: Clear ALL form data first to prevent old data from persisting
+    // Reset form to initial state
+    setFormData({
+      // Service Type
+      serviceType: "truck",
+      travelBilling: "local",
+      travelCost: "",
+
+      // Customer Information
+      firstName: "",
+      lastName: "",
+      company: "",
+      phone: "",
+      phoneName: "",
+      email: "",
+      emailName: "",
+
+      // Current Home or Business Indicator
+      customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
+
+      // Labor Only - same address checkbox
+      laborOnlySameAddress: true,
+
+      // Addresses - Pickup
+      pickupAddress: "",
+      pickupUnit: "",
+      pickupCity: "",
+      pickupState: "",
+      pickupZip: "",
+      pickupLocationType: "house",
+      pickupLocationOther: "",
+      pickupBusinessName: "",
+      pickupBusinessSquareFeet: "",
+      pickupOtherSquareFeet: "",
+      pickupHouseSquareFeet: "",
+      pickupZestimate: "",
+      pickupHowFurnished: 80,
+      pickupApartmentSquareFeet: "",
+      pickupApartmentBedBath: "",
+      pickupApartmentHowFurnished: 80,
+      pickupStorageUnitQuantity: 1,
+      pickupStorageUnitSizes: [""],
+      pickupStorageUnitHowFull: [""],
+      pickupStorageUnitConditioned: [""],
+      pickupTruckPodLength: "",
+      pickupTruckPodWidth: "",
+      pickupTruckPodHowFull: 100,
+
+      // Addresses - Delivery
+      deliveryAddress: "",
+      deliveryUnit: "",
+      deliveryCity: "",
+      deliveryState: "",
+      deliveryZip: "",
+      deliveryLocationType: "house",
+      deliveryLocationOther: "",
+      deliveryBusinessName: "",
+      deliveryHouseSquareFeet: "",
+      deliveryZestimate: "",
+      deliveryHowFurnished: 80,
+      deliveryApartmentSquareFeet: "",
+      deliveryApartmentBedBath: "",
+      deliveryApartmentHowFurnished: 80,
+      deliveryStorageUnitQuantity: 1,
+      deliveryStorageUnitSizes: [""],
+      deliveryStorageUnitConditioned: [""],
+      deliveryPODQuantity: 1,
+      deliveryPODSize: "",
+      deliveryTruckLength: "",
+      deliveryAddressUnknown: false,
+
+      // Addresses - Additional Stop
+      hasAdditionalStop: false,
+      additionalStopAddress: "",
+      additionalStopUnit: "",
+      additionalStopCity: "",
+      additionalStopState: "",
+      additionalStopZip: "",
+      additionalStopLocationType: "house",
+      additionalStopLocationOther: "",
+      additionalStopBusinessName: "",
+      additionalStopHouseSquareFeet: "",
+      additionalStopZestimate: "",
+      additionalStopHowFurnished: 80,
+      additionalStopApartmentBedBath: "",
+      additionalStopStorageUnitQuantity: 1,
+      additionalStopStorageUnitSizes: [""],
+      additionalStopStorageUnitConditioned: [""],
+      additionalStopNotes: "",
+
+      // Property Access - Pickup
+      pickupStairs: 1,
+      pickupNarrowDoorways: false,
+      pickupElevator: false,
+      pickupParkingDistance: "close",
+      pickupAccessNotes: "",
+
+      // Property Access - Delivery
+      deliveryStairs: 1,
+      deliveryNarrowDoorways: false,
+      deliveryElevator: false,
+      deliveryParkingDistance: "close",
+      deliveryAccessNotes: "",
+
+      // Heavy/Special Items
+      gunSafes: false,
+      gunSafesQty: 1,
+      gunSafesDetails: "",
+      pianos: false,
+      pianosQty: 1,
+      pianosDetails: "",
+      poolTables: false,
+      poolTablesQty: 1,
+      poolTablesDetails: "",
+      otherHeavyItems: false,
+      otherHeavyItemsDetails: "",
+      largeTVs: false,
+      largeTVsQty: 1,
+      largeTVsDetails: "",
+      purpleGreenMattress: false,
+      purpleGreenMattressDetails: "",
+      treadmills: false,
+      treadmillsDetails: "",
+      largeAppliances: false,
+      applianceFridge: false,
+      applianceFridgeQty: 1,
+      applianceWasher: false,
+      applianceWasherQty: 1,
+      applianceDryer: false,
+      applianceDryerQty: 1,
+      applianceOven: false,
+      applianceOvenQty: 1,
+      applianceDishwasher: false,
+      applianceDishwasherQty: 1,
+      applianceOtherDetails: "",
+      plants: false,
+      plantsDetails: "",
+      bunkBeds: false,
+      bunkBedsQty: 1,
+      bunkBedsDetails: "",
+      trampoline: false,
+      trampolineQty: 1,
+      trampolineDetails: "",
+      tableSaw: false,
+      tableSawQty: 1,
+      tableSawDetails: "",
+      gymEquipment: false,
+      gymEquipmentQty: 1,
+      gymEquipmentDetails: "",
+      sauna: false,
+      saunaQty: 1,
+      saunaDetails: "",
+      playsets: false,
+      playsetsQty: 1,
+      playsetsDetails: "",
+      specialDisassemblyOther: false,
+      specialDisassemblyOtherDetails: "",
+
+      // Pets
+      catsPresent: false,
+
+      // Packing
+      packingStatus: "moderate",
+      needsPacking: false,
+      packingKitchen: false,
+      packingGarage: false,
+      packingAttic: false,
+      packingWardrobeBoxes: false,
+      packingFragileItems: false,
+      packingBedrooms: false,
+      packingNotes: "",
+      junkRemovalNeeded: false,
+      junkRemovalAmount: "",
+      junkRemovalDetails: "",
+
+      // Insurance
+      needsInsurance: false,
+      estimatedValue: "",
+
+      // Timing
+      preferredDate: "",
+      moveDateUnknown: false,
+      timeFlexible: false,
+      readyToSchedule: false,
+      timingNotes: "",
+
+      // Estimates
+      estimatedCrewSize: "2-3",
+      crewSizeNotes: "",
+
+      // Special Notes
+      specialRequests: "",
+      fixedBudgetRequested: false,
+      desiredBudget: "",
+
+      // House Quality Rating
+      houseQuality: 3, // 1-5 scale, default to middle
+
+      // Tools Needed
+      hd4Wheel: false,
+      airSled: false,
+      applianceDolly: false,
+      socketWrenches: false,
+      safeDolly: false,
+      toolCustom1: "",
+      toolCustom2: "",
+      toolCustom3: "",
+    });
+
+    // Reset phones and emails arrays to empty state
+    setPhones([{ number: "", name: "" }]);
+    setEmails([{ email: "", name: "" }]);
+
     try {
       const response = await fetch('/api/move-wt/load-job', {
         method: 'POST',
@@ -1099,7 +1313,7 @@ export default function MoveWalkthrough() {
 
       // If multiple forms, load the first one (most recent)
       if (result.success && result.address) {
-        
+
         setAddress(result.address);
         setJobNumber(result.job_number);
         setFolderUrl(result.folderUrl || '');
@@ -1110,24 +1324,28 @@ export default function MoveWalkthrough() {
           setQuoteNumber(result.quoteNumber);
         }
 
+        // Now load the new data into the cleared form
         if (result.customerInfo) {
           setFormData(prev => ({
             ...prev,
-            firstName: result.customerInfo.firstName || prev.firstName,
-            lastName: result.customerInfo.lastName || prev.lastName,
-            phone: result.customerInfo.phone || prev.phone,
-            email: result.customerInfo.email || prev.email,
-            pickupAddress: result.customerInfo.pickupAddress || prev.pickupAddress,
-            pickupUnit: result.customerInfo.pickupUnit || prev.pickupUnit,
-            pickupCity: result.customerInfo.pickupCity || prev.pickupCity,
-            pickupState: result.customerInfo.pickupState || prev.pickupState,
-            pickupZip: result.customerInfo.pickupZip || prev.pickupZip,
+            firstName: result.customerInfo.firstName || "",
+            lastName: result.customerInfo.lastName || "",
+            phone: result.customerInfo.phone || "",
+            email: result.customerInfo.email || "",
+            pickupAddress: result.customerInfo.pickupAddress || "",
+            pickupUnit: result.customerInfo.pickupUnit || "",
+            pickupCity: result.customerInfo.pickupCity || "",
+            pickupState: result.customerInfo.pickupState || "",
+            pickupZip: result.customerInfo.pickupZip || "",
           }));
         }
 
         if (result.existingFormData) {
           const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
-          setFormData(prev => ({ ...prev, ...restFormData }));
+          // Replace all form data (not merge)
+          setFormData(restFormData);
+
+          // Load phones and emails arrays
           if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
             setPhones(savedPhones);
           }
@@ -3096,6 +3314,19 @@ export default function MoveWalkthrough() {
           <h2 className="text-xl font-bold text-pink-900 mb-4">Timing & Scheduling</h2>
 
           <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Walk-Through Date
+              </label>
+              <input
+                type="date"
+                name="walkThroughDate"
+                value={formData.walkThroughDate}
+                onChange={handleInputChange}
+                className="max-w-sm bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              />
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Preferred Move Date
