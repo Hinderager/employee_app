@@ -311,6 +311,7 @@ export default function MoveWalkthrough() {
     timeFlexible: false,
     readyToSchedule: false,
     timingNotes: "",
+    tags: [] as string[],
 
     // Estimates
     estimatedCrewSize: "2-3",
@@ -830,6 +831,16 @@ export default function MoveWalkthrough() {
   };
 
   // Handle phone number input with auto-formatting
+
+  // Handle tag checkbox changes
+  const handleTagChange = (tag: string) => {
+    setFormData(prev => ({
+      ...prev,
+      tags: prev.tags.includes(tag)
+        ? prev.tags.filter(t => t !== tag)
+        : [...prev.tags, tag]
+    }));
+  };
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     const formatted = formatPhoneNumber(value);
@@ -1268,6 +1279,7 @@ export default function MoveWalkthrough() {
 
       // Insurance
       needsInsurance: false,
+      tags: formData.tags || [],
       estimatedValue: "",
 
       // Timing
@@ -1806,6 +1818,7 @@ export default function MoveWalkthrough() {
       // Insurance
       needsInsurance: false,
       estimatedValue: "",
+      tags: [],
 
       // Timing
       walkThroughDate: "",
@@ -3349,6 +3362,7 @@ export default function MoveWalkthrough() {
                   timeFlexible: false,
                   readyToSchedule: false,
                   timingNotes: "",
+                  tags: [],
 
                   // Estimates
                   estimatedCrewSize: "2-3",
@@ -3494,11 +3508,13 @@ export default function MoveWalkthrough() {
                           city,
                           state,
                           zip,
+                          timingNotes: formData.timingNotes,
+                          tags: ['WT', ...formData.tags.filter(t => t !== 'WT')],
                         }),
                       });
-                      
+
                       const data = await response.json();
-                      
+
                       if (data.success) {
                         alert('Walk-through scheduled successfully in Workiz!');
                       } else {
@@ -3568,8 +3584,44 @@ export default function MoveWalkthrough() {
                 <button
                   type="button"
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium"
-                  onClick={() => {
-                    alert('Schedule functionality coming soon');
+                  onClick={async () => {
+                    // Validate required fields
+                    if (!formData.preferredDate) { alert('Please select a move date'); return; }
+                    if (!formData.preferredTime) { alert('Please select a move time'); return; }
+                    if (!formData.firstName || !formData.lastName) { alert('Please enter customer first and last name'); return; }
+                    if (!phones[0]?.number) { alert('Please enter a phone number'); return; }
+                    if (!emails[0]?.email) { alert('Please enter an email address'); return; }
+                    if (!formData.pickupAddress) { alert('Please enter the pickup address'); return; }
+                    const phone = phones[0]?.number || '';
+                    const email = emails[0]?.email || '';
+                    try {
+                      const response = await fetch('/api/move-wt/schedule-moving', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          moveDate: formData.preferredDate,
+                          moveTime: formData.preferredTime,
+                          moveDuration: formData.moveDuration || '4',
+                          firstName: formData.firstName,
+                          lastName: formData.lastName,
+                          phone,
+                          email,
+                          pickupAddress: formData.pickupAddress,
+                          pickupCity: formData.pickupCity,
+                          pickupState: formData.pickupState,
+                          pickupZip: formData.pickupZip,
+                          deliveryAddress: formData.deliveryAddress,
+                          deliveryCity: formData.deliveryCity,
+                          deliveryState: formData.deliveryState,
+                          deliveryZip: formData.deliveryZip,
+                          timingNotes: formData.timingNotes,
+                          tags: ['Move', ...formData.tags.filter(t => t !== 'Move')],
+                        }),
+                      });
+                      const data = await response.json();
+                      if (data.success) { alert('Moving job scheduled successfully in Workiz!'); }
+                      else { alert('Failed to schedule: ' + (data.error || 'Unknown error')); }
+                    } catch (error) { console.error('Schedule error:', error); alert('Failed to schedule moving job. Please try again.'); }
                   }}
                 >
                   Schedule
@@ -3603,6 +3655,51 @@ export default function MoveWalkthrough() {
               </label>
             </div>
 
+            {/* Job Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Job Tags
+              </label>
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2">
+                {['Move', 'WT', 'Trk', 'Lbr', 'PM', 'RN', 'ET', 'OOT', 'Cat', '2', '3', '4', '5', '6+'].map(tag => {
+                  // Determine color based on tag
+                  let colorClasses = '';
+                  if (['OOT', 'Cat', 'RN', 'ET'].includes(tag)) {
+                    colorClasses = formData.tags.includes(tag)
+                      ? 'bg-red-500 text-white border-red-600'
+                      : 'border-red-300 text-red-700 hover:bg-red-50';
+                  } else if (['2', '3', '4', '5', '6+'].includes(tag)) {
+                    colorClasses = formData.tags.includes(tag)
+                      ? 'bg-green-500 text-white border-green-600'
+                      : 'border-green-300 text-green-700 hover:bg-green-50';
+                  } else if (['Move', 'WT'].includes(tag)) {
+                    colorClasses = formData.tags.includes(tag)
+                      ? 'bg-blue-500 text-white border-blue-600'
+                      : 'border-blue-300 text-blue-700 hover:bg-blue-50';
+                  } else if (['Trk', 'Lbr'].includes(tag)) {
+                    colorClasses = formData.tags.includes(tag)
+                      ? 'bg-purple-500 text-white border-purple-600'
+                      : 'border-purple-300 text-purple-700 hover:bg-purple-50';
+                  } else if (tag === 'PM') {
+                    colorClasses = formData.tags.includes(tag)
+                      ? 'bg-yellow-400 text-gray-800 border-yellow-500'
+                      : 'border-yellow-300 text-yellow-700 hover:bg-yellow-50';
+                  }
+
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => handleTagChange(tag)}
+                      className={`px-3 py-1.5 rounded-md border-2 font-medium transition-all duration-200 ${colorClasses}`}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Additional Notes
@@ -3616,6 +3713,7 @@ export default function MoveWalkthrough() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
             </div>
+
           </div>
         </section>
 
