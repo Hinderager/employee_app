@@ -936,7 +936,7 @@ export default function MoveWalkthrough() {
       }
 
       // Check if phone search returned multiple forms
-      if (result.success && result.address) {
+      if (result.multiple && result.forms) {
         // Show selection dialog for multiple forms
         let message = `Found ${result.forms.length} saved form(s) for this contact:\n\n`;
         result.forms.forEach((form: any, index: number) => {
@@ -1325,7 +1325,7 @@ export default function MoveWalkthrough() {
       }
 
       // If multiple forms, load the first one (most recent)
-      if (result.success && result.address) {
+      if (result.multiple && result.forms) {
 
         setAddress(result.address);
         setJobNumber(result.job_number);
