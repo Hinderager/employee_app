@@ -23,7 +23,7 @@ const supabase = createClient(
 
 interface Job {
   id: number;
-  jobNumber: string;
+  jobNumbers: string[];
   quoteNumber: string;
   customerName: string;
   phone: string;
@@ -86,7 +86,7 @@ export default function MoveJobsPage() {
     const formData = raw.form_data || {};
     return {
       id: raw.id,
-      jobNumber: raw.job_number || '',
+      jobNumbers: raw.jobNumbers || (raw.job_number ? [raw.job_number] : []),
       quoteNumber: raw.quote_number || '',
       customerName: `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || 'Unknown',
       phone: raw.phone_number || formData.phone || '',
@@ -166,7 +166,7 @@ export default function MoveJobsPage() {
     const filtered = jobs.filter((job) => {
       return (
         job.customerName.toLowerCase().includes(query) ||
-        job.jobNumber.toLowerCase().includes(query) ||
+        job.jobNumbers.some(jn => jn.toLowerCase().includes(query)) ||
         job.phone.includes(query) ||
         job.pickupAddress.toLowerCase().includes(query) ||
         job.deliveryAddress.toLowerCase().includes(query)
@@ -679,10 +679,19 @@ export default function MoveJobsPage() {
                       {job.customerName || "Unknown Customer"}
                     </h3>
                     <p className="text-sm text-gray-500">
-                      {job.jobNumber.startsWith("TEMP-") ? (
-                        <span className="text-orange-600">{job.jobNumber}</span>
+                      {job.jobNumbers.length > 0 ? (
+                        job.jobNumbers.map((jn, idx) => (
+                          <span key={jn}>
+                            {idx > 0 && " / "}
+                            {jn.startsWith("TEMP-") ? (
+                              <span className="text-orange-600">{jn}</span>
+                            ) : (
+                              <span>Job #{jn}</span>
+                            )}
+                          </span>
+                        ))
                       ) : (
-                        `Job #${job.jobNumber}`
+                        "No Job #"
                       )}
                       {job.quoteNumber && (
                         <span className="ml-2 text-gray-400">• Quote #{job.quoteNumber}</span>

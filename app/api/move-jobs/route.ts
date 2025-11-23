@@ -53,13 +53,16 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Create a set of normalized Workiz phone numbers for matching
-    const workizPhoneMap = new Map<string, any>();
+    // Create a map of normalized phone numbers to arrays of Workiz jobs
+    // (one phone can have multiple jobs - e.g., walk-through AND move)
+    const workizPhoneMap = new Map<string, any[]>();
     workizJobs.forEach((wj: any) => {
       const normalizedPhone = normalizePhone(wj.phone);
       if (normalizedPhone) {
-        workizPhoneMap.set(normalizedPhone, wj);
-        console.log(`[move-jobs] Workiz job ${wj.serial_id} (${wj.first_name} ${wj.last_name}): phone ${normalizedPhone}`);
+        const existing = workizPhoneMap.get(normalizedPhone) || [];
+        existing.push(wj);
+        workizPhoneMap.set(normalizedPhone, existing);
+        console.log(`[move-jobs] Workiz job ${wj.serial_id} (${wj.first_name} ${wj.last_name}): phone ${normalizedPhone}, type ${wj.job_type}`);
       }
     });
 
@@ -81,7 +84,7 @@ export async function GET(request: NextRequest) {
 
     // Match estimate forms to Workiz jobs by phone number
     const matchedJobs: any[] = [];
-    const matchedWorkizIds = new Set<number>();
+    const matchedFormIds = new Set<string>();
 
     (moveQuotes || []).forEach((form: any) => {
       const formData = form.form_data || {};
@@ -111,40 +114,52 @@ export async function GET(request: NextRequest) {
       // Remove duplicates and empty strings
       const uniquePhones = [...new Set(formPhones)].filter(p => p.length > 0);
 
-      // Check if any form phone matches a Workiz phone
+      // Collect ALL matching Workiz jobs for this form (could be walk-through + move)
+      const matchingWorkizJobs: any[] = [];
       for (const phone of uniquePhones) {
-        const workizJob = workizPhoneMap.get(phone);
-        if (workizJob && !matchedWorkizIds.has(workizJob.serial_id)) {
-          matchedWorkizIds.add(workizJob.serial_id);
+        const workizJobsForPhone = workizPhoneMap.get(phone) || [];
+        workizJobsForPhone.forEach((wj: any) => {
+          // Avoid duplicates if same job matches multiple form phones
+          if (!matchingWorkizJobs.find(j => j.serial_id === wj.serial_id)) {
+            matchingWorkizJobs.push(wj);
+          }
+        });
+      }
 
-          const name = `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || 'Unknown';
+      // If we found matching Workiz jobs, add this form to results
+      if (matchingWorkizJobs.length > 0 && !matchedFormIds.has(form.id)) {
+        matchedFormIds.add(form.id);
 
-          console.log(`[move-jobs] MATCH: Form ${form.id} (${name}) matched Workiz ${workizJob.serial_id} via phone ${phone}`);
+        const name = `${formData.firstName || ''} ${formData.lastName || ''}`.trim() || 'Unknown';
+        const jobNumbers = matchingWorkizJobs.map(wj => String(wj.serial_id));
 
-          matchedJobs.push({
-            id: form.id,
-            jobNumber: String(workizJob.serial_id),
-            quoteNumber: form.quote_number || '',
-            customerName: name,
-            phone: form.phone_number || formData.phone || '',
-            email: formData.email || '',
-            pickupAddress: formData.pickupAddress || form.address || '',
-            deliveryAddress: formData.deliveryAddress || '',
-            serviceType: formData.serviceType || '',
-            // Use Workiz scheduled date
-            preferredDate: workizJob.scheduled_date,
-            updatedAt: form.updated_at,
-            createdAt: form.created_at,
-            // Full form data for cut sheet
-            formData: formData,
-            // Include Workiz data for reference
-            workizStatus: workizJob.status,
-            workizJobType: workizJob.job_type,
-            workizSerialId: workizJob.serial_id,
-            hasWorkizMatch: true,
-          });
-          break; // Only match once per form
-        }
+        console.log(`[move-jobs] MATCH: Form ${form.id} (${name}) matched ${matchingWorkizJobs.length} Workiz jobs: ${jobNumbers.join(', ')}`);
+
+        matchedJobs.push({
+          id: form.id,
+          jobNumbers: jobNumbers,  // Array of job numbers
+          quoteNumber: form.quote_number || '',
+          customerName: name,
+          phone: form.phone_number || formData.phone || '',
+          email: formData.email || '',
+          pickupAddress: formData.pickupAddress || form.address || '',
+          deliveryAddress: formData.deliveryAddress || '',
+          serviceType: formData.serviceType || '',
+          // Use first Workiz job's scheduled date for filtering
+          preferredDate: matchingWorkizJobs[0].scheduled_date,
+          updatedAt: form.updated_at,
+          createdAt: form.created_at,
+          // Full form data for cut sheet
+          formData: formData,
+          // Include all Workiz jobs data
+          workizJobs: matchingWorkizJobs.map(wj => ({
+            serialId: wj.serial_id,
+            status: wj.status,
+            jobType: wj.job_type,
+            scheduledDate: wj.scheduled_date,
+          })),
+          hasWorkizMatch: true,
+        });
       }
     });
 
