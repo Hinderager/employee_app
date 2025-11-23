@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
       JobDateTime: jobDateTime,
       JobEndDateTime: jobEndDateTime,
       JobNotes: `Walk-through scheduled for ${durationHours} hour(s)`,
-      auth_secret: WORKIZ_API_SECRET || 'sec_50925302779624671511000216',
+      auth_secret: 'sec_50925302779624671511000216',  // Hardcoded temporarily
     };
 
     console.log('[schedule-walkthrough] Sending to Workiz:', WORKIZ_CREATE_JOB_URL);
