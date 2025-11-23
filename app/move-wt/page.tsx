@@ -10,6 +10,7 @@ export default function MoveWalkthrough() {
   const router = useRouter();
   const [jobNumber, setJobNumber] = useState("");
   const [searchPhone, setSearchPhone] = useState("");
+  const [searchQuoteNum, setSearchQuoteNum] = useState("");
   const [address, setAddress] = useState("");
   const [folderUrl, setFolderUrl] = useState("");
   const [quoteNumber, setQuoteNumber] = useState("");
@@ -900,8 +901,8 @@ export default function MoveWalkthrough() {
   };
 
   const handleLoadJob = async () => {
-    if (!jobNumber.trim() && !searchPhone.trim()) {
-      alert('Please enter a job number or phone number');
+    if (!jobNumber.trim() && !searchPhone.trim() && !searchQuoteNum.trim()) {
+      alert('Please enter a job number, phone number, or quote number');
       return;
     }
 
@@ -915,6 +916,9 @@ export default function MoveWalkthrough() {
       if (searchPhone.trim()) {
         // Normalize phone number before sending (strip formatting)
         requestBody.phoneNumber = normalizePhoneNumber(searchPhone);
+      }
+      if (searchQuoteNum.trim()) {
+        requestBody.quoteNumber = searchQuoteNum.trim();
       }
 
       const response = await fetch('/api/move-wt/load-job', {
@@ -1582,6 +1586,7 @@ export default function MoveWalkthrough() {
   const handleClear = () => {
     setJobNumber("");
     setSearchPhone("");
+    setSearchQuoteNum("");
     setAddress("");
     setFolderUrl("");
     setPhones([{ number: "", name: "" }]);
@@ -3031,12 +3036,22 @@ export default function MoveWalkthrough() {
                 placeholder="Phone #"
                 className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <input
+                id="searchQuoteNum"
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={searchQuoteNum}
+                onChange={(e) => setSearchQuoteNum(e.target.value.replace(/D/g, '').slice(0, 4))}
+                placeholder="Quote #"
+                className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
             </div>
             <div className="flex items-center justify-center gap-3">
               <button
                 type="button"
                 onClick={handleLoadJob}
-                disabled={isLoadingJob || (!jobNumber && !searchPhone)}
+                disabled={isLoadingJob || (!jobNumber && !searchPhone && !searchQuoteNum)}
                 className="px-6 py-2 bg-blue-600 rounded-lg font-semibold text-white transition-colors disabled:bg-gray-400"
               >
                 {isLoadingJob ? 'Loading...' : 'Load'}

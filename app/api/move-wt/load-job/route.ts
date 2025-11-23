@@ -122,14 +122,64 @@ async function findOrCreateAddressFolder(drive: any, address: string): Promise<s
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { jobNumber, phoneNumber } = body;
+    const { jobNumber, phoneNumber, quoteNumber } = body;
 
     // Require at least one parameter
-    if ((!jobNumber || !jobNumber.trim()) && (!phoneNumber || !phoneNumber.trim())) {
+    if ((!jobNumber || !jobNumber.trim()) && (!phoneNumber || !phoneNumber.trim()) && (!quoteNumber || !quoteNumber.trim())) {
       return NextResponse.json(
-        { error: 'Either job number or phone number is required' },
+        { error: 'Either job number, phone number, or quote number is required' },
         { status: 400 }
       );
+    }
+
+    // Priority 0: If quote number is provided, load directly from Supabase
+    if (quoteNumber && quoteNumber.trim()) {
+      console.log(`[move-wt/load-job] Loading form by quote number: ${quoteNumber}`);
+
+      const { data: quoteData, error } = await supabase
+        .from('move_quote')
+        .select('*')
+        .eq('quote_number', quoteNumber.trim())
+        .single();
+
+      if (error || !quoteData) {
+        console.error('[move-wt/load-job] Quote not found:', error);
+        return NextResponse.json(
+          { error: `Quote #${quoteNumber} not found` },
+          { status: 404 }
+        );
+      }
+
+      console.log('[move-wt/load-job] Found quote:', quoteData.quote_number);
+
+      let folderUrl = null;
+      const address = quoteData.customer_home_address || quoteData.form_data?.pickupAddress;
+      if (address) {
+        try {
+          const drive = await getDriveClient();
+          const folderId = await findOrCreateAddressFolder(drive, address);
+          folderUrl = `https://drive.google.com/drive/folders/${folderId}`;
+        } catch (folderError) {
+          console.error('[move-wt/load-job] Error getting folder:', folderError);
+        }
+      }
+
+      return NextResponse.json({
+        success: true,
+        job_number: quoteData.job_number || '',
+        quoteNumber: quoteData.quote_number,
+        address: address || '',
+        folder_url: folderUrl,
+        customerInfo: {
+          firstName: quoteData.form_data?.firstName || '',
+          lastName: quoteData.form_data?.lastName || '',
+          phone: quoteData.phone_number || '',
+          email: quoteData.form_data?.email || '',
+        },
+        formData: quoteData.form_data || {},
+        phones: quoteData.form_data?.phones || [],
+        emails: quoteData.form_data?.emails || [],
+      });
     }
 
     // Priority 1: If job number is provided, use it to fetch from Workiz
