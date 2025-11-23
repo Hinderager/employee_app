@@ -12,7 +12,50 @@ const normalizePhone = (phone: string | null | undefined): string => {
 
 const normalizeAddress = (address: string | null | undefined): string => {
   if (!address) return '';
-  return address.toLowerCase().replace(/\s+/g, ' ').trim();
+
+  let normalized = address.toLowerCase();
+
+  // Remove punctuation (periods, commas, hashes)
+  normalized = normalized.replace(/[.,#]/g, '');
+
+  // Expand directional abbreviations
+  const directions: Record<string, string> = {
+    ' n ': ' north ', ' s ': ' south ', ' e ': ' east ', ' w ': ' west ',
+    ' ne ': ' northeast ', ' nw ': ' northwest ', ' se ': ' southeast ', ' sw ': ' southwest ',
+  };
+  for (const [abbr, full] of Object.entries(directions)) {
+    normalized = normalized.replace(new RegExp(abbr, 'g'), full);
+  }
+  // Handle directions at start of string
+  if (normalized.startsWith('n ')) normalized = 'north ' + normalized.slice(2);
+  if (normalized.startsWith('s ')) normalized = 'south ' + normalized.slice(2);
+  if (normalized.startsWith('e ')) normalized = 'east ' + normalized.slice(2);
+  if (normalized.startsWith('w ')) normalized = 'west ' + normalized.slice(2);
+
+  // Expand street type abbreviations
+  const streetTypes: Record<string, string> = {
+    ' st$': ' street', ' st ': ' street ',
+    ' ave$': ' avenue', ' ave ': ' avenue ',
+    ' blvd$': ' boulevard', ' blvd ': ' boulevard ',
+    ' dr$': ' drive', ' dr ': ' drive ',
+    ' ln$': ' lane', ' ln ': ' lane ',
+    ' rd$': ' road', ' rd ': ' road ',
+    ' ct$': ' court', ' ct ': ' court ',
+    ' cir$': ' circle', ' cir ': ' circle ',
+    ' pl$': ' place', ' pl ': ' place ',
+    ' pkwy$': ' parkway', ' pkwy ': ' parkway ',
+    ' hwy$': ' highway', ' hwy ': ' highway ',
+    ' trl$': ' trail', ' trl ': ' trail ',
+    ' apt ': ' apartment ', ' ste ': ' suite ',
+  };
+  for (const [abbr, full] of Object.entries(streetTypes)) {
+    normalized = normalized.replace(new RegExp(abbr, 'g'), full);
+  }
+
+  // Normalize whitespace
+  normalized = normalized.replace(/\s+/g, ' ').trim();
+
+  return normalized;
 };
 
 export async function GET(request: NextRequest) {
