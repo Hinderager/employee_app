@@ -101,10 +101,10 @@ export default function MoveJobsPage() {
     };
   }, []);
 
-  // Fetch jobs on mount
+  // Fetch jobs when selectedDate changes
   useEffect(() => {
-    fetchJobs();
-  }, []);
+    fetchJobs(selectedDate);
+  }, [selectedDate]);
 
   // Real-time subscription for live updates
   useEffect(() => {
@@ -155,48 +155,26 @@ export default function MoveJobsPage() {
     };
   }, []);
 
-  // Filter jobs when search query or selected date changes
+  // Filter jobs by search query (date filtering is done by API)
   useEffect(() => {
-    const selectedDateStr = formatDateForCompare(selectedDate);
-
-    // First filter by date
-    let dateFiltered = jobs.filter((job) => {
-      if (!job.preferredDate) return false;
-
-      // Normalize date format - handle both YYYY-MM-DD and MM/DD/YYYY
-      let jobDateStr = job.preferredDate.split('T')[0];
-
-      // If it's in MM/DD/YYYY format, convert to YYYY-MM-DD
-      if (jobDateStr.includes('/')) {
-        const parts = jobDateStr.split('/');
-        if (parts.length === 3) {
-          // parts[0] = month, parts[1] = day, parts[2] = year
-          const month = parts[0].padStart(2, '0');
-          const day = parts[1].padStart(2, '0');
-          const year = parts[2];
-          jobDateStr = `${year}-${month}-${day}`;
-        }
-      }
-
-      return jobDateStr === selectedDateStr;
-    });
-
-    // Then filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      dateFiltered = dateFiltered.filter((job) => {
-        return (
-          job.customerName.toLowerCase().includes(query) ||
-          job.jobNumber.toLowerCase().includes(query) ||
-          job.phone.includes(query) ||
-          job.pickupAddress.toLowerCase().includes(query) ||
-          job.deliveryAddress.toLowerCase().includes(query)
-        );
-      });
+    if (!searchQuery.trim()) {
+      setFilteredJobs(jobs);
+      return;
     }
 
-    setFilteredJobs(dateFiltered);
-  }, [searchQuery, jobs, selectedDate]);
+    const query = searchQuery.toLowerCase();
+    const filtered = jobs.filter((job) => {
+      return (
+        job.customerName.toLowerCase().includes(query) ||
+        job.jobNumber.toLowerCase().includes(query) ||
+        job.phone.includes(query) ||
+        job.pickupAddress.toLowerCase().includes(query) ||
+        job.deliveryAddress.toLowerCase().includes(query)
+      );
+    });
+
+    setFilteredJobs(filtered);
+  }, [searchQuery, jobs]);
 
   const goToPreviousDay = () => {
     const newDate = new Date(selectedDate);
@@ -214,19 +192,27 @@ export default function MoveJobsPage() {
     setSelectedDate(new Date());
   };
 
-  const fetchJobs = async () => {
+  const fetchJobs = async (date: Date = selectedDate) => {
     try {
       setIsLoading(true);
       setError(null);
 
-      const response = await fetch("/api/move-jobs");
+      // Format date as YYYY-MM-DD for the API
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateStr = `${year}-${month}-${day}`;
+
+      const response = await fetch(`/api/move-jobs?date=${dateStr}`);
       const data = await response.json();
 
       if (!response.ok) {
         throw new Error(data.error || "Failed to fetch jobs");
       }
 
+      // Jobs are already filtered by date from API, set directly
       setJobs(data.jobs || []);
+      setFilteredJobs(data.jobs || []);
     } catch (err) {
       console.error("[move-jobs] Error fetching jobs:", err);
       setError(err instanceof Error ? err.message : "Failed to fetch jobs");
