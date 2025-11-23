@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Workiz API credentials
 const WORKIZ_API_KEY = process.env.WORKIZ_API_KEY || 'api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw';
-const WORKIZ_AUTH_SECRET = process.env.WORKIZ_AUTH_SECRET || '';
+const WORKIZ_API_SECRET = process.env.WORKIZ_API_SECRET || '';
 // Use app.workiz.com (same as other Workiz routes)
 const WORKIZ_CREATE_JOB_URL = `https://app.workiz.com/api/v1/${WORKIZ_API_KEY}/job/create/`;
 
@@ -84,8 +84,8 @@ export async function POST(request: NextRequest) {
     };
 
     // Add auth_secret if available (required by Workiz API)
-    if (WORKIZ_AUTH_SECRET) {
-      workizPayload.auth_secret = WORKIZ_AUTH_SECRET;
+    if (WORKIZ_API_SECRET) {
+      workizPayload.auth_secret = WORKIZ_API_SECRET;
     }
 
     console.log('[schedule-walkthrough] Sending to Workiz:', WORKIZ_CREATE_JOB_URL);
