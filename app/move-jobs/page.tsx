@@ -35,6 +35,10 @@ interface Job {
   updatedAt: string;
   createdAt: string;
   formData: any;
+  // Workiz data
+  workizStatus?: string | null;
+  workizJobType?: string | null;
+  hasWorkizMatch?: boolean;
 }
 
 // Helper to format date as YYYY-MM-DD for comparison (using local timezone)
@@ -104,7 +108,8 @@ export default function MoveJobsPage() {
 
   // Real-time subscription for live updates
   useEffect(() => {
-    const channel = supabase
+    // Subscribe to move_quote changes
+    const moveQuoteChannel = supabase
       .channel('move-jobs-realtime')
       .on(
         'postgres_changes',
@@ -115,39 +120,40 @@ export default function MoveJobsPage() {
         },
         (payload) => {
           console.log('[move-jobs] Real-time update received:', payload.eventType);
-
-          if (payload.eventType === 'INSERT') {
-            const newJob = transformJob(payload.new);
-            setJobs(prev => [newJob, ...prev]);
-          } else if (payload.eventType === 'UPDATE') {
-            const updatedJob = transformJob(payload.new);
-            // Update in jobs list
-            setJobs(prev => prev.map(job =>
-              job.id === updatedJob.id ? updatedJob : job
-            ));
-            // Update selectedJob if it's the one being viewed
-            setSelectedJob(prev =>
-              prev && prev.id === updatedJob.id ? updatedJob : prev
-            );
-          } else if (payload.eventType === 'DELETE') {
-            const deletedId = payload.old.id;
-            setJobs(prev => prev.filter(job => job.id !== deletedId));
-            // Close modal if viewing deleted job
-            setSelectedJob(prev =>
-              prev && prev.id === deletedId ? null : prev
-            );
-          }
+          // Re-fetch all jobs to get updated Workiz data
+          fetchJobs();
         }
       )
       .subscribe((status) => {
-        console.log('[move-jobs] Supabase subscription status:', status);
+        console.log('[move-jobs] move_quote subscription status:', status);
+      });
+
+    // Subscribe to all_workiz_jobs changes to update dates when Workiz syncs
+    const workizChannel = supabase
+      .channel('workiz-jobs-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'all_workiz_jobs',
+        },
+        (payload) => {
+          console.log('[move-jobs] Workiz data updated:', payload.eventType);
+          // Re-fetch to get updated scheduled dates
+          fetchJobs();
+        }
+      )
+      .subscribe((status) => {
+        console.log('[move-jobs] all_workiz_jobs subscription status:', status);
       });
 
     return () => {
-      console.log('[move-jobs] Cleaning up Supabase subscription');
-      supabase.removeChannel(channel);
+      console.log('[move-jobs] Cleaning up Supabase subscriptions');
+      supabase.removeChannel(moveQuoteChannel);
+      supabase.removeChannel(workizChannel);
     };
-  }, [transformJob]);
+  }, []);
 
   // Filter jobs when search query or selected date changes
   useEffect(() => {
@@ -156,7 +162,22 @@ export default function MoveJobsPage() {
     // First filter by date
     let dateFiltered = jobs.filter((job) => {
       if (!job.preferredDate) return false;
-      const jobDateStr = job.preferredDate.split('T')[0];
+
+      // Normalize date format - handle both YYYY-MM-DD and MM/DD/YYYY
+      let jobDateStr = job.preferredDate.split('T')[0];
+
+      // If it's in MM/DD/YYYY format, convert to YYYY-MM-DD
+      if (jobDateStr.includes('/')) {
+        const parts = jobDateStr.split('/');
+        if (parts.length === 3) {
+          // parts[0] = month, parts[1] = day, parts[2] = year
+          const month = parts[0].padStart(2, '0');
+          const day = parts[1].padStart(2, '0');
+          const year = parts[2];
+          jobDateStr = `${year}-${month}-${day}`;
+        }
+      }
+
       return jobDateStr === selectedDateStr;
     });
 
@@ -431,7 +452,7 @@ export default function MoveJobsPage() {
         <Section title="📋 JOB INFO" color="bg-blue-600">
           <InfoRow label="Customer" value={job.customerName} />
           <InfoRow label="Phone" value={<a href={`tel:${job.phone}`} className="text-blue-600">{formatPhone(job.phone)}</a>} />
-          <InfoRow label="Date" value={formData.moveDateUnknown ? 'TBD' : formatDate(formData.preferredDate)} />
+          <InfoRow label="Date" value={formData.moveDateUnknown ? 'TBD' : formatDate(job.preferredDate)} />
           {formData.timeFlexible && <InfoRow label="Time" value="Flexible" />}
           {formData.timingNotes && <InfoRow label="Timing" value={formData.timingNotes} />}
           <InfoRow label="Service" value={formData.serviceType === 'labor-only' ? '🔧 LABOR ONLY' : '🚚 TRUCK + LABOR'} highlight />

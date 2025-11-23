@@ -87,6 +87,9 @@ export async function POST(request: NextRequest) {
       JobNotes: `Walk-through scheduled for ${durationHours} hour(s)`,
     };
 
+    console.log('[schedule-walkthrough] Sending to Workiz:', WORKIZ_CREATE_JOB_URL);
+    console.log('[schedule-walkthrough] Payload:', JSON.stringify(workizPayload, null, 2));
+
     const workizResponse = await fetch(WORKIZ_CREATE_JOB_URL, {
       method: 'POST',
       headers: {
@@ -96,12 +99,21 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify(workizPayload),
     });
 
-    const workizData = await workizResponse.json();
+    const responseText = await workizResponse.text();
+    console.log('[schedule-walkthrough] Workiz response status:', workizResponse.status);
+    console.log('[schedule-walkthrough] Workiz response:', responseText);
+
+    let workizData;
+    try {
+      workizData = JSON.parse(responseText);
+    } catch {
+      workizData = { raw: responseText };
+    }
 
     if (!workizResponse.ok) {
       console.error('[schedule-walkthrough] Workiz API error:', workizData);
       return NextResponse.json(
-        { error: 'Failed to create job in Workiz', details: workizData },
+        { error: 'Failed to create job in Workiz', details: workizData, status: workizResponse.status },
         { status: 500 }
       );
     }
