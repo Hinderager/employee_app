@@ -3400,11 +3400,11 @@ export default function MoveWalkthrough() {
                       alert('Please enter customer first and last name');
                       return;
                     }
-                    if (!formData.phone) {
+                    if (!phones[0]?.number) {
                       alert('Please enter a phone number');
                       return;
                     }
-                    if (!formData.email) {
+                    if (!emails[0]?.email) {
                       alert('Please enter an email address');
                       return;
                     }
@@ -3421,8 +3421,8 @@ export default function MoveWalkthrough() {
                       return;
                     }
                     
-                    const phone = formData.phone || '';
-                    const email = formData.email || '';
+                    const phone = phones[0]?.number || '';
+                    const email = emails[0]?.email || '';
                     
                     try {
                       const response = await fetch('/api/move-wt/schedule-walkthrough', {
