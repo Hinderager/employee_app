@@ -3421,8 +3421,8 @@ export default function MoveWalkthrough() {
                       return;
                     }
                     
-                    const phone = formData.phone || formData.phones?.[0]?.number || '';
-                    const email = formData.email || formData.emails?.[0]?.email || '';
+                    const phone = formData.phone || '';
+                    const email = formData.email || '';
                     
                     try {
                       const response = await fetch('/api/move-wt/schedule-walkthrough', {
