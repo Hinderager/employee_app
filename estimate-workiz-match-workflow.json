@@ -29,7 +29,7 @@
           "parameters": [
             {
               "name": "select",
-              "value": "serial_id,phone,address,job_type,scheduled_date,status"
+              "value": "serial_id,phone,address,job_type,scheduled_date,status,first_name,last_name,email,city,state,postal_code"
             },
             {
               "name": "or",
@@ -100,7 +100,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Match estimate forms to Workiz jobs by phone number and address\n\n// Helper: normalize phone number (strip non-digits)\nconst normalizePhone = (phone) => {\n  if (!phone) return '';\n  return String(phone).replace(/\\D/g, '');\n};\n\n// Helper: normalize address (fuzzy matching)\nconst normalizeAddress = (address) => {\n  if (!address) return '';\n  \n  let normalized = address.toLowerCase();\n  \n  // Remove punctuation\n  normalized = normalized.replace(/[.,#]/g, '');\n  \n  // Expand directional abbreviations\n  const directions = {\n    ' n ': ' north ', ' s ': ' south ', ' e ': ' east ', ' w ': ' west ',\n    ' ne ': ' northeast ', ' nw ': ' northwest ', ' se ': ' southeast ', ' sw ': ' southwest ',\n  };\n  for (const [abbr, full] of Object.entries(directions)) {\n    normalized = normalized.replace(new RegExp(abbr, 'g'), full);\n  }\n  if (normalized.startsWith('n ')) normalized = 'north ' + normalized.slice(2);\n  if (normalized.startsWith('s ')) normalized = 'south ' + normalized.slice(2);\n  if (normalized.startsWith('e ')) normalized = 'east ' + normalized.slice(2);\n  if (normalized.startsWith('w ')) normalized = 'west ' + normalized.slice(2);\n  \n  // Expand street type abbreviations\n  const streetTypes = {\n    ' st$': ' street', ' st ': ' street ',\n    ' ave$': ' avenue', ' ave ': ' avenue ',\n    ' blvd$': ' boulevard', ' blvd ': ' boulevard ',\n    ' dr$': ' drive', ' dr ': ' drive ',\n    ' ln$': ' lane', ' ln ': ' lane ',\n    ' rd$': ' road', ' rd ': ' road ',\n    ' ct$': ' court', ' ct ': ' court ',\n    ' cir$': ' circle', ' cir ': ' circle ',\n    ' pl$': ' place', ' pl ': ' place ',\n    ' pkwy$': ' parkway', ' pkwy ': ' parkway ',\n    ' hwy$': ' highway', ' hwy ': ' highway ',\n    ' trl$': ' trail', ' trl ': ' trail ',\n    ' apt ': ' apartment ', ' ste ': ' suite ',\n  };\n  for (const [abbr, full] of Object.entries(streetTypes)) {\n    normalized = normalized.replace(new RegExp(abbr, 'g'), full);\n  }\n  \n  normalized = normalized.replace(/\\s+/g, ' ').trim();\n  return normalized;\n};\n\nconst data = items[0].json;\nconst workizJobs = data.workizJobs || [];\nconst estimateForms = data.estimateForms || [];\n\nconsole.log(`[Matcher] Found ${workizJobs.length} Workiz jobs and ${estimateForms.length} estimate forms`);\n\n// Build phone and address maps for Workiz jobs\nconst workizPhoneMap = new Map();\nconst workizAddressMap = new Map();\n\nfor (const wj of workizJobs) {\n  const normalizedPhone = normalizePhone(wj.phone);\n  if (normalizedPhone) {\n    const existing = workizPhoneMap.get(normalizedPhone) || [];\n    existing.push(wj);\n    workizPhoneMap.set(normalizedPhone, existing);\n  }\n  \n  const normalizedAddr = normalizeAddress(wj.address);\n  if (normalizedAddr) {\n    const existing = workizAddressMap.get(normalizedAddr) || [];\n    existing.push(wj);\n    workizAddressMap.set(normalizedAddr, existing);\n  }\n}\n\n// Find matches and prepare updates\nconst updates = [];\n\nfor (const form of estimateForms) {\n  const formData = form.form_data || {};\n  \n  // Collect all phone numbers from the form\n  const formPhones = [];\n  if (form.phone_number) formPhones.push(normalizePhone(form.phone_number));\n  if (formData.phone) formPhones.push(normalizePhone(formData.phone));\n  if (Array.isArray(formData.phones)) {\n    for (const p of formData.phones) {\n      if (p && p.number) formPhones.push(normalizePhone(p.number));\n    }\n  }\n  \n  const uniquePhones = [...new Set(formPhones)].filter(p => p.length > 0);\n  const formAddress = normalizeAddress(formData.pickupAddress || form.address || form.customer_home_address);\n  \n  // Find matching Workiz jobs\n  const matchingJobs = [];\n  \n  for (const phone of uniquePhones) {\n    const jobs = workizPhoneMap.get(phone) || [];\n    for (const wj of jobs) {\n      if (!matchingJobs.find(j => j.serial_id === wj.serial_id)) {\n        matchingJobs.push(wj);\n      }\n    }\n  }\n  \n  if (formAddress) {\n    const jobs = workizAddressMap.get(formAddress) || [];\n    for (const wj of jobs) {\n      if (!matchingJobs.find(j => j.serial_id === wj.serial_id)) {\n        matchingJobs.push(wj);\n      }\n    }\n  }\n  \n  if (matchingJobs.length > 0) {\n    const jobNumbers = matchingJobs.map(j => String(j.serial_id)).join(',');\n    const currentJobNumber = form.job_number || '';\n    \n    if (currentJobNumber !== jobNumbers) {\n      updates.push({\n        id: form.id,\n        job_number: jobNumbers,\n        matchCount: matchingJobs.length\n      });\n      console.log(`[Matcher] Form ${form.id}: ${currentJobNumber || '(none)'} -> ${jobNumbers}`);\n    }\n  }\n}\n\nconsole.log(`[Matcher] ${updates.length} forms need job_number updates`);\n\nif (updates.length === 0) {\n  return [{ json: { noUpdates: true, message: 'No updates needed' } }];\n}\n\nreturn updates.map(u => ({ json: u }));"
+        "jsCode": "// Match estimate forms to Workiz jobs and find unmatched jobs\n\nconst normalizePhone = (phone) => {\n  if (!phone) return '';\n  return String(phone).replace(/\\D/g, '');\n};\n\nconst normalizeAddress = (address) => {\n  if (!address) return '';\n  let normalized = address.toLowerCase();\n  normalized = normalized.replace(/[.,#]/g, '');\n  const directions = {\n    ' n ': ' north ', ' s ': ' south ', ' e ': ' east ', ' w ': ' west ',\n    ' ne ': ' northeast ', ' nw ': ' northwest ', ' se ': ' southeast ', ' sw ': ' southwest ',\n  };\n  for (const [abbr, full] of Object.entries(directions)) {\n    normalized = normalized.replace(new RegExp(abbr, 'g'), full);\n  }\n  if (normalized.startsWith('n ')) normalized = 'north ' + normalized.slice(2);\n  if (normalized.startsWith('s ')) normalized = 'south ' + normalized.slice(2);\n  if (normalized.startsWith('e ')) normalized = 'east ' + normalized.slice(2);\n  if (normalized.startsWith('w ')) normalized = 'west ' + normalized.slice(2);\n  const streetTypes = {\n    ' st$': ' street', ' st ': ' street ',\n    ' ave$': ' avenue', ' ave ': ' avenue ',\n    ' blvd$': ' boulevard', ' blvd ': ' boulevard ',\n    ' dr$': ' drive', ' dr ': ' drive ',\n    ' ln$': ' lane', ' ln ': ' lane ',\n    ' rd$': ' road', ' rd ': ' road ',\n    ' ct$': ' court', ' ct ': ' court ',\n    ' cir$': ' circle', ' cir ': ' circle ',\n    ' pl$': ' place', ' pl ': ' place ',\n    ' pkwy$': ' parkway', ' pkwy ': ' parkway ',\n    ' hwy$': ' highway', ' hwy ': ' highway ',\n    ' trl$': ' trail', ' trl ': ' trail ',\n    ' apt ': ' apartment ', ' ste ': ' suite ',\n  };\n  for (const [abbr, full] of Object.entries(streetTypes)) {\n    normalized = normalized.replace(new RegExp(abbr, 'g'), full);\n  }\n  normalized = normalized.replace(/\\s+/g, ' ').trim();\n  return normalized;\n};\n\nconst data = items[0].json;\nconst workizJobs = data.workizJobs || [];\nconst estimateForms = data.estimateForms || [];\n\nconsole.log(`[Matcher] Found ${workizJobs.length} Workiz jobs and ${estimateForms.length} estimate forms`);\n\n// Build maps for forms (by phone and address)\nconst formPhoneMap = new Map();\nconst formAddressMap = new Map();\n\nfor (const form of estimateForms) {\n  const formData = form.form_data || {};\n  \n  // Collect all phones from form\n  const phones = [];\n  if (form.phone_number) phones.push(normalizePhone(form.phone_number));\n  if (formData.phone) phones.push(normalizePhone(formData.phone));\n  if (Array.isArray(formData.phones)) {\n    for (const p of formData.phones) {\n      if (p && p.number) phones.push(normalizePhone(p.number));\n    }\n  }\n  \n  for (const phone of phones) {\n    if (phone) {\n      const existing = formPhoneMap.get(phone) || [];\n      existing.push(form);\n      formPhoneMap.set(phone, existing);\n    }\n  }\n  \n  const formAddress = normalizeAddress(formData.pickupAddress || form.address || form.customer_home_address);\n  if (formAddress) {\n    const existing = formAddressMap.get(formAddress) || [];\n    existing.push(form);\n    formAddressMap.set(formAddress, existing);\n  }\n}\n\n// Track which Workiz jobs are matched and which forms need updates\nconst matchedWorkizIds = new Set();\nconst formUpdates = new Map(); // form.id -> Set of job serial_ids\n\nfor (const wj of workizJobs) {\n  const wjPhone = normalizePhone(wj.phone);\n  const wjAddress = normalizeAddress(wj.address);\n  let matched = false;\n  \n  // Check phone match\n  if (wjPhone) {\n    const matchingForms = formPhoneMap.get(wjPhone) || [];\n    for (const form of matchingForms) {\n      matched = true;\n      matchedWorkizIds.add(wj.serial_id);\n      const existing = formUpdates.get(form.id) || new Set();\n      existing.add(String(wj.serial_id));\n      formUpdates.set(form.id, existing);\n    }\n  }\n  \n  // Check address match\n  if (wjAddress) {\n    const matchingForms = formAddressMap.get(wjAddress) || [];\n    for (const form of matchingForms) {\n      matched = true;\n      matchedWorkizIds.add(wj.serial_id);\n      const existing = formUpdates.get(form.id) || new Set();\n      existing.add(String(wj.serial_id));\n      formUpdates.set(form.id, existing);\n    }\n  }\n}\n\n// Prepare updates for existing forms\nconst updates = [];\nfor (const form of estimateForms) {\n  const jobIds = formUpdates.get(form.id);\n  if (jobIds && jobIds.size > 0) {\n    const jobNumbers = [...jobIds].join(',');\n    const currentJobNumber = form.job_number || '';\n    if (currentJobNumber !== jobNumbers) {\n      updates.push({\n        action: 'update',\n        id: form.id,\n        job_number: jobNumbers\n      });\n    }\n  }\n}\n\n// Find unmatched Workiz jobs and group by phone/address\nconst unmatchedJobs = workizJobs.filter(wj => !matchedWorkizIds.has(wj.serial_id));\n\n// Group unmatched jobs by phone number (same customer might have multiple jobs)\nconst unmatchedByPhone = new Map();\nfor (const wj of unmatchedJobs) {\n  const phone = normalizePhone(wj.phone);\n  const key = phone || `addr_${normalizeAddress(wj.address)}`;\n  const existing = unmatchedByPhone.get(key) || [];\n  existing.push(wj);\n  unmatchedByPhone.set(key, existing);\n}\n\n// Create new forms for unmatched jobs\nconst creates = [];\nfor (const [key, jobs] of unmatchedByPhone.entries()) {\n  const firstJob = jobs[0];\n  const jobNumbers = jobs.map(j => String(j.serial_id)).join(',');\n  \n  creates.push({\n    action: 'create',\n    job_number: jobNumbers,\n    phone_number: firstJob.phone || '',\n    address: firstJob.address || '',\n    customer_home_address: firstJob.address || '',\n    form_data: {\n      firstName: firstJob.first_name || '',\n      lastName: firstJob.last_name || '',\n      email: firstJob.email || '',\n      phone: firstJob.phone || '',\n      pickupAddress: firstJob.address || '',\n      pickupCity: firstJob.city || '',\n      pickupState: firstJob.state || '',\n      pickupZip: firstJob.postal_code || '',\n      serviceType: firstJob.job_type === 'Moving WT' ? 'walkthrough' : 'local',\n      createdFromWorkiz: true,\n      workizSerialIds: jobs.map(j => j.serial_id)\n    }\n  });\n}\n\nconsole.log(`[Matcher] ${updates.length} forms to update, ${creates.length} new forms to create`);\n\nconst results = [...updates, ...creates];\n\nif (results.length === 0) {\n  return [{ json: { noChanges: true, message: 'No updates or creates needed' } }];\n}\n\nreturn results.map(r => ({ json: r }));"
       },
       "id": "match_forms_to_jobs",
       "name": "Match Forms to Jobs",
@@ -118,8 +118,8 @@
           },
           "conditions": [
             {
-              "id": "has_updates",
-              "leftValue": "={{ $json.noUpdates }}",
+              "id": "has_changes",
+              "leftValue": "={{ $json.noChanges }}",
               "rightValue": true,
               "operator": {
                 "type": "boolean",
@@ -131,11 +131,40 @@
         },
         "options": {}
       },
-      "id": "check_has_updates",
-      "name": "Has Updates?",
+      "id": "check_has_changes",
+      "name": "Has Changes?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "is_update",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "update",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "route_action",
+      "name": "Update or Create?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1250, 300]
     },
     {
       "parameters": {
@@ -166,32 +195,66 @@
         "options": {}
       },
       "id": "update_job_numbers",
-      "name": "Update Job Numbers",
+      "name": "Update Existing Form",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1250, 200]
+      "position": [1450, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://jvflufcpcxlsnszlvolj.supabase.co/rest/v1/move_quote",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2Zmx1ZmNwY3hsc25zemx2b2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzNDY5MzIsImV4cCI6MjA3ODkyMjkzMn0.UrDJLRPrMCG4LYDiXccHu6o-FYVaCBiASzQe1RqwWZg"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ job_number: $json.job_number, phone_number: $json.phone_number, address: $json.address, customer_home_address: $json.customer_home_address, form_data: $json.form_data }) }}",
+        "options": {}
+      },
+      "id": "create_estimate_form",
+      "name": "Create New Form",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1450, 400]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const count = items.length;\nconsole.log(`[Matcher] Successfully updated ${count} estimate forms with Workiz job numbers`);\n\nreturn [{\n  json: {\n    success: true,\n    updated_count: count,\n    timestamp: new Date().toISOString()\n  }\n}];"
+        "jsCode": "const updates = items.filter(i => i.json.action === 'update').length;\nconst creates = items.filter(i => i.json.action === 'create').length;\nconsole.log(`[Matcher] Completed: ${updates} updated, ${creates} created`);\n\nreturn [{\n  json: {\n    success: true,\n    updated_count: updates,\n    created_count: creates,\n    timestamp: new Date().toISOString()\n  }\n}];"
       },
       "id": "log_summary",
       "name": "Log Summary",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1450, 200]
+      "position": [1650, 300]
     },
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "console.log('[Matcher] No updates needed - all forms already matched');\nreturn [{ json: { message: 'No updates needed', timestamp: new Date().toISOString() } }];"
+        "jsCode": "console.log('[Matcher] No changes needed');\nreturn [{ json: { message: 'No changes needed', timestamp: new Date().toISOString() } }];"
       },
-      "id": "no_updates",
-      "name": "No Updates",
+      "id": "no_changes",
+      "name": "No Changes",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1250, 400]
+      "position": [1250, 500]
     }
   ],
   "connections": {
@@ -248,32 +311,61 @@
       "main": [
         [
           {
-            "node": "Has Updates?",
+            "node": "Has Changes?",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Has Updates?": {
+    "Has Changes?": {
       "main": [
         [
           {
-            "node": "Update Job Numbers",
+            "node": "Update or Create?",
             "type": "main",
             "index": 0
           }
         ],
         [
           {
-            "node": "No Updates",
+            "node": "No Changes",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Update Job Numbers": {
+    "Update or Create?": {
+      "main": [
+        [
+          {
+            "node": "Update Existing Form",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create New Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Existing Form": {
+      "main": [
+        [
+          {
+            "node": "Log Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Form": {
       "main": [
         [
           {
