@@ -3400,11 +3400,11 @@ export default function MoveWalkthrough() {
                       alert('Please enter customer first and last name');
                       return;
                     }
-                    if (!formData.phone && formData.phones?.length === 0) {
+                    if (!formData.phone) {
                       alert('Please enter a phone number');
                       return;
                     }
-                    if (!formData.email && formData.emails?.length === 0) {
+                    if (!formData.email) {
                       alert('Please enter an email address');
                       return;
                     }
