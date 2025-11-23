@@ -3351,17 +3351,24 @@ export default function MoveWalkthrough() {
                   )}
                 </div>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
-                  <input
-                    type="time"
+                  <select
                     name="walkThroughTime"
                     value={formData.walkThroughTime}
                     onChange={handleInputChange}
-                    step="900"
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
-                  />
-                  {!formData.walkThroughTime && (
-                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex 2xl:hidden">--:-- --</span>
-                  )}
+                  >
+                    <option value="">--:-- --</option>
+                    {Array.from({ length: 24 * 4 }, (_, i) => {
+                      const hour = Math.floor(i / 4);
+                      const minute = (i % 4) * 15;
+                      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                      const ampm = hour < 12 ? 'AM' : 'PM';
+                      const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                      const label = `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+                      return <option key={value} value={value}>{label}</option>;
+                    })}
+                  </select>
+
                 </div>
               </div>
               <div className="flex items-center gap-2 mt-2">
@@ -3405,17 +3412,24 @@ export default function MoveWalkthrough() {
                   )}
                 </div>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
-                  <input
-                    type="time"
+                  <select
                     name="preferredTime"
                     value={formData.preferredTime}
                     onChange={handleInputChange}
-                    step="900"
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
-                  />
-                  {!formData.preferredTime && (
-                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex 2xl:hidden">--:-- --</span>
-                  )}
+                  >
+                    <option value="">--:-- --</option>
+                    {Array.from({ length: 24 * 4 }, (_, i) => {
+                      const hour = Math.floor(i / 4);
+                      const minute = (i % 4) * 15;
+                      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+                      const ampm = hour < 12 ? 'AM' : 'PM';
+                      const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+                      const label = `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
+                      return <option key={value} value={value}>{label}</option>;
+                    })}
+                  </select>
+
                 </div>
               </div>
               <div className="flex items-center gap-2 mt-2">
