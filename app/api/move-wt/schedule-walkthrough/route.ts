@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
       City: city || '',
       State: state || '',
       PostalCode: zip || '', // API uses PostalCode, not Zip
-      JobType: 'Move WT',
+      JobType: 'Moving WT',
       JobDateTime: jobDateTime,
       JobEndDateTime: jobEndDateTime,
       JobNotes: `Walk-through scheduled for ${durationHours} hour(s)`,
