@@ -3358,15 +3358,16 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   >
                     <option value="">--:-- --</option>
-                    {Array.from({ length: 24 * 4 }, (_, i) => {
-                      const hour = Math.floor(i / 4);
+                    {Array.from({ length: 65 }, (_, i) => {
+                      const hour = Math.floor(i / 4) + 6;
                       const minute = (i % 4) * 15;
+                      if (hour > 22 || (hour === 22 && minute > 0)) return null;
                       const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
                       const ampm = hour < 12 ? 'AM' : 'PM';
                       const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
                       const label = `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
                       return <option key={value} value={value}>{label}</option>;
-                    })}
+                    }).filter(Boolean)}
                   </select>
 
                 </div>
@@ -3419,15 +3420,16 @@ export default function MoveWalkthrough() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
                   >
                     <option value="">--:-- --</option>
-                    {Array.from({ length: 24 * 4 }, (_, i) => {
-                      const hour = Math.floor(i / 4);
+                    {Array.from({ length: 65 }, (_, i) => {
+                      const hour = Math.floor(i / 4) + 6;
                       const minute = (i % 4) * 15;
+                      if (hour > 22 || (hour === 22 && minute > 0)) return null;
                       const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
                       const ampm = hour < 12 ? 'AM' : 'PM';
                       const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
                       const label = `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
                       return <option key={value} value={value}>{label}</option>;
-                    })}
+                    }).filter(Boolean)}
                   </select>
 
                 </div>
