@@ -2114,7 +2114,8 @@ export default function MoveWalkthrough() {
     formData.additionalStopCity,
     formData.additionalStopState,
     formData.additionalStopZip,
-    formData.estimatedCrewSize
+    formData.estimatedCrewSize,
+    formData.serviceType
   ]);
 
   // Quote Calculation
