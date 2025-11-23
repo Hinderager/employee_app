@@ -3026,7 +3026,7 @@ export default function MoveWalkthrough() {
                 value={jobNumber}
                 onChange={(e) => setJobNumber(e.target.value)}
                 placeholder="Job #"
-                className="w-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
               <input
                 id="searchPhone"
@@ -3044,7 +3044,7 @@ export default function MoveWalkthrough() {
                 value={searchQuoteNum}
                 onChange={(e) => setSearchQuoteNum(e.target.value.replace(/D/g, '').slice(0, 4))}
                 placeholder="Quote #"
-                className="w-24 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div className="flex items-center justify-center gap-3">
