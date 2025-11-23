@@ -3386,8 +3386,74 @@ export default function MoveWalkthrough() {
                 <button
                   type="button"
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium"
-                  onClick={() => {
-                    alert('Schedule functionality coming soon');
+                  onClick={async () => {
+                    // Validate required fields
+                    if (!formData.walkThroughDate) {
+                      alert('Please select a walk-through date');
+                      return;
+                    }
+                    if (!formData.walkThroughTime) {
+                      alert('Please select a walk-through time');
+                      return;
+                    }
+                    if (!formData.firstName || !formData.lastName) {
+                      alert('Please enter customer first and last name');
+                      return;
+                    }
+                    if (!formData.phone && formData.phones?.length === 0) {
+                      alert('Please enter a phone number');
+                      return;
+                    }
+                    if (!formData.email && formData.emails?.length === 0) {
+                      alert('Please enter an email address');
+                      return;
+                    }
+                    
+                    // Get the current home/business address based on customerHomeAddressType
+                    const isPickup = formData.customerHomeAddressType === 'pickup';
+                    const address = isPickup ? formData.pickupAddress : formData.deliveryAddress;
+                    const city = isPickup ? formData.pickupCity : formData.deliveryCity;
+                    const state = isPickup ? formData.pickupState : formData.deliveryState;
+                    const zip = isPickup ? formData.pickupZip : formData.deliveryZip;
+                    
+                    if (!address && !city && !state && !zip) {
+                      alert('Please enter the customer's current home or business address');
+                      return;
+                    }
+                    
+                    const phone = formData.phone || formData.phones?.[0]?.number || '';
+                    const email = formData.email || formData.emails?.[0]?.email || '';
+                    
+                    try {
+                      const response = await fetch('/api/move-wt/schedule-walkthrough', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          walkThroughDate: formData.walkThroughDate,
+                          walkThroughTime: formData.walkThroughTime,
+                          walkThroughDuration: formData.walkThroughDuration || '1',
+                          firstName: formData.firstName,
+                          lastName: formData.lastName,
+                          phone,
+                          email,
+                          address,
+                          city,
+                          state,
+                          zip,
+                        }),
+                      });
+                      
+                      const data = await response.json();
+                      
+                      if (data.success) {
+                        alert('Walk-through scheduled successfully in Workiz!');
+                      } else {
+                        alert('Failed to schedule: ' + (data.error || 'Unknown error'));
+                      }
+                    } catch (error) {
+                      console.error('Schedule error:', error);
+                      alert('Failed to schedule walk-through. Please try again.');
+                    }
                   }}
                 >
                   Schedule
