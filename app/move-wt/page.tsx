@@ -3417,7 +3417,7 @@ export default function MoveWalkthrough() {
                     const zip = isPickup ? formData.pickupZip : formData.deliveryZip;
                     
                     if (!address && !city && !state && !zip) {
-                      alert('Please enter the customer's current home or business address');
+                      alert("Please enter the customer current home or business address");
                       return;
                     }
                     
