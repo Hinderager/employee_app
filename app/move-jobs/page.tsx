@@ -237,7 +237,28 @@ export default function MoveJobsPage() {
 
   const formatDate = (dateString: string) => {
     if (!dateString) return "";
-    const date = new Date(dateString);
+    // Parse the date string manually to avoid timezone issues
+    // Date-only strings like "2025-11-22" are interpreted as UTC,
+    // which shifts back a day when converted to local time
+    let year, month, day;
+    if (dateString.includes('-')) {
+      // YYYY-MM-DD format
+      [year, month, day] = dateString.split('T')[0].split('-').map(Number);
+    } else if (dateString.includes('/')) {
+      // MM/DD/YYYY format
+      const parts = dateString.split('/').map(Number);
+      [month, day, year] = parts;
+    } else {
+      // Fallback to Date parsing
+      const date = new Date(dateString);
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      });
+    }
+    // Create date at local noon to avoid any timezone edge cases
+    const date = new Date(year, month - 1, day, 12, 0, 0);
     return date.toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
