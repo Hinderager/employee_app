@@ -1366,6 +1366,44 @@ export default function MoveWalkthrough() {
             setEmails(savedEmails);
           }
         }
+      } else if (result.success) {
+        // Handle single form result (most common case from Recent Leads tiles)
+        setAddress(result.address || '');
+        setJobNumber(result.job_number || '');
+        setFolderUrl(result.folderUrl || '');
+        setIsFolderLinkCopied(false);
+        setIsFormSaved(true);
+
+        if (result.quoteNumber) {
+          setQuoteNumber(result.quoteNumber);
+        }
+
+        if (result.customerInfo) {
+          setFormData(prev => ({
+            ...prev,
+            firstName: result.customerInfo.firstName || "",
+            lastName: result.customerInfo.lastName || "",
+            phone: result.customerInfo.phone || "",
+            email: result.customerInfo.email || "",
+            pickupAddress: result.customerInfo.pickupAddress || "",
+            pickupUnit: result.customerInfo.pickupUnit || "",
+            pickupCity: result.customerInfo.pickupCity || "",
+            pickupState: result.customerInfo.pickupState || "",
+            pickupZip: result.customerInfo.pickupZip || "",
+          }));
+        }
+
+        if (result.existingFormData) {
+          const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
+          setFormData(restFormData);
+
+          if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
+            setPhones(savedPhones);
+          }
+          if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
+            setEmails(savedEmails);
+          }
+        }
       }
     } catch (error) {
       console.error('Load recent form error:', error);
