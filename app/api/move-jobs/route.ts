@@ -9,7 +9,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 // Normalize phone number - strip all non-digits
 const normalizePhone = (phone: string | null | undefined): string => {
   if (!phone) return '';
-  return phone.replace(/D/g, '');
+  return phone.replace(/\D/g, '');
 };
 
 export async function GET(request: NextRequest) {
