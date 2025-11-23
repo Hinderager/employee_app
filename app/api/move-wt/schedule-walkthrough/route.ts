@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 // Workiz API credentials
 const WORKIZ_API_KEY = process.env.WORKIZ_API_KEY || 'api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw';
-const WORKIZ_API_SECRET = process.env.WORKIZ_API_SECRET || '';
+const WORKIZ_API_SECRET = process.env.WORKIZ_API_SECRET || 'sec_50925302779624671511000216';
 // Use app.workiz.com (same as other Workiz routes)
 const WORKIZ_CREATE_JOB_URL = `https://app.workiz.com/api/v1/${WORKIZ_API_KEY}/job/create/`;
 
