@@ -257,6 +257,15 @@
       "parameters": {
         "method": "POST",
         "url": "https://employee-app-six-blush.vercel.app/api/reconcile-job-locations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
@@ -283,6 +292,15 @@
       "parameters": {
         "method": "POST",
         "url": "https://employee-app-six-blush.vercel.app/api/reconcile-job-locations",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
