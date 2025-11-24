@@ -110,17 +110,12 @@ function MoveWalkthroughContent() {
     const date = searchParams.get('date');
     const time = searchParams.get('time');
 
-    console.log('[Date Picker] Params:', { pickerType, date, time });
-
     if (pickerType && date && time) {
-      console.log('[Date Picker] Setting date for:', pickerType);
-
       // Restore from sessionStorage first to get all the form data
       const savedFormData = sessionStorage.getItem('moveWtFormData');
       if (savedFormData) {
         try {
           const parsed = JSON.parse(savedFormData);
-          console.log('[Date Picker] Restoring from sessionStorage and merging with new date');
 
           // Merge the new date/time with the restored data
           if (pickerType === 'moving') {
@@ -139,23 +134,17 @@ function MoveWalkthroughContent() {
       } else {
         // No saved data, just update the date fields
         if (pickerType === 'moving') {
-          setFormData(prev => {
-            console.log('[Date Picker] Updating preferredDate from', prev.preferredDate, 'to', date);
-            return {
-              ...prev,
-              preferredDate: date,
-              preferredTime: time,
-            };
-          });
+          setFormData(prev => ({
+            ...prev,
+            preferredDate: date,
+            preferredTime: time,
+          }));
         } else if (pickerType === 'walkthrough') {
-          setFormData(prev => {
-            console.log('[Date Picker] Updating walkThroughDate from', prev.walkThroughDate, 'to', date);
-            return {
-              ...prev,
-              walkThroughDate: date,
-              walkThroughTime: time,
-            };
-          });
+          setFormData(prev => ({
+            ...prev,
+            walkThroughDate: date,
+            walkThroughTime: time,
+          }));
         }
       }
 
@@ -412,11 +401,8 @@ function MoveWalkthroughContent() {
   useEffect(() => {
     // Only restore once
     if (hasRestoredFromStorage.current) {
-      console.log('[SessionStorage] Already restored, skipping');
       return;
     }
-
-    console.log('[SessionStorage] Attempting to restore form data');
 
     // Check if we have URL params from date picker
     const pickerType = searchParams.get('picker');
@@ -425,7 +411,6 @@ function MoveWalkthroughContent() {
     const hasPickerParams = pickerType && date && time;
 
     if (hasPickerParams) {
-      console.log('[SessionStorage] Has date picker params - will restore after picker updates');
       return; // Don't restore yet, wait for picker to set the date first
     }
 
@@ -433,17 +418,12 @@ function MoveWalkthroughContent() {
     if (savedFormData) {
       try {
         const parsed = JSON.parse(savedFormData);
-        console.log('[SessionStorage] Restored data, dates:', {
-          walkThroughDate: parsed.walkThroughDate,
-          preferredDate: parsed.preferredDate
-        });
         setFormData(parsed);
         hasRestoredFromStorage.current = true;
       } catch (error) {
         console.error('Error restoring form data:', error);
       }
     } else {
-      console.log('[SessionStorage] No saved data found');
       hasRestoredFromStorage.current = true;
     }
   }, [searchParams]);
@@ -896,7 +876,6 @@ function MoveWalkthroughContent() {
         return;
       } else {
         // Handle unchecking other checkboxes (like waiveTravel, pickupManualOverride, etc.)
-        console.log('[Checkbox] Unchecking:', name);
         setFormData(prev => ({
           ...prev,
           [name]: false
@@ -949,9 +928,6 @@ function MoveWalkthroughContent() {
       }));
     }
     else {
-      if (name === 'waiveTravel') {
-        console.log('[waiveTravel] Checkbox changed:', { checked, type });
-      }
       setFormData(prev => ({
         ...prev,
         [name]: type === 'checkbox' ? checked : processedValue
