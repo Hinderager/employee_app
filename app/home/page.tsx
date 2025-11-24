@@ -11,7 +11,6 @@ import {
   DocumentTextIcon,
   TruckIcon,
   ClipboardDocumentListIcon,
-  CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
 
 const menuItems = [
@@ -70,13 +69,6 @@ const menuItems = [
     href: "/move-jobs",
     icon: ClipboardDocumentListIcon,
     color: "bg-teal-500",
-  },
-  {
-    title: "Schedule",
-    description: "View daily schedule",
-    href: "/schedule",
-    icon: CalendarDaysIcon,
-    color: "bg-indigo-500",
   },
 ];
 
