@@ -84,16 +84,8 @@ export async function POST(request: NextRequest) {
       JobDateTime: jobDateTime,
       JobEndDateTime: jobEndDateTime,
       // Note: Tags are added via a separate update call after job creation
-      JobNotes: (() => {
-        let notes = `Walk-through scheduled for ${durationHours} hour(s)`;
-
-        if (timingNotes) {
-          notes += `\n\nAdditional Notes:\n${timingNotes}`;
-        }
-
-        return notes;
-      })(),
-      auth_secret: 'sec_50925302779624671511000216',  // Hardcoded temporarily
+      JobNotes: timingNotes || '',
+      auth_secret: WORKIZ_API_SECRET,
     };
 
     console.log('[schedule-walkthrough] Sending to Workiz:', WORKIZ_CREATE_JOB_URL);
@@ -135,7 +127,12 @@ export async function POST(request: NextRequest) {
     // Step 2: If tags were selected, update the job with tags (Tags only work on update endpoint)
     let tagsUpdateResult = null;
     if (tags && tags.length > 0 && jobUUID) {
-      console.log('[schedule-walkthrough] Updating job with tags:', tags);
+      console.log('[schedule-walkthrough] Tags to add:', tags);
+      console.log('[schedule-walkthrough] Job UUID for tag update:', jobUUID);
+
+      // Wait 1 second for Workiz to fully process the job before updating tags
+      console.log('[schedule-walkthrough] Waiting 1 second before adding tags...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       const updatePayload = {
         auth_secret: WORKIZ_API_SECRET,

@@ -88,21 +88,7 @@ export async function POST(request: NextRequest) {
       JobType: 'Moving',
       JobDateTime: jobDateTime,
       JobEndDateTime: jobEndDateTime,
-      JobNotes: (() => {
-        let notes = `Moving job scheduled for ${durationHours} hour(s)`;
-
-        notes += `\n\nPickup Address: ${fullPickupAddress}`;
-
-        if (fullDeliveryAddress) {
-          notes += `\nDelivery Address: ${fullDeliveryAddress}`;
-        }
-
-        if (timingNotes) {
-          notes += `\n\nAdditional Notes:\n${timingNotes}`;
-        }
-
-        return notes;
-      })(),
+      JobNotes: timingNotes || '',
       auth_secret: WORKIZ_API_SECRET,
     };
 
@@ -145,7 +131,12 @@ export async function POST(request: NextRequest) {
     // Step 2: If tags were selected, update the job with tags (Tags only work on update endpoint)
     let tagsUpdateResult = null;
     if (tags && tags.length > 0 && jobUUID) {
-      console.log('[schedule-moving] Updating job with tags:', tags);
+      console.log('[schedule-moving] Tags to add:', tags);
+      console.log('[schedule-moving] Job UUID for tag update:', jobUUID);
+
+      // Wait 1 second for Workiz to fully process the job before updating tags
+      console.log('[schedule-moving] Waiting 1 second before adding tags...');
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       const updatePayload = {
         auth_secret: WORKIZ_API_SECRET,

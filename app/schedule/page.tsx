@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronLeftIcon,
@@ -211,6 +212,10 @@ function getTagColor(tag: string): string {
 }
 
 export default function SchedulePage() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pickerMode = searchParams.get('picker'); // 'moving' or 'walkthrough'
+  
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [threeWeeks, setThreeWeeks] = useState<DayInfo[][]>([[], [], []]);
   const [jobs, setJobs] = useState<ScheduleJob[]>([]);
@@ -383,6 +388,19 @@ export default function SchedulePage() {
     setSelectedDate(new Date());
   };
 
+  // Handle clicking on an hour slot when in picker mode
+  const handleHourClick = (hour: number) => {
+    if (!pickerMode) return;
+    
+    const dateStr = formatDateForApi(selectedDate);
+    const hour12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
+    const ampm = hour < 12 ? 'AM' : 'PM';
+    const timeStr = `${hour.toString().padStart(2, '0')}:00`;
+    
+    // Navigate back to move-wt with selected date and time
+    router.push(`/move-wt?picker=${pickerMode}&date=${dateStr}&time=${timeStr}`);
+  };
+
   const goToMonth = (monthOffset: number) => {
     const newDate = new Date(selectedDate);
     newDate.setMonth(selectedDate.getMonth() + monthOffset);
@@ -428,7 +446,7 @@ export default function SchedulePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col safe-top safe-bottom">
+    <div className="min-h-screen bg-gray-100 flex flex-col safe-top safe-bottom overflow-hidden" style={{ overscrollBehavior: 'none' }}>
       {/* Header */}
       <header className="text-white shadow-lg sticky top-0 z-40" style={{ backgroundColor: "#374151" }}>
         <div className="flex items-center justify-between px-4 py-3">
@@ -488,7 +506,7 @@ export default function SchedulePage() {
           
           {/* Close button */}
           <Link
-            href="/home"
+            href={pickerMode ? "/move-wt" : "/home"}
             className="p-2 hover:bg-gray-600 rounded-lg transition-colors"
           >
             <XMarkIcon className="w-6 h-6 text-gray-300" />
@@ -549,7 +567,7 @@ export default function SchedulePage() {
       {/* Schedule Grid */}
       <div
         ref={scheduleRef}
-        className="flex-1 overflow-y-auto bg-white overflow-x-hidden"
+        className="flex-1 overflow-y-auto bg-white overflow-x-hidden overscroll-contain"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -574,20 +592,22 @@ export default function SchedulePage() {
           </div>
         ) : (
           <div className="relative" style={{ height: `${HOURS.length * 60}px` }}>
-            {/* Hour Lines */}
+            {/* Hour Lines - clickable in picker mode */}
             {HOURS.map((hour) => (
               <div
                 key={hour}
-                className="absolute left-0 right-0 border-t border-gray-200"
-                style={{ top: `${(hour - 6) * 60}px` }}
+                className={`absolute left-0 right-0 border-t border-gray-200 ${pickerMode ? 'cursor-pointer hover:bg-blue-50' : ''}`}
+                style={{ top: `${(hour - 6) * 60}px`, height: '60px' }}
+                onClick={() => handleHourClick(hour)}
               >
-                <span className="absolute -top-3 left-2 text-xs text-gray-500 bg-white px-1">
+                <span className="absolute top-1 left-2 text-xs bg-white px-1 text-gray-500">
                   {hour === 12
                     ? "12 pm"
                     : hour > 12
                     ? `${hour - 12} pm`
                     : `${hour} am`}
                 </span>
+
               </div>
             ))}
 

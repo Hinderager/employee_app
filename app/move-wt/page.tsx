@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import QuotePreview from "../components/QuotePreview";
 import Script from "next/script";
 
 export default function MoveWalkthrough() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [jobNumber, setJobNumber] = useState("");
   const [searchPhone, setSearchPhone] = useState("");
   const [searchQuoteNum, setSearchQuoteNum] = useState("");
@@ -95,6 +96,31 @@ export default function MoveWalkthrough() {
     };
     fetchRecentForms();
   }, []);
+
+  // Handle date/time returned from schedule picker
+  useEffect(() => {
+    const pickerType = searchParams.get('picker');
+    const date = searchParams.get('date');
+    const time = searchParams.get('time');
+    
+    if (pickerType && date && time) {
+      if (pickerType === 'moving') {
+        setFormData(prev => ({
+          ...prev,
+          preferredDate: date,
+          preferredTime: time,
+        }));
+      } else if (pickerType === 'walkthrough') {
+        setFormData(prev => ({
+          ...prev,
+          walkThroughDate: date,
+          walkThroughTime: time,
+        }));
+      }
+      // Clear URL params after reading
+      router.replace('/move-wt', { scroll: false });
+    }
+  }, [searchParams, router]);
 
   // Refs for autocomplete inputs
   const pickupAddressRef = useRef<HTMLInputElement>(null);
@@ -1367,8 +1393,8 @@ export default function MoveWalkthrough() {
 
         if (result.existingFormData) {
           const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
-          // Replace all form data (not merge)
-          setFormData(restFormData);
+          // Replace all form data (not merge) - ensure tags defaults to empty array
+          setFormData({ ...restFormData, tags: restFormData.tags || [] });
 
           // Load phones and emails arrays
           if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
@@ -1407,7 +1433,8 @@ export default function MoveWalkthrough() {
 
         if (result.existingFormData) {
           const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
-          setFormData(restFormData);
+          // Ensure tags defaults to empty array for older saved forms
+          setFormData({ ...restFormData, tags: restFormData.tags || [] });
 
           if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
             setPhones(savedPhones);
@@ -3406,13 +3433,16 @@ export default function MoveWalkthrough() {
                 Walk-Through Date
               </label>
               <div className="flex items-center gap-6">
-                <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
+                <div
+                  className="relative flex-shrink-0 w-[105px] 2xl:w-[160px] cursor-pointer"
+                  onClick={() => router.push('/schedule?picker=walkthrough')}
+                >
                   <input
                     type="date"
                     name="walkThroughDate"
                     value={formData.walkThroughDate}
                     onChange={handleInputChange}
-                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full pointer-events-none"
                   />
                   {!formData.walkThroughDate && (
                     <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex 2xl:hidden">mm/dd/yyyy</span>
@@ -3493,6 +3523,7 @@ export default function MoveWalkthrough() {
                     const email = emails[0]?.email || '';
                     
                     try {
+                      console.log('[Schedule WT] Tags being sent:', formData.tags);
                       const response = await fetch('/api/move-wt/schedule-walkthrough', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -3509,7 +3540,7 @@ export default function MoveWalkthrough() {
                           state,
                           zip,
                           timingNotes: formData.timingNotes,
-                          tags: ['WT', ...formData.tags.filter(t => t !== 'WT')],
+                          tags: formData.tags,
                         }),
                       });
 
@@ -3536,13 +3567,16 @@ export default function MoveWalkthrough() {
                 Move Date
               </label>
               <div className="flex items-center gap-6">
-                <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
+                <div
+                  className="relative flex-shrink-0 w-[105px] 2xl:w-[160px] cursor-pointer"
+                  onClick={() => router.push('/schedule?picker=moving')}
+                >
                   <input
                     type="date"
                     name="preferredDate"
                     value={formData.preferredDate}
                     onChange={handleInputChange}
-                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
+                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full pointer-events-none"
                   />
                   {!formData.preferredDate && (
                     <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex 2xl:hidden">mm/dd/yyyy</span>
@@ -3595,6 +3629,7 @@ export default function MoveWalkthrough() {
                     const phone = phones[0]?.number || '';
                     const email = emails[0]?.email || '';
                     try {
+                      console.log('[Schedule Move] Tags being sent:', formData.tags);
                       const response = await fetch('/api/move-wt/schedule-moving', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -3615,7 +3650,7 @@ export default function MoveWalkthrough() {
                           deliveryState: formData.deliveryState,
                           deliveryZip: formData.deliveryZip,
                           timingNotes: formData.timingNotes,
-                          tags: ['Move', ...formData.tags.filter(t => t !== 'Move')],
+                          tags: formData.tags,
                         }),
                       });
                       const data = await response.json();
