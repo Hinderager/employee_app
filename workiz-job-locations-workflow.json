@@ -21,7 +21,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Get today's date in MST timezone\nconst mstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Denver' }));\nconst today = mstDate.toISOString().split('T')[0];\n\nreturn [{\n  json: {\n    today: today\n  }\n}];"
+        "jsCode": "// Get today's date in MST timezone using Intl.DateTimeFormat\nconst formatter = new Intl.DateTimeFormat('en-US', {\n  timeZone: 'America/Denver',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit'\n});\n\nconst parts = formatter.formatToParts(new Date());\nconst year = parts.find(p => p.type === 'year').value;\nconst month = parts.find(p => p.type === 'month').value;\nconst day = parts.find(p => p.type === 'day').value;\nconst today = `${year}-${month}-${day}`;\n\nreturn [{\n  json: {\n    today: today\n  }\n}];"
       },
       "id": "get_today_date",
       "name": "Get Today's Date",
