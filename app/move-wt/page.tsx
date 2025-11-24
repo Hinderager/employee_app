@@ -2236,6 +2236,7 @@ function MoveWalkthroughContent() {
       amount: number;
       subItems?: Array<{ description: string; amount: number; details?: string; alert?: string }>;
       discount?: string;
+      details?: string;
     }> = [];
     let baseRate = 0;
 
