@@ -51,6 +51,7 @@ function MoveWalkthroughContent() {
     status: 'success' | 'failed';
     error?: string;
   }>>([]);
+  const hasRestoredFromStorage = useRef(false);
 
   // Custom styles for invisible slider
   useEffect(() => {
@@ -113,25 +114,51 @@ function MoveWalkthroughContent() {
 
     if (pickerType && date && time) {
       console.log('[Date Picker] Setting date for:', pickerType);
-      if (pickerType === 'moving') {
-        setFormData(prev => {
-          console.log('[Date Picker] Updating preferredDate from', prev.preferredDate, 'to', date);
-          return {
-            ...prev,
-            preferredDate: date,
-            preferredTime: time,
-          };
-        });
-      } else if (pickerType === 'walkthrough') {
-        setFormData(prev => {
-          console.log('[Date Picker] Updating walkThroughDate from', prev.walkThroughDate, 'to', date);
-          return {
-            ...prev,
-            walkThroughDate: date,
-            walkThroughTime: time,
-          };
-        });
+
+      // Restore from sessionStorage first to get all the form data
+      const savedFormData = sessionStorage.getItem('moveWtFormData');
+      if (savedFormData) {
+        try {
+          const parsed = JSON.parse(savedFormData);
+          console.log('[Date Picker] Restoring from sessionStorage and merging with new date');
+
+          // Merge the new date/time with the restored data
+          if (pickerType === 'moving') {
+            parsed.preferredDate = date;
+            parsed.preferredTime = time;
+          } else if (pickerType === 'walkthrough') {
+            parsed.walkThroughDate = date;
+            parsed.walkThroughTime = time;
+          }
+
+          setFormData(parsed);
+          hasRestoredFromStorage.current = true;
+        } catch (error) {
+          console.error('[Date Picker] Error restoring/merging data:', error);
+        }
+      } else {
+        // No saved data, just update the date fields
+        if (pickerType === 'moving') {
+          setFormData(prev => {
+            console.log('[Date Picker] Updating preferredDate from', prev.preferredDate, 'to', date);
+            return {
+              ...prev,
+              preferredDate: date,
+              preferredTime: time,
+            };
+          });
+        } else if (pickerType === 'walkthrough') {
+          setFormData(prev => {
+            console.log('[Date Picker] Updating walkThroughDate from', prev.walkThroughDate, 'to', date);
+            return {
+              ...prev,
+              walkThroughDate: date,
+              walkThroughTime: time,
+            };
+          });
+        }
       }
+
       // Clear URL params after reading
       router.replace('/move-wt', { scroll: false });
     }
@@ -381,9 +408,27 @@ function MoveWalkthroughContent() {
     toolCustom3: "",
   });
 
-  // Restore form data from sessionStorage on mount (runs only once)
+  // Restore form data from sessionStorage on mount (only once, and only if not coming from picker)
   useEffect(() => {
-    console.log('[SessionStorage] Restoring form data on mount');
+    // Only restore once
+    if (hasRestoredFromStorage.current) {
+      console.log('[SessionStorage] Already restored, skipping');
+      return;
+    }
+
+    console.log('[SessionStorage] Attempting to restore form data');
+
+    // Check if we have URL params from date picker
+    const pickerType = searchParams.get('picker');
+    const date = searchParams.get('date');
+    const time = searchParams.get('time');
+    const hasPickerParams = pickerType && date && time;
+
+    if (hasPickerParams) {
+      console.log('[SessionStorage] Has date picker params - will restore after picker updates');
+      return; // Don't restore yet, wait for picker to set the date first
+    }
+
     const savedFormData = sessionStorage.getItem('moveWtFormData');
     if (savedFormData) {
       try {
@@ -393,13 +438,15 @@ function MoveWalkthroughContent() {
           preferredDate: parsed.preferredDate
         });
         setFormData(parsed);
+        hasRestoredFromStorage.current = true;
       } catch (error) {
         console.error('Error restoring form data:', error);
       }
     } else {
       console.log('[SessionStorage] No saved data found');
+      hasRestoredFromStorage.current = true;
     }
-  }, []);
+  }, [searchParams]);
 
   // Save form data to sessionStorage whenever it changes
   useEffect(() => {
