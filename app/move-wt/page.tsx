@@ -894,6 +894,14 @@ function MoveWalkthroughContent() {
           ...itemClearMap[name]
         }));
         return;
+      } else {
+        // Handle unchecking other checkboxes (like waiveTravel, pickupManualOverride, etc.)
+        console.log('[Checkbox] Unchecking:', name);
+        setFormData(prev => ({
+          ...prev,
+          [name]: false
+        }));
+        return;
       }
     }
     // Auto-check Safe Dolly if Piano or Gun Safe is checked
