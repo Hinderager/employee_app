@@ -32,7 +32,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://employee-f6p1r7lh0-eric-1619s-projects.vercel.app/api/cleanup-old-jobs",
+        "url": "https://employee-app-six-blush.vercel.app/api/cleanup-old-jobs",
         "options": {}
       },
       "id": "cleanup_old_jobs",
@@ -245,7 +245,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://employee-f6p1r7lh0-eric-1619s-projects.vercel.app/api/reconcile-job-locations",
+        "url": "https://employee-app-six-blush.vercel.app/api/reconcile-job-locations",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
@@ -277,7 +277,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://employee-f6p1r7lh0-eric-1619s-projects.vercel.app/api/reconcile-job-locations",
+        "url": "https://employee-app-six-blush.vercel.app/api/reconcile-job-locations",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
