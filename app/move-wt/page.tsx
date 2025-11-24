@@ -136,6 +136,7 @@ function MoveWalkthroughContent() {
       description: string;
       amount: number;
       discount?: string;
+      details?: string;
       subItems?: Array<{ description: string; amount: number; details?: string; alert?: string }>;
     }>,
     total: 0
