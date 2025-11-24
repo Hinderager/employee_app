@@ -10,6 +10,7 @@ import {
   ChatBubbleLeftIcon,
   PhoneIcon,
   UsersIcon,
+  XMarkIcon,
 } from "@heroicons/react/24/outline";
 import { CalendarDaysIcon } from "@heroicons/react/24/solid";
 
@@ -467,6 +468,14 @@ export default function SchedulePage() {
               </div>
             )}
           </div>
+          
+          {/* Close button */}
+          <Link
+            href="/home"
+            className="p-2 hover:bg-gray-600 rounded-lg transition-colors"
+          >
+            <XMarkIcon className="w-6 h-6 text-gray-300" />
+          </Link>
         </div>
 
         {/* Week Days - Continuous carousel showing 3 weeks */}
