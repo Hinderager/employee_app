@@ -258,14 +258,8 @@
         "method": "POST",
         "url": "https://employee-app-six-blush.vercel.app/api/reconcile-job-locations",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "job_numbers",
-              "value": "={{ $json.job_numbers }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ job_numbers: $json.job_numbers }) }}",
         "options": {}
       },
       "id": "reconcile_jobs",
@@ -290,14 +284,8 @@
         "method": "POST",
         "url": "https://employee-app-six-blush.vercel.app/api/reconcile-job-locations",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "job_numbers",
-              "value": "={{ $json.job_numbers }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ job_numbers: $json.job_numbers }) }}",
         "options": {}
       },
       "id": "reconcile_no_jobs",
