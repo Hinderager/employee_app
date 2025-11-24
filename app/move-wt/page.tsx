@@ -1154,6 +1154,7 @@ function MoveWalkthroughContent() {
     setFormData({
       // Service Type
       serviceType: "truck",
+      waiveTravel: false,
       travelBilling: "local",
       travelCost: "",
 
@@ -1196,6 +1197,8 @@ function MoveWalkthroughContent() {
       pickupTruckPodLength: "",
       pickupTruckPodWidth: "",
       pickupTruckPodHowFull: 100,
+      pickupManualOverride: false,
+      pickupManualOverrideHours: "",
 
       // Addresses - Delivery
       deliveryAddress: "",
@@ -1362,6 +1365,8 @@ function MoveWalkthroughContent() {
       toolCustom1: "",
       toolCustom2: "",
       toolCustom3: "",
+      pickupManualOverride: false,
+      pickupManualOverrideHours: "",
     });
 
     // Reset phones and emails arrays to empty state
@@ -1735,6 +1740,8 @@ function MoveWalkthroughContent() {
       pickupTruckPodLength: "",
       pickupTruckPodWidth: "",
       pickupTruckPodHowFull: 100,
+      pickupManualOverride: false,
+      pickupManualOverrideHours: "",
 
       // Addresses - Delivery
       deliveryAddress: "",
