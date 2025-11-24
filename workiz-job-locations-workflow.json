@@ -172,15 +172,11 @@
               "name": "last_synced_at",
               "value": "={{ $now.toISO() }}",
               "type": "string"
-            },
-            {
-              "id": "_jobNumbers",
-              "name": "_jobNumbers",
-              "value": "={{ $json._jobNumbers }}",
-              "type": "string"
             }
           ]
         },
+        "include": "selected",
+        "includeFields": "_jobNumbers",
         "options": {}
       },
       "id": "prepare_job_data",
