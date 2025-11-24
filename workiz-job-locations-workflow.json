@@ -214,7 +214,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://jvflufcpcxlsnszlvolj.supabase.co/rest/v1/job_locations",
+        "url": "https://jvflufcpcxlsnszlvolj.supabase.co/rest/v1/job_locations?on_conflict=job_number",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
