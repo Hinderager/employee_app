@@ -1365,8 +1365,6 @@ function MoveWalkthroughContent() {
       toolCustom1: "",
       toolCustom2: "",
       toolCustom3: "",
-      pickupManualOverride: false,
-      pickupManualOverrideHours: "",
     });
 
     // Reset phones and emails arrays to empty state
@@ -1700,6 +1698,7 @@ function MoveWalkthroughContent() {
     setFormData({
       // Service Type
       serviceType: "truck",
+      waiveTravel: false,
       travelBilling: "local",
       travelCost: "",
 
