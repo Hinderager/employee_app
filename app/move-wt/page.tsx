@@ -152,6 +152,7 @@ function MoveWalkthroughContent() {
   const [formData, setFormData] = useState({
     // Service Type
     serviceType: "truck",
+    waiveTravel: false,
     travelBilling: "local",
     travelCost: "",
 
@@ -2424,44 +2425,56 @@ function MoveWalkthroughContent() {
       const returnTravelTimeCharge = (adjustedFromDelivery.minutes / 60) * 170; // Always 2-person crew for travel time
       const returnTravelCharge = returnTravelDistanceCharge + returnTravelTimeCharge;
 
-      const totalTravelCharge = toStartCharge + moveTravelCharge + returnTravelCharge;
-
-      if (totalTravelCharge < 100) {
-        // Flat travel charge if less than $100
-        items.push({
-          description: 'Travel',
-          amount: 100
-        });
-      } else {
-        // Show breakdown if $100 or more
-        const subItems = [
-          {
-            description: 'Travel to Start',
-            details: `(${adjustedToPickup.miles.toFixed(1)} mi, ${formatDuration(adjustedToPickup.minutes)})`,
-            amount: Math.round(toStartCharge)
-          }
-        ];
-
-        // Add Move Travel if present
+      // If waive travel is checked, only include Move Travel (skip Travel to Start and Return Travel)
+      if (formData.waiveTravel) {
+        // Only add Move Travel if it exists and has miles
         if (distanceData.pickupToDelivery && distanceData.pickupToDelivery.miles > 0) {
-          subItems.push({
+          items.push({
             description: 'Move Travel',
             details: `(${distanceData.pickupToDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.pickupToDelivery.minutes)})`,
             amount: Math.round(moveTravelCharge)
           });
         }
+      } else {
+        const totalTravelCharge = toStartCharge + moveTravelCharge + returnTravelCharge;
 
-        subItems.push({
-          description: 'Return Travel',
-          details: `(${adjustedFromDelivery.miles.toFixed(1)} mi, ${formatDuration(adjustedFromDelivery.minutes)})`,
-          amount: Math.round(returnTravelCharge)
-        });
+        if (totalTravelCharge < 100) {
+          // Flat travel charge if less than $100
+          items.push({
+            description: 'Travel',
+            amount: 100
+          });
+        } else {
+          // Show breakdown if $100 or more
+          const subItems = [
+            {
+              description: 'Travel to Start',
+              details: `(${adjustedToPickup.miles.toFixed(1)} mi, ${formatDuration(adjustedToPickup.minutes)})`,
+              amount: Math.round(toStartCharge)
+            }
+          ];
 
-        items.push({
-          description: 'Travel (first 15 miles included)',
-          amount: Math.round(totalTravelCharge),
-          subItems: subItems
-        });
+          // Add Move Travel if present
+          if (distanceData.pickupToDelivery && distanceData.pickupToDelivery.miles > 0) {
+            subItems.push({
+              description: 'Move Travel',
+              details: `(${distanceData.pickupToDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.pickupToDelivery.minutes)})`,
+              amount: Math.round(moveTravelCharge)
+            });
+          }
+
+          subItems.push({
+            description: 'Return Travel',
+            details: `(${adjustedFromDelivery.miles.toFixed(1)} mi, ${formatDuration(adjustedFromDelivery.minutes)})`,
+            amount: Math.round(returnTravelCharge)
+          });
+
+          items.push({
+            description: 'Travel (first 15 miles included)',
+            amount: Math.round(totalTravelCharge),
+            subItems: subItems
+          });
+        }
       }
     }
 
@@ -3774,6 +3787,20 @@ function MoveWalkthroughContent() {
               />
               <label htmlFor="serviceLaborOnly" className="ml-2 text-sm font-medium text-gray-700">
                 Labor Only
+              </label>
+            </div>
+
+            <div className="flex items-center ml-auto">
+              <input
+                type="checkbox"
+                id="waiveTravel"
+                name="waiveTravel"
+                checked={formData.waiveTravel}
+                onChange={handleInputChange}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="waiveTravel" className="ml-2 text-sm font-medium text-gray-700">
+                Waive Travel
               </label>
             </div>
           </div>
