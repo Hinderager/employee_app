@@ -109,19 +109,28 @@ function MoveWalkthroughContent() {
     const date = searchParams.get('date');
     const time = searchParams.get('time');
 
+    console.log('[Date Picker] Params:', { pickerType, date, time });
+
     if (pickerType && date && time) {
+      console.log('[Date Picker] Setting date for:', pickerType);
       if (pickerType === 'moving') {
-        setFormData(prev => ({
-          ...prev,
-          preferredDate: date,
-          preferredTime: time,
-        }));
+        setFormData(prev => {
+          console.log('[Date Picker] Updating preferredDate from', prev.preferredDate, 'to', date);
+          return {
+            ...prev,
+            preferredDate: date,
+            preferredTime: time,
+          };
+        });
       } else if (pickerType === 'walkthrough') {
-        setFormData(prev => ({
-          ...prev,
-          walkThroughDate: date,
-          walkThroughTime: time,
-        }));
+        setFormData(prev => {
+          console.log('[Date Picker] Updating walkThroughDate from', prev.walkThroughDate, 'to', date);
+          return {
+            ...prev,
+            walkThroughDate: date,
+            walkThroughTime: time,
+          };
+        });
       }
       // Clear URL params after reading
       router.replace('/move-wt', { scroll: false });
@@ -372,16 +381,23 @@ function MoveWalkthroughContent() {
     toolCustom3: "",
   });
 
-  // Restore form data from sessionStorage on mount
+  // Restore form data from sessionStorage on mount (runs only once)
   useEffect(() => {
+    console.log('[SessionStorage] Restoring form data on mount');
     const savedFormData = sessionStorage.getItem('moveWtFormData');
     if (savedFormData) {
       try {
         const parsed = JSON.parse(savedFormData);
+        console.log('[SessionStorage] Restored data, dates:', {
+          walkThroughDate: parsed.walkThroughDate,
+          preferredDate: parsed.preferredDate
+        });
         setFormData(parsed);
       } catch (error) {
         console.error('Error restoring form data:', error);
       }
+    } else {
+      console.log('[SessionStorage] No saved data found');
     }
   }, []);
 
@@ -878,6 +894,9 @@ function MoveWalkthroughContent() {
       }));
     }
     else {
+      if (name === 'waiveTravel') {
+        console.log('[waiveTravel] Checkbox changed:', { checked, type });
+      }
       setFormData(prev => ({
         ...prev,
         [name]: type === 'checkbox' ? checked : processedValue
