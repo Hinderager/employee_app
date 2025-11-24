@@ -215,6 +215,63 @@
       "parameters": {
         "operation": "upsert",
         "tableId": "job_locations",
+        "filterType": "define",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldName": "job_number",
+              "fieldValue": "={{ $json.job_number }}"
+            },
+            {
+              "fieldName": "job_type",
+              "fieldValue": "={{ $json.job_type }}"
+            },
+            {
+              "fieldName": "job_start_time",
+              "fieldValue": "={{ $json.job_start_time }}"
+            },
+            {
+              "fieldName": "job_description",
+              "fieldValue": "={{ $json.job_description }}"
+            },
+            {
+              "fieldName": "customer_name",
+              "fieldValue": "={{ $json.customer_name }}"
+            },
+            {
+              "fieldName": "customer_phone",
+              "fieldValue": "={{ $json.customer_phone }}"
+            },
+            {
+              "fieldName": "address",
+              "fieldValue": "={{ $json.address }}"
+            },
+            {
+              "fieldName": "latitude",
+              "fieldValue": "={{ $json.latitude }}"
+            },
+            {
+              "fieldName": "longitude",
+              "fieldValue": "={{ $json.longitude }}"
+            },
+            {
+              "fieldName": "scheduled_date",
+              "fieldValue": "={{ $json.scheduled_date }}"
+            },
+            {
+              "fieldName": "workiz_job_id",
+              "fieldValue": "={{ $json.workiz_job_id }}"
+            },
+            {
+              "fieldName": "job_status",
+              "fieldValue": "={{ $json.job_status }}"
+            },
+            {
+              "fieldName": "last_synced_at",
+              "fieldValue": "={{ $json.last_synced_at }}"
+            }
+          ]
+        },
         "options": {
           "onConflict": "job_number"
         }
