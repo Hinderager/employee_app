@@ -662,7 +662,7 @@ function SchedulePageContent() {
 
             {/* No jobs message */}
             {jobs.length === 0 && !loading && (
-              <div className="absolute inset-0 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <p className="text-gray-500">No jobs scheduled for this day</p>
               </div>
             )}

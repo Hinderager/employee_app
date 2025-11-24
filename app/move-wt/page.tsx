@@ -97,12 +97,30 @@ function MoveWalkthroughContent() {
     fetchRecentForms();
   }, []);
 
+  // Restore form data from sessionStorage on mount
+  useEffect(() => {
+    const savedFormData = sessionStorage.getItem('moveWtFormData');
+    if (savedFormData) {
+      try {
+        const parsed = JSON.parse(savedFormData);
+        setFormData(parsed);
+      } catch (error) {
+        console.error('Error restoring form data:', error);
+      }
+    }
+  }, []);
+
+  // Save form data to sessionStorage whenever it changes
+  useEffect(() => {
+    sessionStorage.setItem('moveWtFormData', JSON.stringify(formData));
+  }, [formData]);
+
   // Handle date/time returned from schedule picker
   useEffect(() => {
     const pickerType = searchParams.get('picker');
     const date = searchParams.get('date');
     const time = searchParams.get('time');
-    
+
     if (pickerType && date && time) {
       if (pickerType === 'moving') {
         setFormData(prev => ({
