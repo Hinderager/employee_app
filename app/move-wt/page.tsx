@@ -45,6 +45,12 @@ function MoveWalkthroughContent() {
   const [showQuotePreview, setShowQuotePreview] = useState(false);
   const [quoteSent, setQuoteSent] = useState(false);
   const [isSendingQuote, setIsSendingQuote] = useState(false);
+  const [sendHistory, setSendHistory] = useState<Array<{
+    timestamp: string;
+    method: 'sms' | 'email';
+    status: 'success' | 'failed';
+    error?: string;
+  }>>([]);
 
   // Custom styles for invisible slider
   useEffect(() => {
@@ -520,7 +526,8 @@ function MoveWalkthroughContent() {
             ...normalizedFormData,
             quoteItems: quote?.items || [],
             total: quote?.total || 0,
-            baseRate: quote?.baseRate || 0
+            baseRate: quote?.baseRate || 0,
+            sendHistory: sendHistory
           },
           folderUrl: folderUrl,
           isTemporary: !jobNumber || jobNumber.trim() === '',
@@ -1371,6 +1378,7 @@ function MoveWalkthroughContent() {
     // Reset phones and emails arrays to empty state
     setPhones([{ number: "", name: "" }]);
     setEmails([{ email: "", name: "" }]);
+    setSendHistory([]);
 
     try {
       const response = await fetch('/api/move-wt/load-job', {
@@ -1417,7 +1425,7 @@ function MoveWalkthroughContent() {
         }
 
         if (result.existingFormData) {
-          const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
+          const { phones: savedPhones, emails: savedEmails, sendHistory: savedSendHistory, ...restFormData } = result.existingFormData;
           // Replace all form data (not merge) - ensure tags defaults to empty array
           setFormData({ ...restFormData, tags: restFormData.tags || [] });
 
@@ -1427,6 +1435,10 @@ function MoveWalkthroughContent() {
           }
           if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
             setEmails(savedEmails);
+          }
+          // Load send history
+          if (savedSendHistory && Array.isArray(savedSendHistory)) {
+            setSendHistory(savedSendHistory);
           }
         }
       } else if (result.success) {
@@ -1457,7 +1469,7 @@ function MoveWalkthroughContent() {
         }
 
         if (result.existingFormData) {
-          const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
+          const { phones: savedPhones, emails: savedEmails, sendHistory: savedSendHistory, ...restFormData } = result.existingFormData;
           // Ensure tags defaults to empty array for older saved forms
           setFormData({ ...restFormData, tags: restFormData.tags || [] });
 
@@ -1466,6 +1478,10 @@ function MoveWalkthroughContent() {
           }
           if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
             setEmails(savedEmails);
+          }
+          // Load send history
+          if (savedSendHistory && Array.isArray(savedSendHistory)) {
+            setSendHistory(savedSendHistory);
           }
         }
       }
@@ -1693,6 +1709,7 @@ function MoveWalkthroughContent() {
     setFolderUrl("");
     setPhones([{ number: "", name: "" }]);
     setEmails([{ email: "", name: "" }]);
+    setSendHistory([]);
     setIsFolderLinkCopied(false);
     setIsFormSaved(true);
     // Reset form to initial state
@@ -7077,6 +7094,13 @@ function MoveWalkthroughContent() {
 
                     console.log(`Quote sent successfully to ${formData.firstName}. URL: ${result.quoteUrl}`);
 
+                    // Record successful send
+                    setSendHistory(prev => [...prev, {
+                      timestamp: new Date().toISOString(),
+                      method: result.method || 'sms', // Assume SMS for now
+                      status: 'success'
+                    }]);
+
                     // Show "Sent" for 3 seconds
                     setQuoteSent(true);
                     setTimeout(() => {
@@ -7084,6 +7108,15 @@ function MoveWalkthroughContent() {
                     }, 3000);
                   } catch (error) {
                     console.error('Send quote error:', error);
+
+                    // Record failed send
+                    setSendHistory(prev => [...prev, {
+                      timestamp: new Date().toISOString(),
+                      method: 'sms', // Assume SMS for now
+                      status: 'failed',
+                      error: error instanceof Error ? error.message : 'Failed to send quote'
+                    }]);
+
                     alert(error instanceof Error ? error.message : 'Failed to send quote. Please try again.');
                   } finally {
                     setIsSendingQuote(false);
@@ -7098,6 +7131,40 @@ function MoveWalkthroughContent() {
               >
                 {isSendingQuote ? 'Sending...' : (quoteSent ? 'Sent' : 'Send to Customer')}
               </button>
+            </div>
+          </section>
+        )}
+
+        {/* Send History */}
+        {sendHistory.length > 0 && (
+          <section className="bg-white rounded-lg shadow p-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Send History</h3>
+            <div className="space-y-2">
+              {sendHistory.map((record, index) => (
+                <div key={index} className="flex items-center justify-between text-xs border-b border-gray-100 pb-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`px-2 py-1 rounded ${
+                      record.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {record.status === 'success' ? '✓' : '✗'} {record.method.toUpperCase()}
+                    </span>
+                    <span className="text-gray-600">
+                      {new Date(record.timestamp).toLocaleString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                        hour12: true
+                      })}
+                    </span>
+                  </div>
+                  {record.error && (
+                    <span className="text-red-600 text-xs truncate max-w-[200px]" title={record.error}>
+                      {record.error}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </section>
         )}
