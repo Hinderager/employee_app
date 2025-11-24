@@ -339,15 +339,25 @@ export default function SchedulePage() {
     const containerWidth = weekContainerRef.current?.offsetWidth || 300;
     const threshold = containerWidth * 0.2; // 20% of width to trigger
 
-    setIsWeekSwiping(false);
-    setWeekSwipeOffset(0);
-
     if (Math.abs(diff) > threshold) {
-      if (diff > 0) {
-        goToNextWeek();
-      } else {
-        goToPreviousWeek();
-      }
+      // Animate to target position first, then change week after animation
+      const targetOffset = diff > 0 ? -containerWidth : containerWidth;
+      setIsWeekSwiping(false);
+      setWeekSwipeOffset(targetOffset);
+      
+      // After animation completes, swap the week data
+      setTimeout(() => {
+        if (diff > 0) {
+          goToNextWeek();
+        } else {
+          goToPreviousWeek();
+        }
+        setWeekSwipeOffset(0);
+      }, 300); // Match the CSS transition duration
+    } else {
+      // Snap back to original position
+      setIsWeekSwiping(false);
+      setWeekSwipeOffset(0);
     }
   };
 
