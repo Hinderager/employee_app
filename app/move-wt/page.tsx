@@ -3105,7 +3105,7 @@ function MoveWalkthroughContent() {
       <header className="shadow-sm sticky top-0 z-10" style={{ backgroundColor: '#06649b' }}>
         <div className="px-4 py-4 flex items-center">
           <button
-            onClick={() => router.back()}
+            onClick={() => router.push('/')}
             className="text-white mr-3"
           >
             <ArrowLeftIcon className="h-6 w-6" />
