@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0; // Disable ISR caching
 
 const WORKIZ_API_KEY = process.env.WORKIZ_API_KEY || 'api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw';
 const WORKIZ_API_SECRET = process.env.WORKIZ_API_SECRET || 'sec_50925302779624671511000216';
@@ -174,8 +175,10 @@ export async function GET(request: NextRequest) {
       totalJobs: scheduleJobs.length,
     });
     
-    // Prevent caching to ensure real-time updates
-    jsonResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    // Prevent caching to ensure real-time updates (including Vercel edge)
+    jsonResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    jsonResponse.headers.set('CDN-Cache-Control', 'no-store');
+    jsonResponse.headers.set('Vercel-CDN-Cache-Control', 'no-store');
     jsonResponse.headers.set('Pragma', 'no-cache');
     
     return jsonResponse;

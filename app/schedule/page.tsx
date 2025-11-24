@@ -402,7 +402,7 @@ export default function SchedulePage() {
   return (
     <div className="min-h-screen bg-gray-100 flex flex-col safe-top safe-bottom">
       {/* Header */}
-      <header className="text-white shadow-lg" style={{ backgroundColor: "#374151" }}>
+      <header className="text-white shadow-lg sticky top-0 z-40" style={{ backgroundColor: "#374151" }}>
         <div className="flex items-center justify-between px-4 py-3">
           <div className="relative">
             <button
