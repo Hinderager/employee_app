@@ -213,78 +213,33 @@
     },
     {
       "parameters": {
-        "operation": "upsert",
-        "tableId": "job_locations",
-        "filterType": "define",
-        "fieldsUi": {
-          "fieldValues": [
-            {
-              "fieldName": "job_number",
-              "fieldValue": "={{ $json.job_number }}"
-            },
-            {
-              "fieldName": "job_type",
-              "fieldValue": "={{ $json.job_type }}"
-            },
-            {
-              "fieldName": "job_start_time",
-              "fieldValue": "={{ $json.job_start_time }}"
-            },
-            {
-              "fieldName": "job_description",
-              "fieldValue": "={{ $json.job_description }}"
-            },
-            {
-              "fieldName": "customer_name",
-              "fieldValue": "={{ $json.customer_name }}"
-            },
-            {
-              "fieldName": "customer_phone",
-              "fieldValue": "={{ $json.customer_phone }}"
-            },
-            {
-              "fieldName": "address",
-              "fieldValue": "={{ $json.address }}"
-            },
-            {
-              "fieldName": "latitude",
-              "fieldValue": "={{ $json.latitude }}"
-            },
-            {
-              "fieldName": "longitude",
-              "fieldValue": "={{ $json.longitude }}"
-            },
-            {
-              "fieldName": "scheduled_date",
-              "fieldValue": "={{ $json.scheduled_date }}"
-            },
-            {
-              "fieldName": "workiz_job_id",
-              "fieldValue": "={{ $json.workiz_job_id }}"
-            },
-            {
-              "fieldName": "job_status",
-              "fieldValue": "={{ $json.job_status }}"
-            },
-            {
-              "fieldName": "last_synced_at",
-              "fieldValue": "={{ $json.last_synced_at }}"
-            }
-          ]
-        },
+        "method": "POST",
+        "url": "https://jvflufcpcxlsnszlvolj.supabase.co/rest/v1/job_locations",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
-          "onConflict": "job_number"
+          "headers": {
+            "entries": [
+              {
+                "name": "Prefer",
+                "value": "resolution=merge-duplicates"
+              }
+            ]
+          }
         }
       },
       "id": "upsert_to_supabase",
       "name": "Upsert to Supabase",
-      "type": "n8n-nodes-base.supabase",
-      "typeVersion": 1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [2250, 200],
       "credentials": {
-        "supabaseApi": {
-          "id": "top_shelf_supabase",
-          "name": "Top Shelf Supabase"
+        "httpHeaderAuth": {
+          "id": "supabase_job_locations_api",
+          "name": "Supabase Job Locations API"
         }
       }
     },
