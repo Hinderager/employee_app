@@ -16,13 +16,6 @@ import {
 
 const menuItems = [
   {
-    title: "Schedule",
-    description: "View daily schedule",
-    href: "/schedule",
-    icon: CalendarDaysIcon,
-    color: "bg-indigo-500",
-  },
-  {
     title: "Vehicle Locations",
     description: "GPS Tracker",
     href: "/vehicle-locations",
@@ -77,6 +70,13 @@ const menuItems = [
     href: "/move-jobs",
     icon: ClipboardDocumentListIcon,
     color: "bg-teal-500",
+  },
+  {
+    title: "Schedule",
+    description: "View daily schedule",
+    href: "/schedule",
+    icon: CalendarDaysIcon,
+    color: "bg-indigo-500",
   },
 ];
 

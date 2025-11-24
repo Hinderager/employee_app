@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-const WORKIZ_API_KEY = process.env.WORKIZ_API_KEY!;
-const WORKIZ_API_SECRET = process.env.WORKIZ_API_SECRET!;
+const WORKIZ_API_KEY = process.env.WORKIZ_API_KEY || 'api_c3o9qvf0tpw86oqmkygifxjmadj3uvcw';
+const WORKIZ_API_SECRET = process.env.WORKIZ_API_SECRET || 'sec_50925302779624671511000216';
 
 interface WorkizJob {
   UUID: string;
