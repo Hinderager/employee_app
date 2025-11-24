@@ -1,5 +1,5 @@
 {
-  "name": "Workiz Job Locations Sync - Simplified",
+  "name": "Workiz Job Locations Sync - With Reconciliation",
   "nodes": [
     {
       "parameters": {
@@ -66,13 +66,30 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Get today's date in MST\nconst now = new Date();\nconst mstDateString = now.toLocaleString('en-US', { \n  timeZone: 'America/Denver',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit'\n});\nconst [month, day, year] = mstDateString.split(/[\\/, ]+/).filter(x => x);\nconst today = `${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`;\n\nconsole.log('Today (MST):', today);\n\n// Filter jobs for today\nconst filtered = items.filter(item => {\n  const job = item.json;\n  \n  if (!job.SerialId) return false;\n  \n  // Get date from StartDate or JobDateTime\n  let jobDateStr = job.StartDate || job.JobDateTime;\n  if (!jobDateStr) return false;\n  \n  // Extract date part\n  let jobDate;\n  if (jobDateStr.includes('T')) {\n    // ISO format\n    jobDate = jobDateStr.split('T')[0];\n  } else {\n    // SQL format\n    jobDate = jobDateStr.split(' ')[0];\n  }\n  \n  return jobDate === today;\n});\n\nconsole.log('Filtered:', filtered.length, 'of', items.length, 'jobs');\nreturn filtered;"
+        "jsCode": "// Get today's date in MST\nconst now = new Date();\nconst mstDateString = now.toLocaleString('en-US', { \n  timeZone: 'America/Denver',\n  year: 'numeric',\n  month: '2-digit',\n  day: '2-digit'\n});\nconst [month, day, year] = mstDateString.split(/[\\/, ]+/).filter(x => x);\nconst today = `${year}-${month.padStart(2,'0')}-${day.padStart(2,'0')}`;\n\nconsole.log('Today (MST):', today);\n\n// Filter jobs for today with status 'Submitted'\nconst filtered = items.filter(item => {\n  const job = item.json;\n  \n  if (!job.SerialId) return false;\n  \n  // Only include jobs with status 'Submitted'\n  if (job.Status !== 'Submitted') return false;\n  \n  // Get date from StartDate or JobDateTime\n  let jobDateStr = job.StartDate || job.JobDateTime;\n  if (!jobDateStr) return false;\n  \n  // Extract date part\n  let jobDate;\n  if (jobDateStr.includes('T')) {\n    // ISO format\n    jobDate = jobDateStr.split('T')[0];\n  } else {\n    // SQL format\n    jobDate = jobDateStr.split(' ')[0];\n  }\n  \n  return jobDate === today;\n});\n\nconsole.log('Filtered:', filtered.length, 'of', items.length, 'jobs');\n\n// Store the job numbers for reconciliation (in a static variable accessible later)\n// We'll pass this through via a special first item\nconst jobNumbers = filtered.map(item => String(item.json.SerialId));\n\n// If no jobs found, return a marker item for reconciliation\nif (filtered.length === 0) {\n  return [{\n    json: {\n      _noJobsMarker: true,\n      _jobNumbers: jobNumbers\n    }\n  }];\n}\n\n// Add job numbers to first item for later reconciliation\nif (filtered.length > 0) {\n  filtered[0].json._jobNumbers = jobNumbers;\n}\n\nreturn filtered;"
       },
       "id": "filter_today_jobs",
       "name": "Filter Today's Jobs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1250, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json._noJobsMarker }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check_no_jobs",
+      "name": "Has Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1450, 300]
     },
     {
       "parameters": {
@@ -145,9 +162,21 @@
               "type": "string"
             },
             {
+              "id": "job_status",
+              "name": "job_status",
+              "value": "={{ $json.Status || 'Unknown' }}",
+              "type": "string"
+            },
+            {
               "id": "last_synced_at",
               "name": "last_synced_at",
               "value": "={{ $now.toISO() }}",
+              "type": "string"
+            },
+            {
+              "id": "_jobNumbers",
+              "name": "_jobNumbers",
+              "value": "={{ $json._jobNumbers }}",
               "type": "string"
             }
           ]
@@ -158,7 +187,7 @@
       "name": "Prepare Job Data",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [1450, 300]
+      "position": [1650, 200]
     },
     {
       "parameters": {
@@ -169,7 +198,18 @@
       "name": "Parse Start Time",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1650, 300]
+      "position": [1850, 200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Extract job numbers for reconciliation before upserting\n// Store in workflow static data for use after upsert\nconst jobNumbers = items[0]?.json?._jobNumbers || [];\n\n// Store for later use\n$getWorkflowStaticData('global').jobNumbersForReconcile = jobNumbers;\n\n// Remove the _jobNumbers field from items before upserting\nreturn items.map(item => {\n  const { _jobNumbers, ...rest } = item.json;\n  return { json: rest };\n});"
+      },
+      "id": "store_job_numbers",
+      "name": "Store Job Numbers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2050, 200]
     },
     {
       "parameters": {
@@ -183,13 +223,77 @@
       "name": "Upsert to Supabase",
       "type": "n8n-nodes-base.supabase",
       "typeVersion": 1,
-      "position": [1850, 300],
+      "position": [2250, 200],
       "credentials": {
         "supabaseApi": {
           "id": "top_shelf_supabase",
           "name": "Top Shelf Supabase"
         }
       }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Get stored job numbers for reconciliation\nconst jobNumbers = $getWorkflowStaticData('global').jobNumbersForReconcile || [];\n\nreturn [{\n  json: {\n    job_numbers: jobNumbers\n  }\n}];"
+      },
+      "id": "get_job_numbers_for_reconcile",
+      "name": "Get Job Numbers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2450, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://employee-f6p1r7lh0-eric-1619s-projects.vercel.app/api/reconcile-job-locations",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "job_numbers",
+              "value": "={{ $json.job_numbers }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "reconcile_jobs",
+      "name": "Reconcile Jobs",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2650, 200]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// No jobs for today - just return empty array for reconciliation\nconst jobNumbers = $json._jobNumbers || [];\n\nreturn [{\n  json: {\n    job_numbers: jobNumbers\n  }\n}];"
+      },
+      "id": "prepare_empty_reconcile",
+      "name": "Prepare Empty Reconcile",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1650, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://employee-f6p1r7lh0-eric-1619s-projects.vercel.app/api/reconcile-job-locations",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "job_numbers",
+              "value": "={{ $json.job_numbers }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "reconcile_no_jobs",
+      "name": "Reconcile (No Jobs)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1850, 400]
     }
   ],
   "connections": {
@@ -252,6 +356,24 @@
       "main": [
         [
           {
+            "node": "Has Jobs?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Jobs?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Empty Reconcile",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Prepare Job Data",
             "type": "main",
             "index": 0
@@ -274,7 +396,51 @@
       "main": [
         [
           {
+            "node": "Store Job Numbers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Job Numbers": {
+      "main": [
+        [
+          {
             "node": "Upsert to Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert to Supabase": {
+      "main": [
+        [
+          {
+            "node": "Get Job Numbers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Numbers": {
+      "main": [
+        [
+          {
+            "node": "Reconcile Jobs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Empty Reconcile": {
+      "main": [
+        [
+          {
+            "node": "Reconcile (No Jobs)",
             "type": "main",
             "index": 0
           }
