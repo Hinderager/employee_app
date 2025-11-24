@@ -10,10 +10,18 @@ import {
   CameraIcon,
   DocumentTextIcon,
   TruckIcon,
-  ClipboardDocumentListIcon
+  ClipboardDocumentListIcon,
+  CalendarDaysIcon,
 } from "@heroicons/react/24/outline";
 
 const menuItems = [
+  {
+    title: "Schedule",
+    description: "View daily schedule",
+    href: "/schedule",
+    icon: CalendarDaysIcon,
+    color: "bg-indigo-500",
+  },
   {
     title: "Vehicle Locations",
     description: "GPS Tracker",
