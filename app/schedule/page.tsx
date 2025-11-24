@@ -225,6 +225,8 @@ export default function SchedulePage() {
   const weekTouchEndX = useRef<number>(0);
   const [weekSwipeOffset, setWeekSwipeOffset] = useState(0);
   const [isWeekSwiping, setIsWeekSwiping] = useState(false);
+  const [jobSwipeOffset, setJobSwipeOffset] = useState(0);
+  const [isJobSwiping, setIsJobSwiping] = useState(false);
 
   // Update three weeks when selected date changes
   useEffect(() => {
@@ -271,27 +273,42 @@ export default function SchedulePage() {
     return () => clearInterval(interval);
   }, [selectedDate, fetchJobs]);
 
-  // Handle swipe gestures
+  // Handle swipe gestures for jobs area with smooth animation
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
+    touchEndX.current = e.touches[0].clientX;
+    setIsJobSwiping(true);
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
     touchEndX.current = e.touches[0].clientX;
+    const offset = touchEndX.current - touchStartX.current;
+    setJobSwipeOffset(offset);
   };
 
   const handleTouchEnd = () => {
     const diff = touchStartX.current - touchEndX.current;
-    const threshold = 50; // Minimum swipe distance
+    const containerWidth = scheduleRef.current?.offsetWidth || 300;
+    const threshold = containerWidth * 0.2; // 20% to trigger
 
     if (Math.abs(diff) > threshold) {
-      if (diff > 0) {
-        // Swiped left - go to next day
-        goToNextDay();
-      } else {
-        // Swiped right - go to previous day
-        goToPreviousDay();
-      }
+      // Animate to target position first, then change day
+      const targetOffset = diff > 0 ? -containerWidth : containerWidth;
+      setIsJobSwiping(false);
+      setJobSwipeOffset(targetOffset);
+      
+      setTimeout(() => {
+        if (diff > 0) {
+          goToNextDay();
+        } else {
+          goToPreviousDay();
+        }
+        setJobSwipeOffset(0);
+      }, 300);
+    } else {
+      // Snap back
+      setIsJobSwiping(false);
+      setJobSwipeOffset(0);
     }
   };
 
@@ -532,10 +549,14 @@ export default function SchedulePage() {
       {/* Schedule Grid */}
       <div
         ref={scheduleRef}
-        className="flex-1 overflow-y-auto bg-white"
+        className="flex-1 overflow-y-auto bg-white overflow-x-hidden"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        style={{
+          transform: `translateX(${jobSwipeOffset}px)`,
+          transition: isJobSwiping ? 'none' : 'transform 0.3s ease-out',
+        }}
       >
         {loading ? (
           <div className="flex items-center justify-center h-64">
