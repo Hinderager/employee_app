@@ -207,6 +207,8 @@ export default function SchedulePage() {
   const scheduleRef = useRef<HTMLDivElement>(null);
   const weekTouchStartX = useRef<number>(0);
   const weekTouchEndX = useRef<number>(0);
+  const [weekSwipeOffset, setWeekSwipeOffset] = useState(0);
+  const [isWeekSwiping, setIsWeekSwiping] = useState(false);
 
   // Update week days when selected date changes
   useEffect(() => {
@@ -304,15 +306,23 @@ export default function SchedulePage() {
   // Week swipe handlers
   const handleWeekTouchStart = (e: React.TouchEvent) => {
     weekTouchStartX.current = e.touches[0].clientX;
+    weekTouchEndX.current = e.touches[0].clientX;
+    setIsWeekSwiping(true);
   };
 
   const handleWeekTouchMove = (e: React.TouchEvent) => {
     weekTouchEndX.current = e.touches[0].clientX;
+    const offset = weekTouchEndX.current - weekTouchStartX.current;
+    // Limit the offset to prevent over-swiping
+    setWeekSwipeOffset(Math.max(-100, Math.min(100, offset)));
   };
 
   const handleWeekTouchEnd = () => {
     const diff = weekTouchStartX.current - weekTouchEndX.current;
     const threshold = 50;
+
+    setIsWeekSwiping(false);
+    setWeekSwipeOffset(0);
 
     if (Math.abs(diff) > threshold) {
       if (diff > 0) {
@@ -434,6 +444,10 @@ export default function SchedulePage() {
         {/* Week Days - Swipe left/right to change weeks */}
         <div 
           className="flex justify-between px-2 pb-3 cursor-grab active:cursor-grabbing"
+          style={{
+            transform: `translateX(${weekSwipeOffset}px)`,
+            transition: isWeekSwiping ? 'none' : 'transform 0.3s ease-out',
+          }}
           onTouchStart={handleWeekTouchStart}
           onTouchMove={handleWeekTouchMove}
           onTouchEnd={handleWeekTouchEnd}
