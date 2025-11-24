@@ -416,7 +416,14 @@ function SchedulePageContent() {
   };
 
   const selectDay = (date: Date) => {
-    setSelectedDate(date);
+    // If in picker mode, return to move-wt with selected date and default time
+    if (pickerMode) {
+      const dateStr = formatDateForApi(date);
+      const defaultTime = '08:00'; // Default to 8:00 AM
+      router.push(`/move-wt?picker=${pickerMode}&date=${dateStr}&time=${defaultTime}`);
+    } else {
+      setSelectedDate(date);
+    }
   };
 
   // Calculate job columns for overlapping detection
