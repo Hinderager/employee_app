@@ -195,6 +195,8 @@ function MoveWalkthroughContent() {
     pickupTruckPodLength: "",
     pickupTruckPodWidth: "",
     pickupTruckPodHowFull: 100,
+    pickupManualOverride: false,
+    pickupManualOverrideHours: "",
 
     // Addresses - Delivery
     deliveryAddress: "",
@@ -2232,9 +2234,31 @@ function MoveWalkthroughContent() {
     const MINIMUM_LABOR = formData.serviceType === 'truck' ? 100 : 170;
     let movingLabor = MINIMUM_LABOR;
 
-    // Storage unit labor calculation
-    console.log('[Storage Labor] pickupLocationType:', formData.pickupLocationType);
-    if (formData.pickupLocationType === 'storage-unit') {
+    // Manual Override for Labor Hours
+    if (formData.pickupManualOverride && formData.pickupManualOverrideHours) {
+      const hours = parseFloat(formData.pickupManualOverrideHours);
+
+      // Get crew size for labor calculations
+      let crewSize = 2; // default
+      if (formData.estimatedCrewSize) {
+        const crewStr = formData.estimatedCrewSize.toString().trim();
+        if (crewStr.includes('-')) {
+          crewSize = parseInt(crewStr.split('-')[0]);
+        } else {
+          crewSize = parseInt(crewStr) || 2;
+        }
+      }
+
+      const hourlyRatePerPerson = 85;
+      movingLabor = hours * crewSize * hourlyRatePerPerson;
+
+      // Enforce minimum labor even with manual override
+      if (movingLabor < MINIMUM_LABOR) {
+        movingLabor = MINIMUM_LABOR;
+      }
+    } else if (formData.pickupLocationType === 'storage-unit') {
+      // Storage unit labor calculation
+      console.log('[Storage Labor] pickupLocationType:', formData.pickupLocationType);
       // Calculate labor for each storage unit
       let totalStorageLabor = 0;
       console.log('[Storage Labor] Quantity:', formData.pickupStorageUnitQuantity);
@@ -4066,6 +4090,33 @@ function MoveWalkthroughContent() {
                   )}
                 </select>
                 )}
+
+                {/* Manual Override for Labor Hours */}
+                <div className="flex items-center gap-3 mt-2">
+                  <input
+                    type="checkbox"
+                    id="pickupManualOverride"
+                    name="pickupManualOverride"
+                    checked={formData.pickupManualOverride}
+                    onChange={handleInputChange}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="pickupManualOverride" className="text-sm font-medium text-gray-700">
+                    Manual Override
+                  </label>
+                  {formData.pickupManualOverride && (
+                    <input
+                      type="number"
+                      name="pickupManualOverrideHours"
+                      value={formData.pickupManualOverrideHours}
+                      onChange={handleInputChange}
+                      placeholder="Hours"
+                      step="0.5"
+                      min="0"
+                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  )}
+                </div>
 
                 {/* Business Name field */}
                 {formData.pickupLocationType === 'business' && (
