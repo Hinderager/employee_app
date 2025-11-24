@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import QuotePreview from "../components/QuotePreview";
 import Script from "next/script";
 
-export default function MoveWalkthrough() {
+function MoveWalkthroughContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [jobNumber, setJobNumber] = useState("");
@@ -7082,5 +7082,17 @@ export default function MoveWalkthrough() {
       />
 
     </>
+  );
+}
+
+export default function MoveWalkthrough() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    }>
+      <MoveWalkthroughContent />
+    </Suspense>
   );
 }

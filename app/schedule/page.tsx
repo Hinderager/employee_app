@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -211,7 +211,7 @@ function getTagColor(tag: string): string {
   return "bg-gray-500 text-white";
 }
 
-export default function SchedulePage() {
+function SchedulePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pickerMode = searchParams.get('picker'); // 'moving' or 'walkthrough'
@@ -671,5 +671,17 @@ export default function SchedulePage() {
       </div>
 
     </div>
+  );
+}
+
+export default function SchedulePage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
+      </div>
+    }>
+      <SchedulePageContent />
+    </Suspense>
   );
 }
