@@ -215,6 +215,10 @@
         "headerParameters": {
           "parameters": [
             {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
               "name": "apikey",
               "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2Zmx1ZmNwY3hsc25zemx2b2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzNDY5MzIsImV4cCI6MjA3ODkyMjkzMn0.UrDJLRPrMCG4LYDiXccHu6o-FYVaCBiASzQe1RqwWZg"
             },
