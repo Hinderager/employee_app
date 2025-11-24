@@ -74,6 +74,21 @@ function getWeekDays(centerDate: Date): DayInfo[] {
   return days;
 }
 
+// Get 3 weeks (previous, current, next) for continuous carousel swiping
+function getThreeWeeks(centerDate: Date): DayInfo[][] {
+  const prevWeekDate = new Date(centerDate);
+  prevWeekDate.setDate(centerDate.getDate() - 7);
+
+  const nextWeekDate = new Date(centerDate);
+  nextWeekDate.setDate(centerDate.getDate() + 7);
+
+  return [
+    getWeekDays(prevWeekDate),
+    getWeekDays(centerDate),
+    getWeekDays(nextWeekDate),
+  ];
+}
+
 function getMonthName(date: Date): string {
   return date.toLocaleDateString("en-US", { month: "short" });
 }
@@ -196,7 +211,7 @@ function getTagColor(tag: string): string {
 
 export default function SchedulePage() {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [weekDays, setWeekDays] = useState<DayInfo[]>([]);
+  const [threeWeeks, setThreeWeeks] = useState<DayInfo[][]>([[], [], []]);
   const [jobs, setJobs] = useState<ScheduleJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -210,9 +225,9 @@ export default function SchedulePage() {
   const [weekSwipeOffset, setWeekSwipeOffset] = useState(0);
   const [isWeekSwiping, setIsWeekSwiping] = useState(false);
 
-  // Update week days when selected date changes
+  // Update three weeks when selected date changes
   useEffect(() => {
-    setWeekDays(getWeekDays(selectedDate));
+    setThreeWeeks(getThreeWeeks(selectedDate));
   }, [selectedDate]);
 
   // Fetch jobs when selected date changes
@@ -303,7 +318,9 @@ export default function SchedulePage() {
     setSelectedDate(prevWeek);
   };
 
-  // Week swipe handlers
+  // Week swipe handlers - for continuous carousel
+  const weekContainerRef = useRef<HTMLDivElement>(null);
+
   const handleWeekTouchStart = (e: React.TouchEvent) => {
     weekTouchStartX.current = e.touches[0].clientX;
     weekTouchEndX.current = e.touches[0].clientX;
@@ -313,13 +330,14 @@ export default function SchedulePage() {
   const handleWeekTouchMove = (e: React.TouchEvent) => {
     weekTouchEndX.current = e.touches[0].clientX;
     const offset = weekTouchEndX.current - weekTouchStartX.current;
-    // Limit the offset to prevent over-swiping
-    setWeekSwipeOffset(Math.max(-100, Math.min(100, offset)));
+    // Allow full week width swiping
+    setWeekSwipeOffset(offset);
   };
 
   const handleWeekTouchEnd = () => {
     const diff = weekTouchStartX.current - weekTouchEndX.current;
-    const threshold = 50;
+    const containerWidth = weekContainerRef.current?.offsetWidth || 300;
+    const threshold = containerWidth * 0.2; // 20% of width to trigger
 
     setIsWeekSwiping(false);
     setWeekSwipeOffset(0);
@@ -441,50 +459,54 @@ export default function SchedulePage() {
           </div>
         </div>
 
-        {/* Week Days - Swipe left/right to change weeks */}
-        <div 
-          className="flex justify-between px-2 pb-3 cursor-grab active:cursor-grabbing"
-          style={{
-            transform: `translateX(${weekSwipeOffset}px)`,
-            transition: isWeekSwiping ? 'none' : 'transform 0.3s ease-out',
-          }}
+        {/* Week Days - Continuous carousel showing 3 weeks */}
+        <div
+          ref={weekContainerRef}
+          className="overflow-hidden pb-3 cursor-grab active:cursor-grabbing"
           onTouchStart={handleWeekTouchStart}
           onTouchMove={handleWeekTouchMove}
           onTouchEnd={handleWeekTouchEnd}
         >
-          {weekDays.map((day, index) => (
-            <button
-              key={index}
-              onClick={() => selectDay(day.date)}
-              className={`flex flex-col items-center py-2 px-3 rounded-lg transition-all ${
-                day.date.toDateString() === selectedDate.toDateString()
-                  ? "bg-gray-600"
-                  : ""
-              }`}
-            >
-              <span
-                className={`text-xs ${
-                  day.isToday ? "text-yellow-400" : "text-gray-400"
-                }`}
-              >
-                {day.dayName}
-              </span>
-              <span
-                className={`text-lg font-medium mt-1 w-8 h-8 flex items-center justify-center rounded-full ${
-                  day.date.toDateString() === selectedDate.toDateString()
-                    ? "bg-gray-500 text-white"
-                    : day.isToday
-                    ? "text-yellow-400"
-                    : "text-white"
-                }`}
-              >
-                {day.dayNumber}
-              </span>
-              {day.hasJobs && (
-                <span className="w-1 h-1 bg-blue-400 rounded-full mt-1" />
-              )}
-            </button>
-          ))}
+          <div
+            className="flex"
+            style={{
+              transform: `translateX(calc(-33.333% + ${weekSwipeOffset}px))`,
+              transition: isWeekSwiping ? 'none' : 'transform 0.3s ease-out',
+              width: '300%',
+            }}
+          >
+            {threeWeeks.map((week, weekIndex) => (
+              <div key={weekIndex} className="flex justify-between px-2" style={{ width: '33.333%' }}>
+                {week.map((day, dayIndex) => (
+                  <button
+                    key={dayIndex}
+                    onClick={() => selectDay(day.date)}
+                    className={`flex flex-col items-center py-2 px-3 rounded-lg transition-all ${
+                      day.date.toDateString() === selectedDate.toDateString()
+                        ? "bg-gray-600"
+                        : ""
+                    }`}
+                  >
+                    <span className={`text-xs ${day.isToday ? "text-yellow-400" : "text-gray-400"}`}>
+                      {day.dayName}
+                    </span>
+                    <span className={`text-lg font-medium mt-1 w-8 h-8 flex items-center justify-center rounded-full ${
+                      day.date.toDateString() === selectedDate.toDateString()
+                        ? "bg-gray-500 text-white"
+                        : day.isToday
+                        ? "text-yellow-400"
+                        : "text-white"
+                    }`}>
+                      {day.dayNumber}
+                    </span>
+                    {day.hasJobs && (
+                      <span className="w-1 h-1 bg-blue-400 rounded-full mt-1" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
       </header>
 
