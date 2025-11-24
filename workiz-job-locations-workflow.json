@@ -215,14 +215,20 @@
       "parameters": {
         "method": "POST",
         "url": "https://jvflufcpcxlsnszlvolj.supabase.co/rest/v1/job_locations",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json) }}",
         "options": {
           "headers": {
             "entries": [
+              {
+                "name": "apikey",
+                "value": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2Zmx1ZmNwY3hsc25zemx2b2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzNDY5MzIsImV4cCI6MjA3ODkyMjkzMn0.UrDJLRPrMCG4LYDiXccHu6o-FYVaCBiASzQe1RqwWZg"
+              },
+              {
+                "name": "Authorization",
+                "value": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp2Zmx1ZmNwY3hsc25zemx2b2xqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzNDY5MzIsImV4cCI6MjA3ODkyMjkzMn0.UrDJLRPrMCG4LYDiXccHu6o-FYVaCBiASzQe1RqwWZg"
+              },
               {
                 "name": "Prefer",
                 "value": "resolution=merge-duplicates"
@@ -235,13 +241,7 @@
       "name": "Upsert to Supabase",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [2250, 200],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "supabase_job_locations_api",
-          "name": "Supabase Job Locations API"
-        }
-      }
+      "position": [2250, 200]
     },
     {
       "parameters": {
