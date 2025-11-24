@@ -3275,8 +3275,11 @@ function MoveWalkthroughContent() {
                 setFormData(prev => ({
                   // Service Type - reset to defaults
                   serviceType: "truck",
+                  waiveTravel: false,
                   travelBilling: "local",
                   travelCost: "",
+                  pickupManualOverride: false,
+                  pickupManualOverrideHours: "",
 
                   // Customer Information - PRESERVE
                   ...preservedData,
