@@ -3433,20 +3433,15 @@ export default function MoveWalkthrough() {
                 Walk-Through Date
               </label>
               <div className="flex items-center gap-6">
-                <div
-                  className="relative flex-shrink-0 w-[105px] 2xl:w-[160px] cursor-pointer"
-                  onClick={() => router.push('/schedule?picker=walkthrough')}
-                >
+                <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <input
-                    type="date"
-                    name="walkThroughDate"
-                    value={formData.walkThroughDate}
-                    onChange={handleInputChange}
-                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full pointer-events-none"
+                    type="text"
+                    readOnly
+                    value={formData.walkThroughDate ? new Date(formData.walkThroughDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
+                    placeholder="mm/dd/yyyy"
+                    onClick={() => router.push('/schedule?picker=walkthrough')}
+                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
                   />
-                  {!formData.walkThroughDate && (
-                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex 2xl:hidden">mm/dd/yyyy</span>
-                  )}
                 </div>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <select
@@ -3567,20 +3562,15 @@ export default function MoveWalkthrough() {
                 Move Date
               </label>
               <div className="flex items-center gap-6">
-                <div
-                  className="relative flex-shrink-0 w-[105px] 2xl:w-[160px] cursor-pointer"
-                  onClick={() => router.push('/schedule?picker=moving')}
-                >
+                <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <input
-                    type="date"
-                    name="preferredDate"
-                    value={formData.preferredDate}
-                    onChange={handleInputChange}
-                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full pointer-events-none"
+                    type="text"
+                    readOnly
+                    value={formData.preferredDate ? new Date(formData.preferredDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
+                    placeholder="mm/dd/yyyy"
+                    onClick={() => router.push('/schedule?picker=moving')}
+                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
                   />
-                  {!formData.preferredDate && (
-                    <span className="absolute inset-[1px] items-center px-2 bg-white text-gray-400 pointer-events-none rounded-md flex 2xl:hidden">mm/dd/yyyy</span>
-                  )}
                 </div>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <select
