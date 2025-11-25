@@ -45,7 +45,6 @@ async function getArrivalTimeFromTrips(imei: string, bouncieToken: string): Prom
     startDate.setDate(startDate.getDate() - 7);
 
     const tripsUrl = `https://api.bouncie.dev/v1/trips?imei=${imei}&starts-after=${startDate.toISOString()}&ends-before=${endDate.toISOString()}&gps-format=polyline`;
-    console.log(`Fetching trips from: ${tripsUrl}`);
 
     const response = await fetch(tripsUrl, {
       headers: {
@@ -55,44 +54,34 @@ async function getArrivalTimeFromTrips(imei: string, bouncieToken: string): Prom
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.log(`Failed to fetch trips for ${imei}: ${response.status} - ${errorText}`);
       return null;
     }
 
     const trips = await response.json();
-    console.log(`Trips response for ${imei}:`, JSON.stringify(trips, null, 2).substring(0, 1000));
 
     if (!Array.isArray(trips) || trips.length === 0) {
-      console.log(`No trips found for ${imei}`);
       return null;
     }
 
     // Sort trips by end time descending (most recent first)
     const sortedTrips = trips.sort((a: any, b: any) => {
-      const endA = new Date(a.endTime || a.end || 0).getTime();
-      const endB = new Date(b.endTime || b.end || 0).getTime();
+      const endA = new Date(a.endTime || 0).getTime();
+      const endB = new Date(b.endTime || 0).getTime();
       return endB - endA;
     });
 
     // Find the most recent trip that's > 0.2 miles
     for (const trip of sortedTrips) {
-      // Distance could be in 'distance', 'miles', or 'totalMiles'
-      const distance = trip.distance || trip.miles || trip.totalMiles || 0;
+      const distance = trip.distance || 0;
 
       if (distance >= MIN_TRIP_DISTANCE_MILES) {
         // Return the end time of this trip (when vehicle arrived at current location)
-        const arrivalTime = trip.endTime || trip.end;
-        console.log(`Found qualifying trip for ${imei}: ${distance} miles, ended at ${arrivalTime}`);
-        return arrivalTime;
+        return trip.endTime || null;
       }
     }
 
     // If no trip > 0.2 miles found, use the most recent trip end time anyway
-    const lastTrip = sortedTrips[0];
-    const lastArrivalTime = lastTrip?.endTime || lastTrip?.end;
-    console.log(`No trip > ${MIN_TRIP_DISTANCE_MILES} miles for ${imei}, using last trip: ${lastArrivalTime}`);
-    return lastArrivalTime || null;
+    return sortedTrips[0]?.endTime || null;
 
   } catch (error) {
     console.error(`Error fetching trips for ${imei}:`, error);
