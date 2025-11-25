@@ -44,7 +44,8 @@ async function getArrivalTimeFromTrips(imei: string, bouncieToken: string): Prom
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 7);
 
-    const tripsUrl = `https://api.bouncie.dev/v1/trips?imei=${imei}&starts-after=${startDate.toISOString()}&ends-before=${endDate.toISOString()}`;
+    const tripsUrl = `https://api.bouncie.dev/v1/trips?imei=${imei}&starts-after=${startDate.toISOString()}&ends-before=${endDate.toISOString()}&gps-format=polyline`;
+    console.log(`Fetching trips from: ${tripsUrl}`);
 
     const response = await fetch(tripsUrl, {
       headers: {
@@ -54,11 +55,13 @@ async function getArrivalTimeFromTrips(imei: string, bouncieToken: string): Prom
     });
 
     if (!response.ok) {
-      console.log(`Failed to fetch trips for ${imei}: ${response.status}`);
+      const errorText = await response.text();
+      console.log(`Failed to fetch trips for ${imei}: ${response.status} - ${errorText}`);
       return null;
     }
 
     const trips = await response.json();
+    console.log(`Trips response for ${imei}:`, JSON.stringify(trips, null, 2).substring(0, 1000));
 
     if (!Array.isArray(trips) || trips.length === 0) {
       console.log(`No trips found for ${imei}`);

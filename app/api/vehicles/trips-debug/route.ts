@@ -23,7 +23,7 @@ export async function GET() {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - 7);
 
-    const tripsUrl = `https://api.bouncie.dev/v1/trips?imei=${TEST_IMEI}&starts-after=${startDate.toISOString()}&ends-before=${endDate.toISOString()}`;
+    const tripsUrl = `https://api.bouncie.dev/v1/trips?imei=${TEST_IMEI}&starts-after=${startDate.toISOString()}&ends-before=${endDate.toISOString()}&gps-format=polyline`;
 
     const response = await fetch(tripsUrl, {
       headers: {
