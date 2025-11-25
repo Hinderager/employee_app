@@ -164,21 +164,25 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      // Return in same format as job number loading for consistency
       return NextResponse.json({
         success: true,
         job_number: quoteData.job_number || '',
         quoteNumber: quoteData.quote_number,
         address: address || '',
-        folder_url: folderUrl,
+        folderUrl: folderUrl,  // Consistent naming with other paths
         customerInfo: {
           firstName: quoteData.form_data?.firstName || '',
           lastName: quoteData.form_data?.lastName || '',
           phone: quoteData.phone_number || '',
           email: quoteData.form_data?.email || '',
+          pickupAddress: quoteData.form_data?.pickupAddress || '',
+          pickupUnit: quoteData.form_data?.pickupUnit || '',
+          pickupCity: quoteData.form_data?.pickupCity || '',
+          pickupState: quoteData.form_data?.pickupState || '',
+          pickupZip: quoteData.form_data?.pickupZip || '',
         },
-        formData: quoteData.form_data || {},
-        phones: quoteData.form_data?.phones || [],
-        emails: quoteData.form_data?.emails || [],
+        existingFormData: quoteData.form_data || null,  // Consistent naming - frontend expects existingFormData
       });
     }
 

@@ -1394,6 +1394,11 @@ function MoveWalkthroughContent() {
       setIsFolderLinkCopied(false);
       setIsFormSaved(true);
 
+      // Set job number from result (important when loading by quote number)
+      if (result.job_number) {
+        setJobNumber(result.job_number);
+      }
+
       // Capture quote number if present
       if (result.quoteNumber) {
         setQuoteNumber(result.quoteNumber);
