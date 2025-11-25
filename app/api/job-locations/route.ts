@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 // Force dynamic rendering - never cache this route
@@ -18,7 +18,7 @@ function buildDeliveryAddress(formData: any): string | null {
   return parts.length > 0 ? parts.join(', ') : null;
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     // Initialize Supabase client
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -40,15 +40,23 @@ export async function GET() {
       ? createClient(employeeAppUrl, employeeAppKey)
       : null;
 
-    // Get today's date in MST timezone (YYYY-MM-DD format)
-    const mstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Denver' }));
-    const today = mstDate.toISOString().split('T')[0];
+    // Get date from query param or default to today in MST
+    const { searchParams } = new URL(request.url);
+    const dateParam = searchParams.get('date');
 
-    // Fetch today's scheduled jobs from job_locations table
+    let targetDate: string;
+    if (dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam)) {
+      targetDate = dateParam;
+    } else {
+      const mstDate = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Denver' }));
+      targetDate = mstDate.toISOString().split('T')[0];
+    }
+
+    // Fetch scheduled jobs from job_locations table for the target date
     const { data: jobs, error } = await supabase
       .from('job_locations')
       .select('*')
-      .eq('scheduled_date', today)
+      .eq('scheduled_date', targetDate)
       .eq('job_status', 'Submitted')
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
@@ -117,7 +125,7 @@ export async function GET() {
         jobs: enrichedJobs,
         count: enrichedJobs.length,
         timestamp: new Date().toISOString(),
-        date: today
+        date: targetDate
       },
       {
         headers: {

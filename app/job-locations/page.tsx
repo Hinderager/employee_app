@@ -77,6 +77,43 @@ export default function JobLocationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+
+  // Format date display (Today, Tomorrow, Yesterday, or date)
+  const formatDateDisplay = (date: Date): string => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const dateStr = date.toDateString();
+    if (dateStr === today.toDateString()) return "Today";
+    if (dateStr === tomorrow.toDateString()) return "Tomorrow";
+    if (dateStr === yesterday.toDateString()) return "Yesterday";
+
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+    });
+  };
+
+  const goToPreviousDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() - 1);
+    setSelectedDate(newDate);
+  };
+
+  const goToNextDay = () => {
+    const newDate = new Date(selectedDate);
+    newDate.setDate(newDate.getDate() + 1);
+    setSelectedDate(newDate);
+  };
+
+  const goToToday = () => {
+    setSelectedDate(new Date());
+  };
 
   // Initialize Leaflet map
   useEffect(() => {
@@ -141,7 +178,15 @@ export default function JobLocationsPage() {
 
     const interval = setInterval(fetchLocations, 30000);
     return () => clearInterval(interval);
-  }, [mapReady]);
+  }, [mapReady, selectedDate]);
+
+  // Refetch when date changes
+  useEffect(() => {
+    if (mapReady) {
+      isFirstLoadRef.current = true; // Reset so map re-fits bounds on date change
+      fetchLocations();
+    }
+  }, [selectedDate]);
 
   // Fetch directions for a job with destination address
   const fetchDirections = async (job: JobLocation): Promise<{polyline: string, destLat: number, destLng: number} | null> => {
@@ -177,8 +222,11 @@ export default function JobLocationsPage() {
   // Fetch job locations only
   const fetchLocations = async () => {
     try {
+      // Format date as YYYY-MM-DD
+      const dateStr = selectedDate.toISOString().split('T')[0];
+
       // Fetch jobs
-      const jobsResponse = await fetch("/api/job-locations");
+      const jobsResponse = await fetch(`/api/job-locations?date=${dateStr}`);
       const jobsData = await jobsResponse.json();
 
       setJobs(jobsData.jobs || []);
@@ -519,10 +567,57 @@ export default function JobLocationsPage() {
         <span className="font-medium text-gray-900">Menu</span>
       </Link>
 
+      {/* Date Navigation - Top Center */}
+      <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-lg px-4 py-2">
+        <div className="flex items-center justify-center gap-2">
+          <button
+            onClick={goToPreviousDay}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <svg
+              className="h-5 w-5 text-gray-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+          </button>
+          <button
+            onClick={goToToday}
+            className="flex flex-col items-center min-w-[140px] hover:bg-gray-50 rounded-lg px-2 py-1 transition-colors"
+          >
+            <span className="text-lg font-semibold text-gray-900">
+              {formatDateDisplay(selectedDate)}
+            </span>
+            <span className="text-xs text-gray-500">
+              {selectedDate.toLocaleDateString("en-US", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+            </span>
+          </button>
+          <button
+            onClick={goToNextDay}
+            className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+          >
+            <svg
+              className="h-5 w-5 text-gray-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
       {/* Map Info - Top Right */}
       <div className="fixed top-4 right-4 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-lg px-4 py-2">
         <div className="text-sm">
-          <div className="font-bold text-gray-900">{jobs.length} Jobs Today</div>
+          <div className="font-bold text-gray-900">{jobs.length} Jobs</div>
           {lastUpdate && (
             <div className="text-xs text-gray-600">
               Updated: {lastUpdate.toLocaleTimeString()}
