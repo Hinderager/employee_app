@@ -528,16 +528,32 @@ export default function JobLocationsPage() {
       }
     }
 
-    // Auto-fit map to show all markers (including destinations) on first load
-    if (allMapElements.length > 0 && isFirstLoadRef.current) {
+    // Default bounds: Caldwell west edge to East Boise
+    // This ensures a consistent view of the Treasure Valley service area
+    const treasureValleyBounds = L.latLngBounds(
+      [43.55, -116.72],  // Southwest: south of Caldwell
+      [43.72, -116.10]   // Northeast: east Boise near Lucky Peak
+    );
+
+    // Auto-fit map on first load or date change
+    if (isFirstLoadRef.current) {
       try {
-        const group = L.featureGroup(allMapElements);
-        const bounds = group.getBounds();
-        if (bounds.isValid()) {
-          mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+        if (allMapElements.length > 0) {
+          // Get bounds of all job markers
+          const group = L.featureGroup(allMapElements);
+          const jobBounds = group.getBounds();
+
+          // Extend to include Treasure Valley default area
+          const combinedBounds = treasureValleyBounds.extend(jobBounds);
+          mapRef.current.fitBounds(combinedBounds, { padding: [30, 30] });
+        } else {
+          // No jobs - show default Treasure Valley view
+          mapRef.current.fitBounds(treasureValleyBounds, { padding: [30, 30] });
         }
       } catch (error) {
         console.log('Unable to fit bounds on initial load:', error);
+        // Fallback to default view
+        mapRef.current.fitBounds(treasureValleyBounds);
       }
       isFirstLoadRef.current = false;
     }
