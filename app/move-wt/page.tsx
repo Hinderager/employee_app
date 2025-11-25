@@ -22,6 +22,9 @@ function MoveWalkthroughContent() {
   const [isLoadingPickupProperty, setIsLoadingPickupProperty] = useState(false);
   const [isLoadingDeliveryProperty, setIsLoadingDeliveryProperty] = useState(false);
 
+  // Counter to force re-initialization of Google Places Autocomplete
+  const [autocompleteReinitKey, setAutocompleteReinitKey] = useState(0);
+
   // Recent forms for quick-link buttons
   const [recentForms, setRecentForms] = useState<Array<{
     id: string;
@@ -832,7 +835,9 @@ function MoveWalkthroughContent() {
         packingGarage: false,
         packingAttic: false,
         packingWardrobeBoxes: false,
-        packingFragileItems: false
+        packingFragileItems: false,
+        packingBedrooms: false,
+        packingNotes: ""
       }));
       return;
     }
@@ -855,17 +860,28 @@ function MoveWalkthroughContent() {
         poolTables: { poolTablesQty: 1, poolTablesDetails: "" },
         largeTVs: { largeTVsQty: 1, largeTVsDetails: "" },
         treadmills: { treadmillsDetails: "" },
+        otherHeavyItems: { otherHeavyItemsDetails: "" },
+        plants: { plantsDetails: "" },
+        purpleGreenMattress: { purpleGreenMattressDetails: "" },
         // Special Disassembly
         trampoline: { trampolineQty: 1, trampolineDetails: "" },
         bunkBeds: { bunkBedsQty: 1, bunkBedsDetails: "" },
         gymEquipment: { gymEquipmentQty: 1, gymEquipmentDetails: "" },
         sauna: { saunaQty: 1, saunaDetails: "" },
+        playsets: { playsetsQty: 1, playsetsDetails: "" },
+        tableSaw: { tableSawQty: 1, tableSawDetails: "" },
+        specialDisassemblyOther: { specialDisassemblyOtherDetails: "" },
         // Appliances
         applianceFridge: { applianceFridgeQty: 1 },
         applianceWasher: { applianceWasherQty: 1 },
         applianceDryer: { applianceDryerQty: 1 },
         applianceOven: { applianceOvenQty: 1 },
-        applianceDishwasher: { applianceDishwasherQty: 1 }
+        applianceDishwasher: { applianceDishwasherQty: 1 },
+        // Insurance & Budget
+        needsInsurance: { estimatedValue: "" },
+        fixedBudgetRequested: { desiredBudget: "" },
+        // Manual Override
+        pickupManualOverride: { pickupManualOverrideHours: "" }
       };
       if (itemClearMap[name]) {
         setFormData(prev => ({
@@ -1196,6 +1212,8 @@ function MoveWalkthroughContent() {
       alert(error instanceof Error ? error.message : 'Failed to load job. Please try again.');
     } finally {
       setIsLoadingJob(false);
+      // Force re-initialization of Google Places Autocomplete after form data loads
+      setAutocompleteReinitKey(prev => prev + 1);
     }
   };
 
@@ -1540,6 +1558,8 @@ function MoveWalkthroughContent() {
       alert(error instanceof Error ? error.message : 'Failed to load form. Please try again.');
     } finally {
       setIsLoadingJob(false);
+      // Force re-initialization of Google Places Autocomplete after form data loads
+      setAutocompleteReinitKey(prev => prev + 1);
     }
   };
 
@@ -1738,6 +1758,8 @@ function MoveWalkthroughContent() {
       throw error;
     } finally {
       setIsLoadingJob(false);
+      // Force re-initialization of Google Places Autocomplete after form data loads
+      setAutocompleteReinitKey(prev => prev + 1);
     }
   };
 
@@ -1976,6 +1998,8 @@ function MoveWalkthroughContent() {
       toolCustom2: "",
       toolCustom3: "",
     });
+    // Force re-initialization of Google Places Autocomplete after clearing
+    setAutocompleteReinitKey(prev => prev + 1);
   };
 
   // Initialize Google Places Autocomplete
@@ -2076,9 +2100,14 @@ function MoveWalkthroughContent() {
   };
 
   // Initialize autocomplete when Google is loaded or when additional stop is toggled or when delivery address visibility changes
+  // Also re-initialize when autocompleteReinitKey changes (used when loading forms or clearing data)
   useEffect(() => {
     if (isGoogleLoaded) {
-      initializeAutocomplete();
+      // Small delay to ensure DOM is ready after state changes
+      const timeoutId = setTimeout(() => {
+        initializeAutocomplete();
+      }, 100);
+      return () => clearTimeout(timeoutId);
     }
 
     // Cleanup on unmount
@@ -2093,7 +2122,7 @@ function MoveWalkthroughContent() {
         google.maps.event.clearInstanceListeners(additionalStopAutocompleteRef.current);
       }
     };
-  }, [isGoogleLoaded, formData.hasAdditionalStop, formData.deliveryAddressUnknown]);
+  }, [isGoogleLoaded, formData.hasAdditionalStop, formData.deliveryAddressUnknown, autocompleteReinitKey]);
 
   // Calculate Distance
   const calculateDistance = async () => {
@@ -7286,7 +7315,7 @@ function MoveWalkthroughContent() {
               quoteSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
             }
           }}
-          className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all z-40 flex items-center gap-2"
+          className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all z-40 flex items-center gap-2"
           style={{ backgroundColor: '#10b981' }}
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">

@@ -416,14 +416,9 @@ function SchedulePageContent() {
   };
 
   const selectDay = (date: Date) => {
-    // If in picker mode, return to move-wt with selected date and default time
-    if (pickerMode) {
-      const dateStr = formatDateForApi(date);
-      const defaultTime = '08:00'; // Default to 8:00 AM
-      router.push(`/move-wt?picker=${pickerMode}&date=${dateStr}&time=${defaultTime}`);
-    } else {
-      setSelectedDate(date);
-    }
+    // In picker mode, just select the date and let user pick a time slot
+    // In normal mode, just navigate to that day's schedule
+    setSelectedDate(date);
   };
 
   // Calculate job columns for overlapping detection
@@ -570,6 +565,13 @@ function SchedulePageContent() {
           </div>
         </div>
       </header>
+
+      {/* Picker Mode Instructions */}
+      {pickerMode && (
+        <div className="bg-blue-500 text-white px-4 py-2 text-center text-sm font-medium">
+          Tap a time slot below to select {pickerMode === 'walkthrough' ? 'walk-through' : 'move'} time
+        </div>
+      )}
 
       {/* Schedule Grid */}
       <div

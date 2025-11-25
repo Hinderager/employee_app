@@ -42,6 +42,15 @@ export async function POST(request: NextRequest) {
     let additionalStopToDeliveryData = null;
     let pickupToDeliveryData = null;
 
+    // Check if pickup and delivery addresses are the same (case-insensitive, trimmed)
+    const pickupNormalized = pickupAddress.toLowerCase().trim();
+    const deliveryNormalized = deliveryAddress.toLowerCase().trim();
+    const samePickupAndDelivery = pickupNormalized === deliveryNormalized;
+
+    if (samePickupAndDelivery) {
+      console.log('[calculate-distance] Pickup and delivery addresses are identical, skipping API call for move travel');
+    }
+
     if (additionalStopAddress) {
       // Calculate distance from pickup to additional stop
       const pickupToAdditionalStopUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(pickupAddress)}&destinations=${encodeURIComponent(additionalStopAddress)}&units=imperial&key=${googleApiKey}`;
@@ -52,8 +61,8 @@ export async function POST(request: NextRequest) {
       const additionalStopToDeliveryUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(additionalStopAddress)}&destinations=${encodeURIComponent(deliveryAddress)}&units=imperial&key=${googleApiKey}`;
       const additionalStopToDeliveryResponse = await fetch(additionalStopToDeliveryUrl);
       additionalStopToDeliveryData = await additionalStopToDeliveryResponse.json();
-    } else {
-      // Calculate distance from pickup to delivery (no additional stop)
+    } else if (!samePickupAndDelivery) {
+      // Calculate distance from pickup to delivery (no additional stop) - only if addresses are different
       const pickupToDeliveryUrl = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(pickupAddress)}&destinations=${encodeURIComponent(deliveryAddress)}&units=imperial&key=${googleApiKey}`;
       const pickupToDeliveryResponse = await fetch(pickupToDeliveryUrl);
       pickupToDeliveryData = await pickupToDeliveryResponse.json();
@@ -91,7 +100,8 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-    } else {
+    } else if (!samePickupAndDelivery) {
+      // Only check pickup to delivery if addresses are different
       if (pickupToDeliveryData?.status !== 'OK') {
         console.error('[calculate-distance] API returned non-OK status for pickup to delivery route');
         return NextResponse.json(
@@ -127,7 +137,8 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-    } else {
+    } else if (!samePickupAndDelivery) {
+      // Only extract pickup to delivery element if addresses are different
       pickupToDeliveryElement = pickupToDeliveryData?.rows[0]?.elements[0];
 
       if (pickupToDeliveryElement?.status !== 'OK') {
@@ -138,6 +149,7 @@ export async function POST(request: NextRequest) {
         );
       }
     }
+    // If samePickupAndDelivery is true, pickupToDeliveryElement stays null and we'll use 0 miles/minutes
 
     // Extract distances and durations (in meters and seconds)
     const toPickupDistanceMeters = toPickupElement.distance.value;
@@ -180,6 +192,10 @@ export async function POST(request: NextRequest) {
 
       pickupToDeliveryMiles = pickupToDeliveryDistanceMeters / 1609.34;
       pickupToDeliveryMinutes = Math.round(pickupToDeliveryDurationSeconds / 60);
+    }
+    // If samePickupAndDelivery is true, pickupToDeliveryMiles and pickupToDeliveryMinutes stay at 0
+    if (samePickupAndDelivery) {
+      console.log('[calculate-distance] Pickup and delivery are same address - move travel set to 0 miles, 0 minutes');
     }
 
     const totalMiles = toPickupMiles + fromDeliveryMiles;
