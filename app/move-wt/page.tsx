@@ -115,21 +115,45 @@ function MoveWalkthroughContent() {
 
     if (pickerType && date && time) {
       // Restore from sessionStorage first to get all the form data
-      const savedFormData = sessionStorage.getItem('moveWtFormData');
-      if (savedFormData) {
+      const savedState = sessionStorage.getItem('moveWtFormData');
+      if (savedState) {
         try {
-          const parsed = JSON.parse(savedFormData);
+          const parsed = JSON.parse(savedState);
+
+          // Check if this is the new format (has formData property) or old format (is formData directly)
+          const isNewFormat = parsed.formData !== undefined;
+          const restoredFormData = isNewFormat ? parsed.formData : parsed;
 
           // Merge the new date/time with the restored data
           if (pickerType === 'moving') {
-            parsed.preferredDate = date;
-            parsed.preferredTime = time;
+            restoredFormData.preferredDate = date;
+            restoredFormData.preferredTime = time;
           } else if (pickerType === 'walkthrough') {
-            parsed.walkThroughDate = date;
-            parsed.walkThroughTime = time;
+            restoredFormData.walkThroughDate = date;
+            restoredFormData.walkThroughTime = time;
           }
 
-          setFormData(parsed);
+          setFormData(restoredFormData);
+
+          // Restore other state if using new format
+          if (isNewFormat) {
+            if (parsed.phones && Array.isArray(parsed.phones) && parsed.phones.length > 0) {
+              setPhones(parsed.phones);
+            }
+            if (parsed.emails && Array.isArray(parsed.emails) && parsed.emails.length > 0) {
+              setEmails(parsed.emails);
+            }
+            if (parsed.jobNumber) setJobNumber(parsed.jobNumber);
+            if (parsed.searchPhone) setSearchPhone(parsed.searchPhone);
+            if (parsed.searchQuoteNum) setSearchQuoteNum(parsed.searchQuoteNum);
+            if (parsed.quoteNumber) setQuoteNumber(parsed.quoteNumber);
+            if (parsed.address) setAddress(parsed.address);
+            if (parsed.folderUrl) setFolderUrl(parsed.folderUrl);
+            if (parsed.sendHistory && Array.isArray(parsed.sendHistory)) {
+              setSendHistory(parsed.sendHistory);
+            }
+          }
+
           hasRestoredFromStorage.current = true;
         } catch (error) {
           console.error('[Date Picker] Error restoring/merging data:', error);
@@ -417,11 +441,36 @@ function MoveWalkthroughContent() {
       return; // Don't restore yet, wait for picker to set the date first
     }
 
-    const savedFormData = sessionStorage.getItem('moveWtFormData');
-    if (savedFormData) {
+    const savedState = sessionStorage.getItem('moveWtFormData');
+    if (savedState) {
       try {
-        const parsed = JSON.parse(savedFormData);
-        setFormData(parsed);
+        const parsed = JSON.parse(savedState);
+
+        // Check if this is the new format (has formData property) or old format (is formData directly)
+        const isNewFormat = parsed.formData !== undefined;
+        const restoredFormData = isNewFormat ? parsed.formData : parsed;
+
+        setFormData(restoredFormData);
+
+        // Restore other state if using new format
+        if (isNewFormat) {
+          if (parsed.phones && Array.isArray(parsed.phones) && parsed.phones.length > 0) {
+            setPhones(parsed.phones);
+          }
+          if (parsed.emails && Array.isArray(parsed.emails) && parsed.emails.length > 0) {
+            setEmails(parsed.emails);
+          }
+          if (parsed.jobNumber) setJobNumber(parsed.jobNumber);
+          if (parsed.searchPhone) setSearchPhone(parsed.searchPhone);
+          if (parsed.searchQuoteNum) setSearchQuoteNum(parsed.searchQuoteNum);
+          if (parsed.quoteNumber) setQuoteNumber(parsed.quoteNumber);
+          if (parsed.address) setAddress(parsed.address);
+          if (parsed.folderUrl) setFolderUrl(parsed.folderUrl);
+          if (parsed.sendHistory && Array.isArray(parsed.sendHistory)) {
+            setSendHistory(parsed.sendHistory);
+          }
+        }
+
         hasRestoredFromStorage.current = true;
       } catch (error) {
         console.error('Error restoring form data:', error);
@@ -431,10 +480,23 @@ function MoveWalkthroughContent() {
     }
   }, [searchParams]);
 
-  // Save form data to sessionStorage whenever it changes
+  // Save ALL form state to sessionStorage whenever it changes
+  // This preserves data when navigating to/from the date picker
   useEffect(() => {
-    sessionStorage.setItem('moveWtFormData', JSON.stringify(formData));
-  }, [formData]);
+    const fullFormState = {
+      formData,
+      phones,
+      emails,
+      jobNumber,
+      searchPhone,
+      searchQuoteNum,
+      quoteNumber,
+      address,
+      folderUrl,
+      sendHistory,
+    };
+    sessionStorage.setItem('moveWtFormData', JSON.stringify(fullFormState));
+  }, [formData, phones, emails, jobNumber, searchPhone, searchQuoteNum, quoteNumber, address, folderUrl, sendHistory]);
 
   // Format number with commas
   const formatNumberWithCommas = (value: string): string => {
