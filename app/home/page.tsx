@@ -22,25 +22,11 @@ const menuItems = [
     color: "bg-blue-500",
   },
   {
-    title: "Move Billing",
-    description: "Moving supplies charges",
-    href: "/move-billing",
-    icon: CreditCardIcon,
-    color: "bg-purple-500",
-  },
-  {
     title: "Job Locations",
     description: "View job sites",
     href: "/job-locations",
     icon: MapIcon,
     color: "bg-orange-500",
-  },
-  {
-    title: "Pictures",
-    description: "Job photos",
-    href: "/pictures",
-    icon: CameraIcon,
-    color: "bg-pink-500",
   },
   {
     title: "Receipts",
@@ -50,11 +36,25 @@ const menuItems = [
     color: "bg-amber-500",
   },
   {
-    title: "Order Supplies",
-    description: "Request materials",
-    href: "/supplies",
-    icon: ShoppingCartIcon,
-    color: "bg-green-500",
+    title: "Pictures",
+    description: "Job photos",
+    href: "/pictures",
+    icon: CameraIcon,
+    color: "bg-pink-500",
+  },
+  {
+    title: "Move Billing",
+    description: "Moving supplies charges",
+    href: "/move-billing",
+    icon: CreditCardIcon,
+    color: "bg-purple-500",
+  },
+  {
+    title: "Move Jobs",
+    description: "View move jobs",
+    href: "/move-jobs",
+    icon: ClipboardDocumentListIcon,
+    color: "bg-teal-500",
   },
   {
     title: "Move Quote",
@@ -64,11 +64,11 @@ const menuItems = [
     color: "bg-red-500",
   },
   {
-    title: "Move Jobs",
-    description: "View move jobs",
-    href: "/move-jobs",
-    icon: ClipboardDocumentListIcon,
-    color: "bg-teal-500",
+    title: "Order Supplies",
+    description: "Request materials",
+    href: "/supplies",
+    icon: ShoppingCartIcon,
+    color: "bg-green-500",
   },
 ];
 
