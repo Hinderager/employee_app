@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
 import QuotePreview from "../components/QuotePreview";
 import Script from "next/script";
 
@@ -55,6 +55,9 @@ function MoveWalkthroughContent() {
     error?: string;
   }>>([]);
   const hasRestoredFromStorage = useRef(false);
+
+  // Track the previous primary phone number to detect customer changes
+  const previousPrimaryPhone = useRef<string>("");
 
   // Custom styles for invisible slider
   useEffect(() => {
@@ -566,6 +569,29 @@ function MoveWalkthroughContent() {
     return phone.replace(/\D/g, '');
   };
 
+  // Helper functions for date navigation
+  const adjustDate = (currentDate: string, days: number): string => {
+    if (!currentDate) {
+      // If no date, start from today
+      const today = new Date();
+      today.setDate(today.getDate() + days);
+      return today.toISOString().split('T')[0];
+    }
+    const date = new Date(currentDate + 'T00:00:00');
+    date.setDate(date.getDate() + days);
+    return date.toISOString().split('T')[0];
+  };
+
+  const handleWalkThroughDateNav = (days: number) => {
+    const newDate = adjustDate(formData.walkThroughDate, days);
+    setFormData(prev => ({ ...prev, walkThroughDate: newDate }));
+  };
+
+  const handleMoveDateNav = (days: number) => {
+    const newDate = adjustDate(formData.preferredDate, days);
+    setFormData(prev => ({ ...prev, preferredDate: newDate }));
+  };
+
   // Phone number formatting - formats to (XXX) XXX-XXXX
   const formatPhoneNumber = (phone: string): string => {
     const normalized = normalizePhoneNumber(phone);
@@ -1040,9 +1066,84 @@ function MoveWalkthroughContent() {
     setSearchPhone(formatted);
   };
 
+  // Helper function to check if form has meaningful data worth saving
+  const hasFormDataWorthSaving = (): boolean => {
+    const primaryPhone = phones[0]?.number || formData?.phone || '';
+    const normalizedPhone = normalizePhoneNumber(primaryPhone);
+    // Consider form worth saving if there's a phone number with at least 10 digits
+    return normalizedPhone.length >= 10;
+  };
+
+  // Helper function to save current form before switching customers
+  const saveCurrentFormBeforeSwitching = async () => {
+    if (!hasFormDataWorthSaving()) return;
+
+    const phoneNumber = phones[0]?.number || formData?.phone || '';
+    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    const pickupAddress = formData?.pickupAddress || '';
+
+    // Use existing temp job number or create one
+    let effectiveJobNumber = jobNumber || tempJobNumber;
+    if (!effectiveJobNumber || effectiveJobNumber.trim() === '') {
+      effectiveJobNumber = `TEMP-${normalizedPhone}`;
+    }
+
+    const normalizedFormData = {
+      ...formData,
+      phone: normalizedPhone,
+      phones: phones.map(p => ({ ...p, number: normalizePhoneNumber(p.number) })),
+      emails: emails
+    };
+
+    try {
+      await fetch('/api/move-wt/save-form', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jobNumber: effectiveJobNumber,
+          address: pickupAddress || 'Work in Progress',
+          formData: normalizedFormData,
+          folderUrl: folderUrl,
+          isTemporary: !jobNumber || jobNumber.trim() === '',
+        }),
+      });
+      console.log("Form auto-saved before customer switch:", new Date().toLocaleTimeString());
+    } catch (error) {
+      console.error('Error saving form before switch:', error);
+    }
+  };
+
   // Handlers for dynamic phone entries
-  const handlePhoneNumberChange = (index: number, value: string) => {
+  const handlePhoneNumberChange = async (index: number, value: string) => {
     const formatted = formatPhoneNumber(value);
+    const newNormalizedPhone = normalizePhoneNumber(formatted);
+
+    // If this is the primary phone (index 0) and it's a significant change
+    if (index === 0) {
+      const currentPrimaryPhone = normalizePhoneNumber(phones[0]?.number || '');
+
+      // Check if we're changing from one complete phone to a different complete phone
+      if (currentPrimaryPhone.length >= 10 &&
+          newNormalizedPhone.length >= 10 &&
+          currentPrimaryPhone !== newNormalizedPhone) {
+        // Save current form before switching to new customer
+        await saveCurrentFormBeforeSwitching();
+
+        // Reset temp job number and quote number for new customer
+        setTempJobNumber('');
+        setQuoteNumber('');
+        setSearchQuoteNum('');
+
+        // Update the previous phone ref
+        previousPrimaryPhone.current = newNormalizedPhone;
+
+        console.log(`Switched from customer ${currentPrimaryPhone} to ${newNormalizedPhone}`);
+      } else if (newNormalizedPhone.length >= 10) {
+        // Update the previous phone ref when a complete phone is entered
+        previousPrimaryPhone.current = newNormalizedPhone;
+      }
+    }
+
     setPhones(prev => {
       const updated = [...prev];
       updated[index] = { ...updated[index], number: formatted };
@@ -2320,7 +2421,14 @@ function MoveWalkthroughContent() {
     }
   };
 
-  const handleClear = () => {
+  const handleClear = async () => {
+    // Save current form before clearing (if there's data worth saving)
+    await saveCurrentFormBeforeSwitching();
+
+    // Reset temp job number and quote number for new customer
+    setTempJobNumber('');
+    setQuoteNumber('');
+
     setJobNumber("");
     setSearchPhone("");
     setSearchQuoteNum("");
@@ -2553,7 +2661,16 @@ function MoveWalkthroughContent() {
   const initializeAutocomplete = () => {
     if (!isGoogleLoaded || typeof google === 'undefined') return;
 
+    // Idaho bounds (with small buffer for border areas)
+    // SW corner: ~41.9°N, ~117.2°W | NE corner: ~49.0°N, ~111.0°W
+    const idahoBounds = new google.maps.LatLngBounds(
+      new google.maps.LatLng(41.9, -117.5),  // Southwest corner
+      new google.maps.LatLng(49.0, -110.5)   // Northeast corner
+    );
+
     const options = {
+      bounds: idahoBounds,
+      strictBounds: true,  // Only show results within Idaho bounds
       componentRestrictions: { country: 'us' },
       fields: ['address_components', 'formatted_address'],
       types: ['address']
@@ -4142,6 +4259,15 @@ function MoveWalkthroughContent() {
                 Walk-Through Date
               </label>
               <div className="flex items-center gap-6">
+                {/* Left arrow - desktop only */}
+                <button
+                  type="button"
+                  onClick={() => handleWalkThroughDateNav(-1)}
+                  className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                  title="Previous day"
+                >
+                  <ChevronLeftIcon className="h-5 w-5" />
+                </button>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <input
                     type="text"
@@ -4152,6 +4278,15 @@ function MoveWalkthroughContent() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
                   />
                 </div>
+                {/* Right arrow - desktop only */}
+                <button
+                  type="button"
+                  onClick={() => handleWalkThroughDateNav(1)}
+                  className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                  title="Next day"
+                >
+                  <ChevronRightIcon className="h-5 w-5" />
+                </button>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <select
                     name="walkThroughTime"
@@ -4271,6 +4406,15 @@ function MoveWalkthroughContent() {
                 Move Date
               </label>
               <div className="flex items-center gap-6">
+                {/* Left arrow - desktop only */}
+                <button
+                  type="button"
+                  onClick={() => handleMoveDateNav(-1)}
+                  className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                  title="Previous day"
+                >
+                  <ChevronLeftIcon className="h-5 w-5" />
+                </button>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <input
                     type="text"
@@ -4281,6 +4425,15 @@ function MoveWalkthroughContent() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
                   />
                 </div>
+                {/* Right arrow - desktop only */}
+                <button
+                  type="button"
+                  onClick={() => handleMoveDateNav(1)}
+                  className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
+                  title="Next day"
+                >
+                  <ChevronRightIcon className="h-5 w-5" />
+                </button>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <select
                     name="preferredTime"

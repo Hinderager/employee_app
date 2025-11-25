@@ -53,9 +53,25 @@ export async function POST(request: NextRequest) {
       customerHomeAddress = buildFullAddress(formData, 'delivery');
     }
 
-    // Extract and normalize phone number from formData
-    const phoneNumber = formData?.phone || '';
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
+    // Extract and normalize ALL phone numbers from formData
+    const primaryPhone = formData?.phone || '';
+    const normalizedPhone = normalizePhoneNumber(primaryPhone);
+
+    // Extract all phones from the phones array
+    const allPhones: string[] = [];
+    if (normalizedPhone) {
+      allPhones.push(normalizedPhone);
+    }
+    // Add phones from the phones array (if present)
+    if (formData?.phones && Array.isArray(formData.phones)) {
+      formData.phones.forEach((p: { number?: string }) => {
+        const normalized = normalizePhoneNumber(p.number || '');
+        if (normalized && normalized.length >= 10 && !allPhones.includes(normalized)) {
+          allPhones.push(normalized);
+        }
+      });
+    }
+    console.log(`[move-wt/save-form] All phone numbers to save: ${allPhones.join(', ')}`);
 
     console.log(`[move-wt/save-form] Saving form for job: ${jobNumber}, customer home address: ${customerHomeAddress || 'Not Set'}, phone: ${normalizedPhone}`);
     console.log(`[move-wt/save-form] preferredDate in formData: "${formData?.preferredDate || 'NOT SET'}"`);
@@ -97,20 +113,13 @@ export async function POST(request: NextRequest) {
 
         const newJobNumbers = updatedData || existing.job_numbers || [];
 
-        // Add phone to phone_numbers array
-        const { data: updatedPhones, error: phoneError } = await supabase.rpc(
-          'add_to_array_if_not_exists',
-          {
-            arr: existing.phone_numbers || [],
-            item: normalizedPhone
+        // Add ALL phones to phone_numbers array
+        let newPhoneNumbers = existing.phone_numbers || [];
+        for (const phone of allPhones) {
+          if (phone && !newPhoneNumbers.includes(phone)) {
+            newPhoneNumbers.push(phone);
           }
-        );
-
-        if (phoneError) {
-          console.error('[move-wt/save-form] Error updating phone_numbers:', phoneError);
         }
-
-        const newPhoneNumbers = updatedPhones || existing.phone_numbers || [];
 
         // Update the record
         const { data, error } = await supabase
@@ -199,7 +208,7 @@ export async function POST(request: NextRequest) {
               customer_home_address: customerHomeAddress,
               address: address, // Legacy field
               phone_number: normalizedPhone,
-              phone_numbers: normalizedPhone ? [normalizedPhone] : [],
+              phone_numbers: allPhones,
               form_data: formData,
               move_date: formData?.preferredDate || null,
               updated_at: new Date().toISOString(),

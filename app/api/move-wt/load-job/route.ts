@@ -414,11 +414,26 @@ export async function POST(request: NextRequest) {
       }
 
       // Query Supabase for ALL form data matching this phone number
-      const { data: formRecords, error: queryError } = await supabase
+      // First try the phone_numbers array (contains all phones for the job)
+      let { data: formRecords, error: queryError } = await supabase
         .from('move_quote')
         .select('*')
-        .eq('phone_number', normalizedPhone)
+        .contains('phone_numbers', [normalizedPhone])
         .order('updated_at', { ascending: false });
+
+      // If no results, fall back to checking the primary phone_number field
+      if ((!formRecords || formRecords.length === 0) && !queryError) {
+        const { data: fallbackRecords, error: fallbackError } = await supabase
+          .from('move_quote')
+          .select('*')
+          .eq('phone_number', normalizedPhone)
+          .order('updated_at', { ascending: false });
+
+        if (!fallbackError) {
+          formRecords = fallbackRecords;
+        }
+        queryError = fallbackError;
+      }
 
       if (queryError) {
         console.error('[move-wt/load-job] Supabase query error:', queryError);
