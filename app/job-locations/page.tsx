@@ -472,29 +472,27 @@ export default function JobLocationsPage() {
               dashArray: '10, 10' // Dashed line
             }).addTo(mapRef.current);
 
-            // Create black X marker for destination
+            // Create circled number marker for destination
             const destIcon = L.divIcon({
               className: 'destination-marker',
               html: `
                 <div style="
-                  width: 30px;
-                  height: 30px;
+                  width: 26px;
+                  height: 26px;
                   display: flex;
                   align-items: center;
                   justify-content: center;
-                  font-size: 28px;
+                  font-size: 14px;
                   font-weight: bold;
                   color: #000;
-                  text-shadow:
-                    -1px -1px 0 #fff,
-                    1px -1px 0 #fff,
-                    -1px 1px 0 #fff,
-                    1px 1px 0 #fff,
-                    0 0 4px rgba(255,255,255,0.8);
-                ">✕</div>
+                  background: white;
+                  border: 3px solid #000;
+                  border-radius: 50%;
+                  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+                ">${jobOrder}</div>
               `,
-              iconSize: [30, 30],
-              iconAnchor: [15, 15]
+              iconSize: [26, 26],
+              iconAnchor: [13, 13]
             });
 
             const destMarker = L.marker([directions.destLat, directions.destLng], {
@@ -641,7 +639,7 @@ export default function JobLocationsPage() {
             <span className="text-sm font-medium text-gray-900">Moving</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-lg font-bold text-black">✕</span>
+            <div className="w-5 h-5 rounded-full border-2 border-black bg-white flex items-center justify-center text-xs font-bold text-black flex-shrink-0">#</div>
             <span className="text-sm font-medium text-gray-900">Destination</span>
           </div>
         </div>
