@@ -438,12 +438,6 @@ export default function VehicleLocationsPage() {
               </div>
             </div>
 
-            {/* Address */}
-            {selectedVehicle.address && (
-              <div className="mt-2 text-sm text-gray-600 truncate">
-                📍 {selectedVehicle.address}
-              </div>
-            )}
           </div>
         )}
       </div>
