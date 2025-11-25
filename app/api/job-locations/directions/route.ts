@@ -5,11 +5,11 @@ export const dynamic = 'force-dynamic';
 
 export async function POST(request: NextRequest) {
   try {
-    const { origin, destination } = await request.json();
+    const { originLat, originLng, destination } = await request.json();
 
-    if (!origin || !destination) {
+    if (!originLat || !originLng || !destination) {
       return NextResponse.json(
-        { error: 'Origin and destination are required' },
+        { error: 'Origin coordinates and destination are required' },
         { status: 400 }
       );
     }
@@ -23,8 +23,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Use coordinates for origin to ensure route starts from exact marker location
+    const originCoords = `${originLat},${originLng}`;
+
     // First try the Directions API
-    const directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${googleApiKey}`;
+    const directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(originCoords)}&destination=${encodeURIComponent(destination)}&key=${googleApiKey}`;
 
     const response = await fetch(directionsUrl);
     const data = await response.json();
@@ -46,7 +49,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Directions API failed - fall back to Geocoding API
+    // Directions API failed - fall back to Geocoding API for destination only
     console.log('[directions] Directions API failed, falling back to geocoding. Status:', data.status);
 
     // Geocode the destination address
@@ -64,20 +67,10 @@ export async function POST(request: NextRequest) {
 
     const destLocation = geocodeData.results[0].geometry.location;
 
-    // Also geocode origin to create a simple polyline
-    const originGeocodeUrl = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(origin)}&key=${googleApiKey}`;
-    const originGeocodeResponse = await fetch(originGeocodeUrl);
-    const originGeocodeData = await originGeocodeResponse.json();
-
-    let originLocation = { lat: 0, lng: 0 };
-    if (originGeocodeData.status === 'OK' && originGeocodeData.results && originGeocodeData.results.length > 0) {
-      originLocation = originGeocodeData.results[0].geometry.location;
-    }
-
     // Create a simple encoded polyline for a straight line (origin -> destination)
-    // This is a simplified polyline encoding for just two points
+    // Origin coordinates are already provided, no need to geocode
     const simplePolyline = encodePolyline([
-      [originLocation.lat, originLocation.lng],
+      [originLat, originLng],
       [destLocation.lat, destLocation.lng]
     ]);
 

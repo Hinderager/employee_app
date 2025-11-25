@@ -190,14 +190,15 @@ export default function JobLocationsPage() {
 
   // Fetch directions for a job with destination address
   const fetchDirections = async (job: JobLocation): Promise<{polyline: string, destLat: number, destLng: number} | null> => {
-    if (!job.destination_address || !job.address) return null;
+    if (!job.destination_address || !job.latitude || !job.longitude) return null;
 
     try {
       const response = await fetch('/api/job-locations/directions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          origin: job.address,
+          originLat: job.latitude,
+          originLng: job.longitude,
           destination: job.destination_address
         })
       });
