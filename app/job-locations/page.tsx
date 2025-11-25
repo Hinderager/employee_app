@@ -15,11 +15,61 @@ interface JobLocation {
   latitude: number;
   longitude: number;
   scheduled_date: string;
+  // New fields for routes
+  has_estimate_form?: boolean;
+  service_type?: string | null;
+  destination_address?: string | null;
+}
+
+interface RouteData {
+  jobId: string;
+  polyline: any; // Leaflet polyline object
+  destinationMarker: any; // Leaflet marker object
+}
+
+// Decode Google Maps polyline encoding
+function decodePolyline(encoded: string): [number, number][] {
+  const points: [number, number][] = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+
+  while (index < encoded.length) {
+    let shift = 0;
+    let result = 0;
+    let byte;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const dlat = result & 1 ? ~(result >> 1) : result >> 1;
+    lat += dlat;
+
+    shift = 0;
+    result = 0;
+
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+
+    const dlng = result & 1 ? ~(result >> 1) : result >> 1;
+    lng += dlng;
+
+    points.push([lat / 1e5, lng / 1e5]);
+  }
+
+  return points;
 }
 
 export default function JobLocationsPage() {
   const mapRef = useRef<any>(null);
   const jobMarkersRef = useRef<any[]>([]);
+  const routesRef = useRef<RouteData[]>([]); // Store route polylines and destination markers
   const isFirstLoadRef = useRef<boolean>(true);
   const openPopupJobIdRef = useRef<string | null>(null); // Track which popup is open
   const [jobs, setJobs] = useState<JobLocation[]>([]);
@@ -93,6 +143,37 @@ export default function JobLocationsPage() {
     return () => clearInterval(interval);
   }, [mapReady]);
 
+  // Fetch directions for a job with destination address
+  const fetchDirections = async (job: JobLocation): Promise<{polyline: string, destLat: number, destLng: number} | null> => {
+    if (!job.destination_address || !job.address) return null;
+
+    try {
+      const response = await fetch('/api/job-locations/directions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          origin: job.address,
+          destination: job.destination_address
+        })
+      });
+
+      if (!response.ok) {
+        console.error('Failed to fetch directions for job', job.job_number);
+        return null;
+      }
+
+      const data = await response.json();
+      return {
+        polyline: data.polyline,
+        destLat: data.destinationLat,
+        destLng: data.destinationLng
+      };
+    } catch (err) {
+      console.error('Error fetching directions:', err);
+      return null;
+    }
+  };
+
   // Fetch job locations only
   const fetchLocations = async () => {
     try {
@@ -115,7 +196,7 @@ export default function JobLocationsPage() {
   };
 
   // Update markers on map
-  const updateMapMarkers = (jobData: JobLocation[]) => {
+  const updateMapMarkers = async (jobData: JobLocation[]) => {
     if (!mapRef.current) return;
 
     const L = (window as any).L;
@@ -139,17 +220,28 @@ export default function JobLocationsPage() {
     jobMarkersRef.current.forEach(marker => marker.remove());
     jobMarkersRef.current = [];
 
+    // Clear existing routes and destination markers
+    routesRef.current.forEach(route => {
+      if (route.polyline) route.polyline.remove();
+      if (route.destinationMarker) route.destinationMarker.remove();
+    });
+    routesRef.current = [];
+
     // Sort jobs by start time to determine order
     const sortedJobs = [...jobData].sort((a, b) =>
       new Date(a.job_start_time).getTime() - new Date(b.job_start_time).getTime()
     );
 
+    // Collect all map elements for bounds calculation
+    const allMapElements: any[] = [];
+
     // Add job markers
-    sortedJobs.forEach((job, index) => {
+    for (let index = 0; index < sortedJobs.length; index++) {
+      const job = sortedJobs[index];
       if (job.latitude && job.longitude) {
         const jobOrder = index + 1;
         const isJunkJob = job.job_type.toLowerCase().includes("junk");
-        const jobColor = isJunkJob ? "#FF6B6B" : "#4ECDC4"; // Red for junk, blue for moving
+        const jobColor = isJunkJob ? "#FF6B6B" : "#4ECDC4"; // Red for junk, teal for moving
         // Parse the time from Workiz
         // JobDateTime comes from Workiz API as ISO 8601 UTC: "2016-08-29T09:12:33.001Z"
         // Convert to MST and display in 12-hour format
@@ -248,6 +340,11 @@ export default function JobLocationsPage() {
                 <strong>Phone:</strong> <a href="tel:${job.customer_phone}" style="color: #4ECDC4;">${job.customer_phone}</a>
               </p>
             ` : ''}
+            ${job.destination_address ? `
+              <p style="margin: 4px 0; font-size: 14px;">
+                <strong>Destination:</strong> ${job.destination_address}
+              </p>
+            ` : ''}
             ${description ? `
               <div style="margin: 4px 0;">
                 <p id="${popupId}-short" style="margin: 0; font-size: 13px; color: #666; ${needsTruncation ? '' : 'display: none;'}">
@@ -303,18 +400,90 @@ export default function JobLocationsPage() {
         });
 
         jobMarkersRef.current.push(marker);
+        allMapElements.push(marker);
 
         // Reopen popup if this was the previously open one
         if (currentOpenJobId === job.id) {
           marker.openPopup();
         }
-      }
-    });
 
-    // Auto-fit map to show all job markers on first load
-    if (jobMarkersRef.current.length > 0 && isFirstLoadRef.current) {
+        // If this job has a destination address (truck service with estimate form),
+        // fetch directions and draw the route
+        if (job.destination_address && job.has_estimate_form && job.service_type === 'truck') {
+          const directions = await fetchDirections(job);
+          if (directions) {
+            // Decode the polyline and draw the route
+            const decodedPoints = decodePolyline(directions.polyline);
+
+            // Create the route polyline with dashed style
+            const routePolyline = L.polyline(decodedPoints, {
+              color: jobColor,
+              weight: 4,
+              opacity: 0.7,
+              dashArray: '10, 10' // Dashed line
+            }).addTo(mapRef.current);
+
+            // Create black X marker for destination
+            const destIcon = L.divIcon({
+              className: 'destination-marker',
+              html: `
+                <div style="
+                  width: 30px;
+                  height: 30px;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  font-size: 28px;
+                  font-weight: bold;
+                  color: #000;
+                  text-shadow:
+                    -1px -1px 0 #fff,
+                    1px -1px 0 #fff,
+                    -1px 1px 0 #fff,
+                    1px 1px 0 #fff,
+                    0 0 4px rgba(255,255,255,0.8);
+                ">✕</div>
+              `,
+              iconSize: [30, 30],
+              iconAnchor: [15, 15]
+            });
+
+            const destMarker = L.marker([directions.destLat, directions.destLng], {
+              icon: destIcon
+            }).addTo(mapRef.current);
+
+            // Add popup to destination marker
+            destMarker.bindPopup(`
+              <div style="min-width: 180px;">
+                <h4 style="margin: 0 0 8px 0; font-weight: bold; color: ${jobColor};">
+                  Job #${jobOrder} Destination
+                </h4>
+                <p style="margin: 4px 0; font-size: 13px;">
+                  ${job.destination_address}
+                </p>
+              </div>
+            `, {
+              closeOnClick: true,
+              closeButton: true
+            });
+
+            // Store route data for cleanup
+            routesRef.current.push({
+              jobId: job.id,
+              polyline: routePolyline,
+              destinationMarker: destMarker
+            });
+
+            allMapElements.push(destMarker);
+          }
+        }
+      }
+    }
+
+    // Auto-fit map to show all markers (including destinations) on first load
+    if (allMapElements.length > 0 && isFirstLoadRef.current) {
       try {
-        const group = L.featureGroup(jobMarkersRef.current);
+        const group = L.featureGroup(allMapElements);
         const bounds = group.getBounds();
         if (bounds.isValid()) {
           mapRef.current.fitBounds(bounds, { padding: [50, 50] });
@@ -373,6 +542,10 @@ export default function JobLocationsPage() {
             <div className="w-6 h-6 rounded flex-shrink-0" style={{ backgroundColor: '#4ECDC4' }}></div>
             <span className="text-sm font-medium text-gray-900">Moving</span>
           </div>
+          <div className="flex items-center gap-2">
+            <span className="text-lg font-bold text-black">✕</span>
+            <span className="text-sm font-medium text-gray-900">Destination</span>
+          </div>
         </div>
       </div>
 
@@ -381,6 +554,11 @@ export default function JobLocationsPage() {
 
       <style jsx global>{`
         .custom-job-marker {
+          background: transparent;
+          border: none;
+        }
+
+        .destination-marker {
           background: transparent;
           border: none;
         }
