@@ -46,9 +46,12 @@ interface VehicleLocation {
   iconUrl: string;
 }
 
+// Increased padding for more space between vehicles and screen edge
+const MAP_PADDING = [100, 100];
+
 export default function VehicleLocationsPage() {
   const mapRef = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
+  const markersRef = useRef<Map<string, any>>(new Map()); // Store markers by IMEI for smooth updates
   const isFirstLoadRef = useRef<boolean>(true);
   const followingVehicleRef = useRef<string | null>(null); // Track which vehicle to follow (by IMEI)
   const [vehicles, setVehicles] = useState<VehicleLocation[]>([]);
@@ -167,41 +170,25 @@ export default function VehicleLocationsPage() {
     }
   };
 
-  // Update markers on map
+  // Update markers on map - now updates existing markers instead of recreating them
   const updateMapMarkers = (vehicleData: VehicleLocation[]) => {
     if (!mapRef.current) return;
 
     const L = (window as any).L;
     if (!L) return;
 
-    // Clear existing markers
-    markersRef.current.forEach(marker => marker.remove());
-    markersRef.current = [];
+    // Track which vehicles we've seen this update
+    const seenImeis = new Set<string>();
 
-    // Add new markers for each vehicle (skip vehicles with no valid location)
+    // Update or create markers for each vehicle
     vehicleData.forEach(vehicle => {
       if (vehicle.latitude && vehicle.longitude &&
           vehicle.latitude !== 0 && vehicle.longitude !== 0) {
-        // Create custom icon using image (same as OMW Text project)
-        const customIcon = L.icon({
-          iconUrl: vehicle.iconUrl,
-          iconSize: [75, 75],           // Same size as OMW Text
-          iconAnchor: [75/2, 75],       // Bottom-center positioning (same as OMW Text)
-          popupAnchor: [0, -75]         // Popup above icon (same as OMW Text)
-        });
 
-        const marker = L.marker([vehicle.latitude, vehicle.longitude], {
-          icon: customIcon
-        }).addTo(mapRef.current);
+        seenImeis.add(vehicle.imei);
+        const existingMarker = markersRef.current.get(vehicle.imei);
 
-        // Add click handler to follow this vehicle
-        marker.on('click', () => {
-          followingVehicleRef.current = vehicle.imei;
-          setFollowingVehicle(vehicle.imei);
-          mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
-        });
-
-        // Add popup with vehicle info
+        // Create popup content
         const fuelIcon = vehicle.fuelLevel > 50 ? '⛽' : vehicle.fuelLevel > 25 ? '🟡' : '🔴';
         const popupContent = `
           <div style="min-width: 200px;">
@@ -229,24 +216,60 @@ export default function VehicleLocationsPage() {
           </div>
         `;
 
-        marker.bindPopup(popupContent, {
-          autoClose: false,      // Don't auto-close when another popup opens
-          closeOnClick: true,    // Close when clicking map (outside the pin)
-          closeButton: true,     // Show X button to close
-          autoPan: true,         // Auto-pan map to show popup
-          maxWidth: 300          // Max width for popup
-        });
-        markersRef.current.push(marker);
+        if (existingMarker) {
+          // Update existing marker position smoothly (no blink!)
+          existingMarker.setLatLng([vehicle.latitude, vehicle.longitude]);
+          // Update popup content
+          existingMarker.setPopupContent(popupContent);
+        } else {
+          // Create new marker only if it doesn't exist
+          const customIcon = L.icon({
+            iconUrl: vehicle.iconUrl,
+            iconSize: [75, 75],
+            iconAnchor: [75/2, 75],
+            popupAnchor: [0, -75]
+          });
+
+          const marker = L.marker([vehicle.latitude, vehicle.longitude], {
+            icon: customIcon
+          }).addTo(mapRef.current);
+
+          // Add click handler to follow this vehicle
+          marker.on('click', () => {
+            followingVehicleRef.current = vehicle.imei;
+            setFollowingVehicle(vehicle.imei);
+            mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
+          });
+
+          marker.bindPopup(popupContent, {
+            autoClose: false,
+            closeOnClick: true,
+            closeButton: true,
+            autoPan: true,
+            maxWidth: 300
+          });
+
+          markersRef.current.set(vehicle.imei, marker);
+        }
+      }
+    });
+
+    // Remove markers for vehicles that are no longer in the data
+    markersRef.current.forEach((marker, imei) => {
+      if (!seenImeis.has(imei)) {
+        marker.remove();
+        markersRef.current.delete(imei);
       }
     });
 
     // Auto-fit map to show all vehicles ONLY on first load
-    if (markersRef.current.length > 0 && isFirstLoadRef.current) {
+    if (markersRef.current.size > 0 && isFirstLoadRef.current) {
       try {
-        const group = L.featureGroup(markersRef.current);
+        const markersArray = Array.from(markersRef.current.values());
+        const group = L.featureGroup(markersArray);
         const bounds = group.getBounds();
         if (bounds.isValid()) {
-          mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+          mapRef.current.fitBounds(bounds, { padding: MAP_PADDING });
         }
       } catch (error) {
         console.log('Unable to fit bounds on initial load:', error);
@@ -282,20 +305,21 @@ export default function VehicleLocationsPage() {
     setFollowingVehicle(null);
 
     // Fit bounds to show all vehicles (same as initial load)
-    if (markersRef.current.length > 0 && L && mapRef.current) {
-      if (markersRef.current.length === 1) {
+    const markersArray = Array.from(markersRef.current.values());
+    if (markersArray.length > 0 && L && mapRef.current) {
+      if (markersArray.length === 1) {
         // If only one marker, just center on it
-        const latLng = markersRef.current[0].getLatLng();
+        const latLng = markersArray[0].getLatLng();
         mapRef.current.setView(latLng, 13);
       } else {
         // If multiple markers, fit bounds
         try {
-          const group = L.featureGroup(markersRef.current);
-          mapRef.current.fitBounds(group.getBounds(), { padding: [50, 50] });
+          const group = L.featureGroup(markersArray);
+          mapRef.current.fitBounds(group.getBounds(), { padding: MAP_PADDING });
         } catch (error) {
           console.log('Unable to fit bounds, centering on first vehicle:', error);
           // Fallback: center on first marker
-          const latLng = markersRef.current[0].getLatLng();
+          const latLng = markersArray[0].getLatLng();
           mapRef.current.setView(latLng, 13);
         }
       }
