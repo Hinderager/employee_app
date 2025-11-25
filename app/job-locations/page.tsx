@@ -417,7 +417,7 @@ export default function JobLocationsPage() {
 
             // Create the route polyline with dashed style
             const routePolyline = L.polyline(decodedPoints, {
-              color: jobColor,
+              color: '#000000',
               weight: 4,
               opacity: 0.7,
               dashArray: '10, 10' // Dashed line
