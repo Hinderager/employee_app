@@ -46,8 +46,10 @@ interface VehicleLocation {
   iconUrl: string;
 }
 
-// Increased padding for more space between vehicles and screen edge
-const MAP_PADDING = [100, 100];
+// Asymmetric padding: more at top (menu button) and bottom (footer nav)
+// Format: paddingTopLeft [left, top], paddingBottomRight [right, bottom]
+const MAP_PADDING_TOP_LEFT = [50, 100];     // [left, top] - account for menu button
+const MAP_PADDING_BOTTOM_RIGHT = [50, 180]; // [right, bottom] - account for footer nav bar
 
 export default function VehicleLocationsPage() {
   const mapRef = useRef<any>(null);
@@ -269,7 +271,10 @@ export default function VehicleLocationsPage() {
         const group = L.featureGroup(markersArray);
         const bounds = group.getBounds();
         if (bounds.isValid()) {
-          mapRef.current.fitBounds(bounds, { padding: MAP_PADDING });
+          mapRef.current.fitBounds(bounds, {
+            paddingTopLeft: MAP_PADDING_TOP_LEFT,
+            paddingBottomRight: MAP_PADDING_BOTTOM_RIGHT
+          });
         }
       } catch (error) {
         console.log('Unable to fit bounds on initial load:', error);
@@ -315,7 +320,10 @@ export default function VehicleLocationsPage() {
         // If multiple markers, fit bounds
         try {
           const group = L.featureGroup(markersArray);
-          mapRef.current.fitBounds(group.getBounds(), { padding: MAP_PADDING });
+          mapRef.current.fitBounds(group.getBounds(), {
+            paddingTopLeft: MAP_PADDING_TOP_LEFT,
+            paddingBottomRight: MAP_PADDING_BOTTOM_RIGHT
+          });
         } catch (error) {
           console.log('Unable to fit bounds, centering on first vehicle:', error);
           // Fallback: center on first marker
