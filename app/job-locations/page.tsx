@@ -552,10 +552,10 @@ export default function JobLocationsPage() {
       }
     });
 
-    // Default bounds: Caldwell west edge to East Boise
+    // Default bounds: Centered on Meridian with tighter view
     const treasureValleyBounds = L.latLngBounds(
-      [43.55, -116.72],
-      [43.72, -116.10]
+      [43.56, -116.60],  // Southwest
+      [43.67, -116.18]   // Northeast
     );
 
     // Auto-fit map on first load or date change
