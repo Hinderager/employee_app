@@ -612,14 +612,6 @@ export default function JobLocationsPage() {
         </div>
       </div>
 
-      {/* Map Info - Top Right */}
-      <div className="fixed top-4 right-4 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-full px-4 py-2">
-        <div className="text-center">
-          <div className="text-xl font-bold text-gray-900">{jobs.length}</div>
-          <div className="text-xs text-gray-600">Jobs</div>
-        </div>
-      </div>
-
       {/* Legend - Bottom Center */}
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-lg px-6 py-3">
         <div className="flex items-center gap-6 flex-nowrap whitespace-nowrap">
