@@ -87,12 +87,23 @@ function formatDuration(ms: number): string {
   }
 }
 
+// Format idle duration (minutes only, simpler format)
+function formatIdleDuration(ms: number): string {
+  const totalMinutes = Math.floor(ms / 60000);
+  if (totalMinutes > 0) {
+    return `${totalMinutes}m`;
+  } else {
+    return "<1m";
+  }
+}
+
 export default function VehicleLocationsPage() {
   const mapRef = useRef<any>(null);
   const markersRef = useRef<Map<string, any>>(new Map());
   const isFirstLoadRef = useRef<boolean>(true);
   const followingVehicleRef = useRef<string | null>(null);
   const locationArrivalsRef = useRef<Map<string, LocationArrival>>(new Map());
+  const idleStartTimesRef = useRef<Map<string, Date>>(new Map()); // Track when each vehicle started idling
 
   const [vehicles, setVehicles] = useState<VehicleLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -101,6 +112,7 @@ export default function VehicleLocationsPage() {
   const [followingVehicle, setFollowingVehicle] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [timeAtLocation, setTimeAtLocation] = useState<Map<string, number>>(new Map());
+  const [idleTimes, setIdleTimes] = useState<Map<string, number>>(new Map());
 
   // Initialize Leaflet map
   useEffect(() => {
@@ -169,15 +181,24 @@ export default function VehicleLocationsPage() {
     return () => clearInterval(interval);
   }, [mapReady]);
 
-  // Update time at location display every second
+  // Update time at location and idle times display every second
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
-      const newTimes = new Map<string, number>();
+
+      // Update location times
+      const newLocationTimes = new Map<string, number>();
       locationArrivalsRef.current.forEach((arrival, imei) => {
-        newTimes.set(imei, now.getTime() - arrival.arrivalTime.getTime());
+        newLocationTimes.set(imei, now.getTime() - arrival.arrivalTime.getTime());
       });
-      setTimeAtLocation(newTimes);
+      setTimeAtLocation(newLocationTimes);
+
+      // Update idle times
+      const newIdleTimes = new Map<string, number>();
+      idleStartTimesRef.current.forEach((startTime, imei) => {
+        newIdleTimes.set(imei, now.getTime() - startTime.getTime());
+      });
+      setIdleTimes(newIdleTimes);
     }, 1000);
     return () => clearInterval(interval);
   }, []);
@@ -191,6 +212,9 @@ export default function VehicleLocationsPage() {
 
       // Update location arrivals for time tracking
       updateLocationArrivals(data.vehicles);
+
+      // Update idle tracking
+      updateIdleTracking(data.vehicles);
 
       setVehicles(data.vehicles);
       setLastUpdate(new Date());
@@ -237,6 +261,24 @@ export default function VehicleLocationsPage() {
             arrivalTime: now
           });
         }
+      }
+    });
+  };
+
+  // Track when vehicles start/stop idling (running but speed = 0)
+  const updateIdleTracking = (vehicleData: VehicleLocation[]) => {
+    const now = new Date();
+
+    vehicleData.forEach(vehicle => {
+      const isIdling = vehicle.isRunning && vehicle.speed === 0;
+      const currentlyTrackedAsIdling = idleStartTimesRef.current.has(vehicle.imei);
+
+      if (isIdling && !currentlyTrackedAsIdling) {
+        // Vehicle just started idling
+        idleStartTimesRef.current.set(vehicle.imei, now);
+      } else if (!isIdling && currentlyTrackedAsIdling) {
+        // Vehicle stopped idling (either moving or turned off)
+        idleStartTimesRef.current.delete(vehicle.imei);
       }
     });
   };
@@ -358,6 +400,14 @@ export default function VehicleLocationsPage() {
     ? timeAtLocation.get(followingVehicle) || 0
     : 0;
 
+  // Get idle time for selected vehicle (if idling)
+  const selectedIdleTime = followingVehicle
+    ? idleTimes.get(followingVehicle) || 0
+    : 0;
+
+  // Determine if selected vehicle is idling
+  const isSelectedVehicleIdling = selectedVehicle?.isRunning && selectedVehicle?.speed === 0;
+
   return (
     <div className="h-screen w-screen relative">
       {/* Header Bar - Vehicle Status */}
@@ -412,8 +462,13 @@ export default function VehicleLocationsPage() {
                 {/* Status */}
                 <div className="flex items-center gap-1">
                   <span className="text-gray-500">Status:</span>
-                  <span className={`font-semibold ${selectedVehicle.isRunning ? 'text-green-600' : 'text-red-600'}`}>
-                    {selectedVehicle.isRunning ? '● Running' : '● Stopped'}
+                  <span className={`font-semibold ${
+                    isSelectedVehicleIdling ? 'text-yellow-600' :
+                    selectedVehicle.isRunning ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {isSelectedVehicleIdling
+                      ? `● Idling (${formatIdleDuration(selectedIdleTime)})`
+                      : selectedVehicle.isRunning ? '● Running' : '● Stopped'}
                   </span>
                 </div>
 
