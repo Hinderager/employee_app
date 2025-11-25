@@ -68,10 +68,10 @@ function decodePolyline(encoded: string): [number, number][] {
 
 export default function JobLocationsPage() {
   const mapRef = useRef<any>(null);
-  const jobMarkersRef = useRef<any[]>([]);
-  const routesRef = useRef<RouteData[]>([]); // Store route polylines and destination markers
+  const jobMarkersRef = useRef<Map<string, any>>(new Map()); // Map of job ID to marker
+  const routesRef = useRef<Map<string, RouteData>>(new Map()); // Map of job ID to route data
   const isFirstLoadRef = useRef<boolean>(true);
-  const openPopupJobIdRef = useRef<string | null>(null); // Track which popup is open
+  const currentJobOrderRef = useRef<Map<string, number>>(new Map()); // Track job order for icon updates
   const [jobs, setJobs] = useState<JobLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -180,9 +180,20 @@ export default function JobLocationsPage() {
     return () => clearInterval(interval);
   }, [mapReady, selectedDate]);
 
-  // Refetch when date changes
+  // Refetch when date changes - clear all markers first
   useEffect(() => {
     if (mapReady) {
+      // Clear all existing markers and routes when changing dates
+      jobMarkersRef.current.forEach(marker => marker.remove());
+      jobMarkersRef.current.clear();
+      currentJobOrderRef.current.clear();
+
+      routesRef.current.forEach(route => {
+        if (route.polyline) route.polyline.remove();
+        if (route.destinationMarker) route.destinationMarker.remove();
+      });
+      routesRef.current.clear();
+
       isFirstLoadRef.current = true; // Reset so map re-fits bounds on date change
       fetchLocations();
     }
@@ -244,6 +255,63 @@ export default function JobLocationsPage() {
     }
   };
 
+  // Helper to create job icon HTML
+  const createJobIconHtml = (jobOrder: number, jobColor: string, startTime: string) => `
+    <div style="position: relative;">
+      <div style="
+        background-color: ${jobColor};
+        width: 40px;
+        height: 40px;
+        border-radius: 50% 50% 50% 0;
+        transform: rotate(-45deg);
+        border: 3px solid white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      ">
+        <div style="
+          transform: rotate(45deg);
+          color: white;
+          font-weight: bold;
+          font-size: 18px;
+        ">${jobOrder}</div>
+      </div>
+      <div style="
+        position: absolute;
+        top: -35px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: ${jobColor};
+        color: white;
+        padding: 4px 14px;
+        border-radius: 6px;
+        font-size: 13pt;
+        font-weight: bold;
+        white-space: nowrap;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      ">${startTime}</div>
+    </div>
+  `;
+
+  // Helper to create destination icon HTML
+  const createDestIconHtml = (jobOrder: number) => `
+    <div style="
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      color: #000;
+      background: white;
+      border: 3px solid #000;
+      border-radius: 50%;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    ">${jobOrder}</div>
+  `;
+
   // Update markers on map
   const updateMapMarkers = async (jobData: JobLocation[]) => {
     if (!mapRef.current) return;
@@ -251,109 +319,62 @@ export default function JobLocationsPage() {
     const L = (window as any).L;
     if (!L) return;
 
-    // Save which popup is currently open (if any)
-    let currentOpenJobId: string | null = null;
-    jobMarkersRef.current.forEach((marker, index) => {
-      if (marker.isPopupOpen && marker.isPopupOpen()) {
-        // Find which job this marker belongs to by index
-        const sortedJobs = [...jobs].sort((a, b) =>
-          new Date(a.job_start_time).getTime() - new Date(b.job_start_time).getTime()
-        );
-        if (sortedJobs[index]) {
-          currentOpenJobId = sortedJobs[index].id;
-        }
-      }
-    });
-
-    // Clear existing markers
-    jobMarkersRef.current.forEach(marker => marker.remove());
-    jobMarkersRef.current = [];
-
-    // Clear existing routes and destination markers
-    routesRef.current.forEach(route => {
-      if (route.polyline) route.polyline.remove();
-      if (route.destinationMarker) route.destinationMarker.remove();
-    });
-    routesRef.current = [];
+    // Track which jobs we see in this update
+    const seenJobIds = new Set<string>();
 
     // Sort jobs by start time to determine order
     const sortedJobs = [...jobData].sort((a, b) =>
       new Date(a.job_start_time).getTime() - new Date(b.job_start_time).getTime()
     );
 
-    // Collect all map elements for bounds calculation
-    const allMapElements: any[] = [];
-
-    // Add job markers
+    // Process each job
     for (let index = 0; index < sortedJobs.length; index++) {
       const job = sortedJobs[index];
-      if (job.latitude && job.longitude) {
-        const jobOrder = index + 1;
-        const isJunkJob = job.job_type.toLowerCase().includes("junk");
-        const jobColor = isJunkJob ? "#FF6B6B" : "#4ECDC4"; // Red for junk, teal for moving
-        // Parse the time from Workiz
-        // JobDateTime comes from Workiz API as ISO 8601 UTC: "2016-08-29T09:12:33.001Z"
-        // Convert to MST and display in 12-hour format
-        let startTime = '';
-        try {
-          const dateStr = job.job_start_time;
+      if (!job.latitude || !job.longitude) continue;
 
-          // Parse as Date object (handles ISO 8601 format)
-          const jobDate = new Date(dateStr);
+      seenJobIds.add(job.id);
+      const jobOrder = index + 1;
+      const isJunkJob = job.job_type.toLowerCase().includes("junk");
+      const jobColor = isJunkJob ? "#FF6B6B" : "#4ECDC4";
 
-          // Convert to MST and format as 12-hour time
-          startTime = jobDate.toLocaleTimeString('en-US', {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-            timeZone: 'America/Denver'
+      // Parse start time
+      let startTime = '';
+      try {
+        const jobDate = new Date(job.job_start_time);
+        startTime = jobDate.toLocaleTimeString('en-US', {
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+          timeZone: 'America/Denver'
+        });
+      } catch (e) {
+        startTime = job.job_start_time;
+      }
+
+      const existingMarker = jobMarkersRef.current.get(job.id);
+      const previousOrder = currentJobOrderRef.current.get(job.id);
+
+      if (existingMarker) {
+        // Update existing marker position
+        existingMarker.setLatLng([job.latitude, job.longitude]);
+
+        // Update icon if order changed
+        if (previousOrder !== jobOrder) {
+          const newIcon = L.divIcon({
+            className: 'custom-job-marker',
+            html: createJobIconHtml(jobOrder, jobColor, startTime),
+            iconSize: [40, 40],
+            iconAnchor: [20, 40],
+            popupAnchor: [0, -40]
           });
-        } catch (e) {
-          // Fallback to original string if parsing fails
-          console.error('Error parsing job start time:', e);
-          startTime = job.job_start_time;
+          existingMarker.setIcon(newIcon);
+          currentJobOrderRef.current.set(job.id, jobOrder);
         }
-
-        // Create custom div icon with job order and time
+      } else {
+        // Create new marker
         const jobIcon = L.divIcon({
           className: 'custom-job-marker',
-          html: `
-            <div style="position: relative;">
-              <div style="
-                background-color: ${jobColor};
-                width: 40px;
-                height: 40px;
-                border-radius: 50% 50% 50% 0;
-                transform: rotate(-45deg);
-                border: 3px solid white;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-                display: flex;
-                align-items: center;
-                justify-content: center;
-              ">
-                <div style="
-                  transform: rotate(45deg);
-                  color: white;
-                  font-weight: bold;
-                  font-size: 18px;
-                ">${jobOrder}</div>
-              </div>
-              <div style="
-                position: absolute;
-                top: -35px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: ${jobColor};
-                color: white;
-                padding: 4px 14px;
-                border-radius: 6px;
-                font-size: 13pt;
-                font-weight: bold;
-                white-space: nowrap;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-              ">${startTime}</div>
-            </div>
-          `,
+          html: createJobIconHtml(jobOrder, jobColor, startTime),
           iconSize: [40, 40],
           iconAnchor: [20, 40],
           popupAnchor: [0, -40]
@@ -363,7 +384,7 @@ export default function JobLocationsPage() {
           icon: jobIcon
         }).addTo(mapRef.current);
 
-        // Truncate description if too long (approx 3 lines = ~150 chars)
+        // Create popup content
         const descriptionLimit = 150;
         const description = job.job_description || '';
         const needsTruncation = description.length > descriptionLimit;
@@ -448,49 +469,30 @@ export default function JobLocationsPage() {
           maxWidth: 300
         });
 
-        jobMarkersRef.current.push(marker);
-        allMapElements.push(marker);
+        jobMarkersRef.current.set(job.id, marker);
+        currentJobOrderRef.current.set(job.id, jobOrder);
+      }
 
-        // Reopen popup if this was the previously open one
-        if (currentOpenJobId === job.id) {
-          marker.openPopup();
-        }
+      // Handle routes for truck jobs with destinations
+      if (job.destination_address && job.has_estimate_form && job.service_type === 'truck') {
+        const existingRoute = routesRef.current.get(job.id);
 
-        // If this job has a destination address (truck service with estimate form),
-        // fetch directions and draw the route
-        if (job.destination_address && job.has_estimate_form && job.service_type === 'truck') {
+        if (!existingRoute) {
+          // Fetch and create route only if it doesn't exist
           const directions = await fetchDirections(job);
           if (directions) {
-            // Decode the polyline and draw the route
             const decodedPoints = decodePolyline(directions.polyline);
 
-            // Create the route polyline with dashed style
             const routePolyline = L.polyline(decodedPoints, {
               color: '#000000',
               weight: 4,
               opacity: 0.7,
-              dashArray: '10, 10' // Dashed line
+              dashArray: '10, 10'
             }).addTo(mapRef.current);
 
-            // Create circled number marker for destination
             const destIcon = L.divIcon({
               className: 'destination-marker',
-              html: `
-                <div style="
-                  width: 26px;
-                  height: 26px;
-                  display: flex;
-                  align-items: center;
-                  justify-content: center;
-                  font-size: 14px;
-                  font-weight: bold;
-                  color: #000;
-                  background: white;
-                  border: 3px solid #000;
-                  border-radius: 50%;
-                  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-                ">${jobOrder}</div>
-              `,
+              html: createDestIconHtml(jobOrder),
               iconSize: [26, 26],
               iconAnchor: [13, 13]
             });
@@ -499,7 +501,6 @@ export default function JobLocationsPage() {
               icon: destIcon
             }).addTo(mapRef.current);
 
-            // Add popup to destination marker
             destMarker.bindPopup(`
               <div style="min-width: 180px;">
                 <h4 style="margin: 0 0 8px 0; font-weight: bold; color: ${jobColor};">
@@ -514,44 +515,63 @@ export default function JobLocationsPage() {
               closeButton: true
             });
 
-            // Store route data for cleanup
-            routesRef.current.push({
+            routesRef.current.set(job.id, {
               jobId: job.id,
               polyline: routePolyline,
               destinationMarker: destMarker
             });
-
-            allMapElements.push(destMarker);
           }
+        } else if (previousOrder !== jobOrder) {
+          // Update destination marker icon if order changed
+          const newDestIcon = L.divIcon({
+            className: 'destination-marker',
+            html: createDestIconHtml(jobOrder),
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
+          });
+          existingRoute.destinationMarker.setIcon(newDestIcon);
         }
       }
     }
 
+    // Remove markers for jobs no longer in the data
+    jobMarkersRef.current.forEach((marker, jobId) => {
+      if (!seenJobIds.has(jobId)) {
+        marker.remove();
+        jobMarkersRef.current.delete(jobId);
+        currentJobOrderRef.current.delete(jobId);
+      }
+    });
+
+    // Remove routes for jobs no longer in the data
+    routesRef.current.forEach((route, jobId) => {
+      if (!seenJobIds.has(jobId)) {
+        if (route.polyline) route.polyline.remove();
+        if (route.destinationMarker) route.destinationMarker.remove();
+        routesRef.current.delete(jobId);
+      }
+    });
+
     // Default bounds: Caldwell west edge to East Boise
-    // This ensures a consistent view of the Treasure Valley service area
     const treasureValleyBounds = L.latLngBounds(
-      [43.55, -116.72],  // Southwest: south of Caldwell
-      [43.72, -116.10]   // Northeast: east Boise near Lucky Peak
+      [43.55, -116.72],
+      [43.72, -116.10]
     );
 
     // Auto-fit map on first load or date change
     if (isFirstLoadRef.current) {
       try {
-        if (allMapElements.length > 0) {
-          // Get bounds of all job markers
-          const group = L.featureGroup(allMapElements);
+        const allMarkers = Array.from(jobMarkersRef.current.values());
+        if (allMarkers.length > 0) {
+          const group = L.featureGroup(allMarkers);
           const jobBounds = group.getBounds();
-
-          // Extend to include Treasure Valley default area
           const combinedBounds = treasureValleyBounds.extend(jobBounds);
           mapRef.current.fitBounds(combinedBounds, { padding: [30, 30] });
         } else {
-          // No jobs - show default Treasure Valley view
           mapRef.current.fitBounds(treasureValleyBounds, { padding: [30, 30] });
         }
       } catch (error) {
         console.log('Unable to fit bounds on initial load:', error);
-        // Fallback to default view
         mapRef.current.fitBounds(treasureValleyBounds);
       }
       isFirstLoadRef.current = false;
