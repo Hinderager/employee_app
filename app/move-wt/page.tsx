@@ -1431,6 +1431,9 @@ function MoveWalkthroughContent() {
         console.log('[handleLoadJob] restFormData keys:', Object.keys(restFormData));
         console.log('[handleLoadJob] Sample values - pickupLocationType:', restFormData.pickupLocationType,
                     'gunSafes:', restFormData.gunSafes, 'serviceType:', restFormData.serviceType);
+        console.log('[handleLoadJob] Phone fields - phone:', restFormData.phone, 'email:', restFormData.email);
+        console.log('[handleLoadJob] Phones array:', savedPhones);
+        console.log('[handleLoadJob] Emails array:', savedEmails);
 
         setFormData(prev => ({
           ...prev,
@@ -1439,10 +1442,26 @@ function MoveWalkthroughContent() {
 
         // Restore phones and emails arrays if they exist
         if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
+          console.log('[handleLoadJob] Restoring phones array:', savedPhones);
           setPhones(savedPhones);
+        } else {
+          console.log('[handleLoadJob] No valid phones array to restore, savedPhones=', savedPhones);
+          // If there's a phone in formData but no phones array, create one
+          if (restFormData.phone) {
+            console.log('[handleLoadJob] Creating phones array from formData.phone:', restFormData.phone);
+            setPhones([{ number: restFormData.phone, name: restFormData.phoneName || '' }]);
+          }
         }
         if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
+          console.log('[handleLoadJob] Restoring emails array:', savedEmails);
           setEmails(savedEmails);
+        } else {
+          console.log('[handleLoadJob] No valid emails array to restore, savedEmails=', savedEmails);
+          // If there's an email in formData but no emails array, create one
+          if (restFormData.email) {
+            console.log('[handleLoadJob] Creating emails array from formData.email:', restFormData.email);
+            setEmails([{ email: restFormData.email, name: restFormData.emailName || '' }]);
+          }
         }
       } else {
         console.log('[handleLoadJob] No existingFormData in result');
