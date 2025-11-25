@@ -44,33 +44,12 @@ interface VehicleLocation {
   fuelLevel: number;
   color: string;
   iconUrl: string;
-}
-
-interface LocationArrival {
-  latitude: number;
-  longitude: number;
-  arrivalTime: Date;
+  arrivalTime: string | null; // Time vehicle arrived at current location (from API)
 }
 
 // Asymmetric padding: more at top (header) and bottom (footer nav)
 const MAP_PADDING_TOP_LEFT = [50, 140];     // [left, top] - account for header
 const MAP_PADDING_BOTTOM_RIGHT = [50, 180]; // [right, bottom] - account for footer nav bar
-
-// 200 yards in meters (for location tolerance)
-const LOCATION_TOLERANCE_METERS = 182.88;
-
-// Calculate distance between two lat/lng points using Haversine formula
-function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000; // Earth's radius in meters
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
 
 // Format duration for display
 function formatDuration(ms: number): string {
@@ -102,7 +81,6 @@ export default function VehicleLocationsPage() {
   const markersRef = useRef<Map<string, any>>(new Map());
   const isFirstLoadRef = useRef<boolean>(true);
   const followingVehicleRef = useRef<string | null>(null);
-  const locationArrivalsRef = useRef<Map<string, LocationArrival>>(new Map());
   const idleStartTimesRef = useRef<Map<string, Date>>(new Map()); // Track when each vehicle started idling
   const isProgrammaticMoveRef = useRef<boolean>(false); // Flag to prevent clearing selection during programmatic map moves
 
@@ -112,7 +90,7 @@ export default function VehicleLocationsPage() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [followingVehicle, setFollowingVehicle] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [timeAtLocation, setTimeAtLocation] = useState<Map<string, number>>(new Map());
+  const [currentTime, setCurrentTime] = useState<Date>(new Date()); // For updating time displays
   const [idleTimes, setIdleTimes] = useState<Map<string, number>>(new Map());
 
   // Initialize Leaflet map
@@ -187,17 +165,11 @@ export default function VehicleLocationsPage() {
     return () => clearInterval(interval);
   }, [mapReady]);
 
-  // Update time at location and idle times display every second
+  // Update current time every second for duration displays
   useEffect(() => {
     const interval = setInterval(() => {
       const now = new Date();
-
-      // Update location times
-      const newLocationTimes = new Map<string, number>();
-      locationArrivalsRef.current.forEach((arrival, imei) => {
-        newLocationTimes.set(imei, now.getTime() - arrival.arrivalTime.getTime());
-      });
-      setTimeAtLocation(newLocationTimes);
+      setCurrentTime(now);
 
       // Update idle times
       const newIdleTimes = new Map<string, number>();
@@ -216,9 +188,6 @@ export default function VehicleLocationsPage() {
 
       const data = await response.json();
 
-      // Update location arrivals for time tracking
-      updateLocationArrivals(data.vehicles);
-
       // Update idle tracking
       updateIdleTracking(data.vehicles);
 
@@ -232,43 +201,6 @@ export default function VehicleLocationsPage() {
       setError(err instanceof Error ? err.message : "Unknown error");
       setLoading(false);
     }
-  };
-
-  // Track when vehicles arrive at new locations (with 200 yard tolerance)
-  const updateLocationArrivals = (vehicleData: VehicleLocation[]) => {
-    const now = new Date();
-
-    vehicleData.forEach(vehicle => {
-      if (!vehicle.latitude || !vehicle.longitude) return;
-
-      const existingArrival = locationArrivalsRef.current.get(vehicle.imei);
-
-      if (!existingArrival) {
-        // First time seeing this vehicle
-        locationArrivalsRef.current.set(vehicle.imei, {
-          latitude: vehicle.latitude,
-          longitude: vehicle.longitude,
-          arrivalTime: now
-        });
-      } else {
-        // Check if vehicle moved more than 200 yards
-        const distance = getDistanceInMeters(
-          existingArrival.latitude,
-          existingArrival.longitude,
-          vehicle.latitude,
-          vehicle.longitude
-        );
-
-        if (distance > LOCATION_TOLERANCE_METERS) {
-          // Vehicle moved - update arrival location and time
-          locationArrivalsRef.current.set(vehicle.imei, {
-            latitude: vehicle.latitude,
-            longitude: vehicle.longitude,
-            arrivalTime: now
-          });
-        }
-      }
-    });
   };
 
   // Track when vehicles start/stop idling (running but speed = 0)
@@ -411,10 +343,12 @@ export default function VehicleLocationsPage() {
     ? vehicles.find(v => v.imei === followingVehicle)
     : null;
 
-  // Get time at location for selected vehicle
-  const selectedTimeAtLocation = followingVehicle
-    ? timeAtLocation.get(followingVehicle) || 0
-    : 0;
+  // Calculate time at location from API-provided arrivalTime
+  const selectedTimeAtLocation = (() => {
+    if (!selectedVehicle?.arrivalTime) return 0;
+    const arrivalDate = new Date(selectedVehicle.arrivalTime);
+    return currentTime.getTime() - arrivalDate.getTime();
+  })();
 
   // Get idle time for selected vehicle (if idling)
   const selectedIdleTime = followingVehicle
@@ -503,7 +437,9 @@ export default function VehicleLocationsPage() {
                 <div className="flex items-center gap-1">
                   <span className="text-gray-500">Here:</span>
                   <span className="font-semibold text-blue-600">
-                    {formatDuration(selectedTimeAtLocation)}
+                    {selectedVehicle?.arrivalTime
+                      ? formatDuration(selectedTimeAtLocation)
+                      : "Unknown"}
                   </span>
                 </div>
               </div>

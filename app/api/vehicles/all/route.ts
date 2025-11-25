@@ -5,6 +5,9 @@ import { getBouncieToken } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+// Minimum trip distance in miles to count as a "real" trip
+const MIN_TRIP_DISTANCE_MILES = 0.2;
+
 // Vehicle data from OMW Text project
 const VEHICLES = [
   {
@@ -32,6 +35,67 @@ const VEHICLES = [
     iconUrl: "/icons/prius-icon.png"
   }
 ];
+
+// Fetch recent trips for a vehicle and find the last trip > 0.2 miles
+async function getArrivalTimeFromTrips(imei: string, bouncieToken: string): Promise<string | null> {
+  try {
+    // Look back 7 days for trips
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - 7);
+
+    const tripsUrl = `https://api.bouncie.dev/v1/trips?imei=${imei}&starts-after=${startDate.toISOString()}&ends-before=${endDate.toISOString()}`;
+
+    const response = await fetch(tripsUrl, {
+      headers: {
+        'Authorization': bouncieToken,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) {
+      console.log(`Failed to fetch trips for ${imei}: ${response.status}`);
+      return null;
+    }
+
+    const trips = await response.json();
+
+    if (!Array.isArray(trips) || trips.length === 0) {
+      console.log(`No trips found for ${imei}`);
+      return null;
+    }
+
+    // Sort trips by end time descending (most recent first)
+    const sortedTrips = trips.sort((a: any, b: any) => {
+      const endA = new Date(a.endTime || a.end || 0).getTime();
+      const endB = new Date(b.endTime || b.end || 0).getTime();
+      return endB - endA;
+    });
+
+    // Find the most recent trip that's > 0.2 miles
+    for (const trip of sortedTrips) {
+      // Distance could be in 'distance', 'miles', or 'totalMiles'
+      const distance = trip.distance || trip.miles || trip.totalMiles || 0;
+
+      if (distance >= MIN_TRIP_DISTANCE_MILES) {
+        // Return the end time of this trip (when vehicle arrived at current location)
+        const arrivalTime = trip.endTime || trip.end;
+        console.log(`Found qualifying trip for ${imei}: ${distance} miles, ended at ${arrivalTime}`);
+        return arrivalTime;
+      }
+    }
+
+    // If no trip > 0.2 miles found, use the most recent trip end time anyway
+    const lastTrip = sortedTrips[0];
+    const lastArrivalTime = lastTrip?.endTime || lastTrip?.end;
+    console.log(`No trip > ${MIN_TRIP_DISTANCE_MILES} miles for ${imei}, using last trip: ${lastArrivalTime}`);
+    return lastArrivalTime || null;
+
+  } catch (error) {
+    console.error(`Error fetching trips for ${imei}:`, error);
+    return null;
+  }
+}
 
 export async function GET() {
   try {
@@ -65,31 +129,19 @@ export async function GET() {
 
     const bouncieData = await response.json();
 
-    // DEBUG: Log the full Bouncie API response structure
-    console.log('=== BOUNCIE API DEBUG ===');
-    console.log('Number of vehicles returned:', bouncieData.length);
-    console.log('Full Bouncie response:', JSON.stringify(bouncieData, null, 2));
+    // Fetch arrival times for all vehicles in parallel
+    const arrivalTimePromises = VEHICLES.map(vehicle =>
+      getArrivalTimeFromTrips(vehicle.imei, bouncieToken!)
+    );
+    const arrivalTimes = await Promise.all(arrivalTimePromises);
 
     // Map Bouncie data to our vehicle format
-    const vehiclesWithLocations = VEHICLES.map(vehicle => {
+    const vehiclesWithLocations = VEHICLES.map((vehicle, index) => {
       // Find matching vehicle in Bouncie data
       const bouncieVehicle = bouncieData.find((bv: any) => bv.imei === vehicle.imei);
-
-      // DEBUG: Log each vehicle's data structure
-      console.log(`\n--- Vehicle: ${vehicle.name} (${vehicle.imei}) ---`);
-      if (bouncieVehicle) {
-        console.log('Found in Bouncie data:', JSON.stringify(bouncieVehicle, null, 2));
-        console.log('Has stats?', !!bouncieVehicle.stats);
-        console.log('Has stats.location?', !!bouncieVehicle.stats?.location);
-        if (bouncieVehicle.stats) {
-          console.log('Stats keys:', Object.keys(bouncieVehicle.stats));
-        }
-      } else {
-        console.log('NOT FOUND in Bouncie data');
-      }
+      const arrivalTime = arrivalTimes[index];
 
       if (!bouncieVehicle || !bouncieVehicle.stats?.location) {
-        console.log(`⚠️ RETURNING 0,0 for ${vehicle.name} - no location data`);
         return {
           ...vehicle,
           latitude: 0,
@@ -99,7 +151,8 @@ export async function GET() {
           timestamp: new Date().toISOString(),
           address: 'Location unavailable',
           isRunning: false,
-          fuelLevel: 0
+          fuelLevel: 0,
+          arrivalTime: null
         };
       }
 
@@ -114,7 +167,8 @@ export async function GET() {
         timestamp: bouncieVehicle.stats.lastUpdated || new Date().toISOString(),
         address: location.address || 'Address unavailable',
         isRunning: bouncieVehicle.stats.isRunning || false,
-        fuelLevel: Math.round(bouncieVehicle.stats.fuelLevel || 0)
+        fuelLevel: Math.round(bouncieVehicle.stats.fuelLevel || 0),
+        arrivalTime: arrivalTime // Time the vehicle arrived at current location (from last trip > 0.2 miles)
       };
     });
 
