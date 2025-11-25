@@ -766,11 +766,26 @@ export default function MoveJobsPage() {
                   {/* Tags */}
                   {tags.length > 0 && (
                     <div className="flex flex-wrap gap-1 mb-2">
-                      {tags.map((tag: string, idx: number) => (
-                        <span key={idx} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-700 rounded-full">
-                          {tag}
-                        </span>
-                      ))}
+                      {tags.map((tag: string, idx: number) => {
+                        // Color code tags to match move-wt page
+                        let tagColor = 'bg-gray-500 text-white'; // default
+                        if (['OOT', 'Cat', 'RN', 'ET'].includes(tag)) {
+                          tagColor = 'bg-red-500 text-white';
+                        } else if (['2', '3', '4', '5', '6+'].includes(tag)) {
+                          tagColor = 'bg-green-500 text-white';
+                        } else if (['Move', 'WT'].includes(tag)) {
+                          tagColor = 'bg-blue-500 text-white';
+                        } else if (['Trk', 'Lbr'].includes(tag)) {
+                          tagColor = 'bg-purple-500 text-white';
+                        } else if (tag === 'PM') {
+                          tagColor = 'bg-yellow-400 text-gray-800';
+                        }
+                        return (
+                          <span key={idx} className={`px-2 py-0.5 text-xs font-medium rounded-full ${tagColor}`}>
+                            {tag}
+                          </span>
+                        );
+                      })}
                     </div>
                   )}
 
