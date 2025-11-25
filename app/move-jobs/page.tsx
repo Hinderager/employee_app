@@ -461,7 +461,7 @@ export default function MoveJobsPage() {
           <InfoRow label="Phone" value={<a href={`tel:${job.phone}`} className="text-blue-600">{formatPhone(job.phone)}</a>} />
           <InfoRow label="Date" value={formData.moveDateUnknown ? 'TBD' : formatDate(job.preferredDate)} />
           {formData.timeFlexible && <InfoRow label="Time" value="Flexible" />}
-          {formData.timingNotes && <InfoRow label="Timing" value={formData.timingNotes} />}
+          {formData.timingNotes && <InfoRow label="Job Notes" value={formData.timingNotes} />}
           <InfoRow label="Service" value={formData.serviceType === 'labor-only' ? '🔧 LABOR ONLY' : '🚚 TRUCK + LABOR'} highlight />
           {formData.crewSizeNotes && <InfoRow label="Crew Notes" value={formData.crewSizeNotes} />}
         </Section>
@@ -666,84 +666,164 @@ export default function MoveJobsPage() {
             <p className="text-sm text-gray-500 mb-2">
               {filteredJobs.length} job{filteredJobs.length !== 1 ? "s" : ""} for {formatDateDisplay(selectedDate)}
             </p>
-            {filteredJobs.map((job) => (
-              <div
-                key={job.id}
-                onClick={() => handleJobClick(job)}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow active:scale-[0.99]"
-              >
-                {/* Header Row */}
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <h3 className="font-semibold text-gray-900">
-                      {job.customerName || "Unknown Customer"}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      {job.jobNumbers.length > 0 ? (
-                        job.jobNumbers.map((jn, idx) => (
-                          <span key={jn}>
-                            {idx > 0 && " / "}
-                            {jn.startsWith("TEMP-") ? (
-                              <span className="text-orange-600">{jn}</span>
-                            ) : (
-                              <span>Job #{jn}</span>
-                            )}
-                          </span>
-                        ))
-                      ) : (
-                        "No Job #"
-                      )}
-                      {job.quoteNumber && (
-                        <span className="ml-2 text-gray-400">• Quote #{job.quoteNumber}</span>
-                      )}
-                    </p>
-                  </div>
-                  <span
-                    className={`px-2 py-1 text-xs rounded-full ${
-                      job.serviceType === "truck"
-                        ? "bg-blue-100 text-blue-700"
+            {filteredJobs.map((job) => {
+              const formData = job.formData || {};
+
+              // Build special items list for tile
+              const tileSpecialItems: string[] = [];
+              if (formData.gunSafes) tileSpecialItems.push(`Gun Safe${formData.gunSafesQty > 1 ? ` (${formData.gunSafesQty})` : ''}`);
+              if (formData.pianos) tileSpecialItems.push(`Piano${formData.pianosQty > 1 ? ` (${formData.pianosQty})` : ''}`);
+              if (formData.poolTables) tileSpecialItems.push(`Pool Table${formData.poolTablesQty > 1 ? ` (${formData.poolTablesQty})` : ''}`);
+              if (formData.hotTubs) tileSpecialItems.push(`Hot Tub${formData.hotTubsQty > 1 ? ` (${formData.hotTubsQty})` : ''}`);
+              if (formData.ridingMowers) tileSpecialItems.push(`Riding Mower${formData.ridingMowersQty > 1 ? ` (${formData.ridingMowersQty})` : ''}`);
+              if (formData.atvs) tileSpecialItems.push(`ATV/Golf Cart${formData.atvsQty > 1 ? ` (${formData.atvsQty})` : ''}`);
+              if (formData.motorcycles) tileSpecialItems.push(`Motorcycle${formData.motorcyclesQty > 1 ? ` (${formData.motorcyclesQty})` : ''}`);
+              if (formData.treadmills) tileSpecialItems.push(`Treadmill${formData.treadmillsQty > 1 ? ` (${formData.treadmillsQty})` : ''}`);
+              if (formData.ellipticals) tileSpecialItems.push(`Elliptical${formData.ellipticalsQty > 1 ? ` (${formData.ellipticalsQty})` : ''}`);
+              if (formData.gymEquipment) tileSpecialItems.push(`Gym Equipment${formData.gymEquipmentQty > 1 ? ` (${formData.gymEquipmentQty})` : ''}`);
+              if (formData.largeTVs) tileSpecialItems.push(`Large TV${formData.largeTVsQty > 1 ? ` (${formData.largeTVsQty})` : ''}`);
+              if (formData.tableSaw) tileSpecialItems.push(`Table Saw/Heavy Tools`);
+              if (formData.otherHeavyItems) tileSpecialItems.push(`Other Heavy Items`);
+
+              // Appliances
+              if (formData.largeAppliances) {
+                const applianceList: string[] = [];
+                if (formData.applianceFridge) applianceList.push('Fridge');
+                if (formData.applianceWasher) applianceList.push('Washer');
+                if (formData.applianceDryer) applianceList.push('Dryer');
+                if (formData.applianceOven) applianceList.push('Oven');
+                if (formData.applianceDishwasher) applianceList.push('Dishwasher');
+                if (applianceList.length > 0) tileSpecialItems.push(`Appliances: ${applianceList.join(', ')}`);
+              }
+
+              // Equipment/tools needed
+              const tileEquipment: string[] = [];
+              if (formData.applianceDolly || formData.largeAppliances) tileEquipment.push('Appliance Dolly');
+              if (formData.safeDolly || formData.gunSafes) tileEquipment.push('Safe Dolly');
+              if (formData.pianos) tileEquipment.push('Piano Board');
+              if (formData.poolTables) tileEquipment.push('Pool Table Tools');
+              if (formData.hotTubs) tileEquipment.push('Hot Tub Equipment');
+
+              // Services
+              const tileServices: string[] = [];
+              if (formData.needsPacking) tileServices.push('Packing');
+              if (formData.junkRemovalNeeded) tileServices.push('Junk Removal');
+
+              // Square feet and value
+              const sqFt = formData.pickupHouseSquareFeet || formData.pickupApartmentSquareFeet;
+              const homeValue = formData.pickupZestimate;
+              const howFurnished = formData.pickupHowFurnished || formData.pickupApartmentHowFurnished;
+
+              // Tags
+              const tags = formData.tags || [];
+
+              return (
+                <div
+                  key={job.id}
+                  onClick={() => handleJobClick(job)}
+                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 cursor-pointer hover:shadow-md transition-shadow active:scale-[0.99]"
+                >
+                  {/* Header Row */}
+                  <div className="flex items-start justify-between mb-2">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">
+                        {job.customerName || "Unknown Customer"}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {job.jobNumbers.length > 0 ? (
+                          job.jobNumbers.map((jn, idx) => (
+                            <span key={jn}>
+                              {idx > 0 && " / "}
+                              {jn.startsWith("TEMP-") ? (
+                                <span className="text-orange-600">{jn}</span>
+                              ) : (
+                                <span>Job #{jn}</span>
+                              )}
+                            </span>
+                          ))
+                        ) : (
+                          "No Job #"
+                        )}
+                      </p>
+                    </div>
+                    <span
+                      className={`px-2 py-1 text-xs rounded-full ${
+                        job.serviceType === "truck"
+                          ? "bg-blue-100 text-blue-700"
+                          : job.serviceType === "labor-only"
+                          ? "bg-purple-100 text-purple-700"
+                          : "bg-gray-100 text-gray-600"
+                      }`}
+                    >
+                      {job.serviceType === "truck"
+                        ? "🚚 Truck"
                         : job.serviceType === "labor-only"
-                        ? "bg-purple-100 text-purple-700"
-                        : "bg-gray-100 text-gray-600"
-                    }`}
-                  >
-                    {job.serviceType === "truck"
-                      ? "🚚 Truck"
-                      : job.serviceType === "labor-only"
-                      ? "🔧 Labor"
-                      : "—"}
-                  </span>
-                </div>
+                        ? "🔧 Labor"
+                        : "—"}
+                    </span>
+                  </div>
 
-                {/* Details */}
-                <div className="space-y-1 text-sm">
-                  {job.phone && (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <PhoneIcon className="h-4 w-4 text-gray-400" />
-                      {formatPhone(job.phone)}
+                  {/* Tags */}
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {tags.map((tag: string, idx: number) => (
+                        <span key={idx} className="px-2 py-0.5 text-xs bg-gray-100 text-gray-700 rounded-full">
+                          {tag}
+                        </span>
+                      ))}
                     </div>
                   )}
-                  {job.pickupAddress && (
-                    <div className="flex items-start gap-2 text-gray-600">
-                      <MapPinIcon className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                      <span className="line-clamp-1">{job.pickupAddress}</span>
-                    </div>
-                  )}
-                  {job.deliveryAddress && (
-                    <div className="flex items-start gap-2 text-gray-600">
-                      <MapPinIcon className="h-4 w-4 text-blue-500 mt-0.5 flex-shrink-0" />
-                      <span className="line-clamp-1">{job.deliveryAddress}</span>
-                    </div>
-                  )}
-                </div>
 
-                {/* Footer */}
-                <div className="mt-3 pt-2 border-t border-gray-100 flex justify-between items-center text-xs text-gray-400">
-                  <span>Updated {formatDate(job.updatedAt)}</span>
-                  <span className="text-blue-600 font-medium">Tap for details →</span>
+                  {/* Property Info */}
+                  {(sqFt || homeValue) && (
+                    <div className="text-sm text-gray-600 mb-2">
+                      {sqFt && <span>{Number(sqFt).toLocaleString()} sq ft</span>}
+                      {sqFt && howFurnished && <span className="text-gray-400"> • </span>}
+                      {howFurnished && <span>{howFurnished}% moving</span>}
+                      {(sqFt || howFurnished) && homeValue && <span className="text-gray-400"> • </span>}
+                      {homeValue && <span className="text-green-600">${Number(homeValue).toLocaleString()} value</span>}
+                    </div>
+                  )}
+
+                  {/* Crew Size */}
+                  {formData.estimatedCrewSize && (
+                    <div className="text-sm text-gray-700 mb-2">
+                      <span className="font-medium">Crew:</span> {formData.estimatedCrewSize}
+                      {formData.crewSizeNotes && <span className="text-gray-500"> ({formData.crewSizeNotes})</span>}
+                    </div>
+                  )}
+
+                  {/* Special Items - High Alert */}
+                  {tileSpecialItems.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-2 mb-2">
+                      <div className="text-xs font-semibold text-red-700 mb-1">⚠️ SPECIAL ITEMS</div>
+                      <div className="text-sm text-red-800">{tileSpecialItems.join(' • ')}</div>
+                    </div>
+                  )}
+
+                  {/* Tools Needed */}
+                  {tileEquipment.length > 0 && (
+                    <div className="bg-purple-50 border border-purple-200 rounded-lg p-2 mb-2">
+                      <div className="text-xs font-semibold text-purple-700 mb-1">🛠️ TOOLS NEEDED</div>
+                      <div className="text-sm text-purple-800">{tileEquipment.join(' • ')}</div>
+                    </div>
+                  )}
+
+                  {/* Services */}
+                  {tileServices.length > 0 && (
+                    <div className="bg-orange-50 border border-orange-200 rounded-lg p-2 mb-2">
+                      <div className="text-xs font-semibold text-orange-700 mb-1">📦 SERVICES</div>
+                      <div className="text-sm text-orange-800">{tileServices.join(' • ')}</div>
+                    </div>
+                  )}
+
+                  {/* Footer */}
+                  <div className="mt-2 pt-2 border-t border-gray-100 text-right">
+                    <span className="text-xs text-blue-600 font-medium">Tap for details →</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
