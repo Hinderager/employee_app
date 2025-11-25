@@ -255,7 +255,7 @@ export default function VehicleLocationsPage() {
             followingVehicleRef.current = vehicle.imei;
             setFollowingVehicle(vehicle.imei);
             isProgrammaticMoveRef.current = true;
-            mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
+            mapRef.current.setView([vehicle.latitude, vehicle.longitude], 13);
             setTimeout(() => { isProgrammaticMoveRef.current = false; }, 100);
           });
 
@@ -306,7 +306,7 @@ export default function VehicleLocationsPage() {
       followingVehicleRef.current = imei;
       setFollowingVehicle(imei);
       isProgrammaticMoveRef.current = true;
-      mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
+      mapRef.current.setView([vehicle.latitude, vehicle.longitude], 13);
       setTimeout(() => { isProgrammaticMoveRef.current = false; }, 100);
     }
   };
