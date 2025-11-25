@@ -433,15 +433,17 @@ export default function VehicleLocationsPage() {
                   </span>
                 </div>
 
-                {/* Time at Location */}
-                <div className="flex items-center gap-1">
-                  <span className="text-gray-500">Here:</span>
-                  <span className="font-semibold text-blue-600">
-                    {selectedVehicle?.arrivalTime
-                      ? formatDuration(selectedTimeAtLocation)
-                      : "Unknown"}
-                  </span>
-                </div>
+                {/* Time at Location - only show when parked (not moving) */}
+                {selectedVehicle?.speed === 0 && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-gray-500">Here:</span>
+                    <span className="font-semibold text-blue-600">
+                      {selectedVehicle?.arrivalTime
+                        ? formatDuration(selectedTimeAtLocation)
+                        : "Unknown"}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
