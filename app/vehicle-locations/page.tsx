@@ -433,8 +433,8 @@ export default function VehicleLocationsPage() {
                   </span>
                 </div>
 
-                {/* Time at Location - only show when parked (not moving) */}
-                {selectedVehicle?.speed === 0 && (
+                {/* Time at Location - only show when truly parked (engine off) */}
+                {!selectedVehicle?.isRunning && (
                   <div className="flex items-center gap-1">
                     <span className="text-gray-500">Here:</span>
                     <span className="font-semibold text-blue-600">
