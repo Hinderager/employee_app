@@ -104,6 +104,7 @@ export default function VehicleLocationsPage() {
   const followingVehicleRef = useRef<string | null>(null);
   const locationArrivalsRef = useRef<Map<string, LocationArrival>>(new Map());
   const idleStartTimesRef = useRef<Map<string, Date>>(new Map()); // Track when each vehicle started idling
+  const isProgrammaticMoveRef = useRef<boolean>(false); // Flag to prevent clearing selection during programmatic map moves
 
   const [vehicles, setVehicles] = useState<VehicleLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -162,13 +163,18 @@ export default function VehicleLocationsPage() {
 
     mapRef.current = map;
 
+    // Only clear selection on manual drag/zoom, not programmatic moves
     map.on('dragstart', () => {
-      followingVehicleRef.current = null;
-      setFollowingVehicle(null);
+      if (!isProgrammaticMoveRef.current) {
+        followingVehicleRef.current = null;
+        setFollowingVehicle(null);
+      }
     });
     map.on('zoomstart', () => {
-      followingVehicleRef.current = null;
-      setFollowingVehicle(null);
+      if (!isProgrammaticMoveRef.current) {
+        followingVehicleRef.current = null;
+        setFollowingVehicle(null);
+      }
     });
 
     fetchVehicleLocations();
@@ -316,7 +322,9 @@ export default function VehicleLocationsPage() {
           marker.on('click', () => {
             followingVehicleRef.current = vehicle.imei;
             setFollowingVehicle(vehicle.imei);
+            isProgrammaticMoveRef.current = true;
             mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
+            setTimeout(() => { isProgrammaticMoveRef.current = false; }, 100);
           });
 
           markersRef.current.set(vehicle.imei, marker);
@@ -337,10 +345,12 @@ export default function VehicleLocationsPage() {
         const group = L.featureGroup(markersArray);
         const bounds = group.getBounds();
         if (bounds.isValid()) {
+          isProgrammaticMoveRef.current = true;
           mapRef.current.fitBounds(bounds, {
             paddingTopLeft: MAP_PADDING_TOP_LEFT,
             paddingBottomRight: MAP_PADDING_BOTTOM_RIGHT
           });
+          setTimeout(() => { isProgrammaticMoveRef.current = false; }, 100);
         }
       } catch (error) {
         console.log('Unable to fit bounds on initial load:', error);
@@ -351,7 +361,9 @@ export default function VehicleLocationsPage() {
     if (followingVehicleRef.current) {
       const followedVehicle = vehicleData.find(v => v.imei === followingVehicleRef.current);
       if (followedVehicle && followedVehicle.latitude && followedVehicle.longitude) {
+        isProgrammaticMoveRef.current = true;
         mapRef.current.setView([followedVehicle.latitude, followedVehicle.longitude], mapRef.current.getZoom());
+        setTimeout(() => { isProgrammaticMoveRef.current = false; }, 100);
       }
     }
   };
@@ -361,7 +373,9 @@ export default function VehicleLocationsPage() {
     if (vehicle && vehicle.latitude && vehicle.longitude && mapRef.current) {
       followingVehicleRef.current = imei;
       setFollowingVehicle(imei);
+      isProgrammaticMoveRef.current = true;
       mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
+      setTimeout(() => { isProgrammaticMoveRef.current = false; }, 100);
     }
   };
 
@@ -372,6 +386,7 @@ export default function VehicleLocationsPage() {
 
     const markersArray = Array.from(markersRef.current.values());
     if (markersArray.length > 0 && L && mapRef.current) {
+      isProgrammaticMoveRef.current = true;
       if (markersArray.length === 1) {
         const latLng = markersArray[0].getLatLng();
         mapRef.current.setView(latLng, 13);
@@ -387,6 +402,7 @@ export default function VehicleLocationsPage() {
           mapRef.current.setView(latLng, 13);
         }
       }
+      setTimeout(() => { isProgrammaticMoveRef.current = false; }, 100);
     }
   };
 
