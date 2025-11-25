@@ -589,6 +589,7 @@ function MoveWalkthroughContent() {
       // Capture quote number from response
       if (result.quoteNumber) {
         setQuoteNumber(result.quoteNumber);
+        setSearchQuoteNum(result.quoteNumber);
         console.log("Quote number set:", result.quoteNumber);
       } else {
         console.warn("No quote number in save response:", result);
@@ -1347,6 +1348,7 @@ function MoveWalkthroughContent() {
         // Capture quote number if present
         if (result.quoteNumber) {
           setQuoteNumber(result.quoteNumber);
+          setSearchQuoteNum(result.quoteNumber);
         }
 
         // Load customer info if available
@@ -1395,6 +1397,7 @@ function MoveWalkthroughContent() {
       // Capture quote number if present
       if (result.quoteNumber) {
         setQuoteNumber(result.quoteNumber);
+        setSearchQuoteNum(result.quoteNumber);
       }
 
       // Populate customer information
@@ -1697,6 +1700,7 @@ function MoveWalkthroughContent() {
 
         if (result.quoteNumber) {
           setQuoteNumber(result.quoteNumber);
+          setSearchQuoteNum(result.quoteNumber);
         }
 
         // Now load the new data into the cleared form
@@ -1742,6 +1746,7 @@ function MoveWalkthroughContent() {
 
         if (result.quoteNumber) {
           setQuoteNumber(result.quoteNumber);
+          setSearchQuoteNum(result.quoteNumber);
         }
 
         if (result.customerInfo) {
@@ -2159,6 +2164,7 @@ function MoveWalkthroughContent() {
       // Capture quote number if present
       if (result.quoteNumber) {
         setQuoteNumber(result.quoteNumber);
+        setSearchQuoteNum(result.quoteNumber);
       }
 
       // Populate customer information
