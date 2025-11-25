@@ -46,30 +46,67 @@ interface VehicleLocation {
   iconUrl: string;
 }
 
-// Asymmetric padding: more at top (menu button) and bottom (footer nav)
-// Format: paddingTopLeft [left, top], paddingBottomRight [right, bottom]
-const MAP_PADDING_TOP_LEFT = [50, 100];     // [left, top] - account for menu button
+interface LocationArrival {
+  latitude: number;
+  longitude: number;
+  arrivalTime: Date;
+}
+
+// Asymmetric padding: more at top (header) and bottom (footer nav)
+const MAP_PADDING_TOP_LEFT = [50, 140];     // [left, top] - account for header
 const MAP_PADDING_BOTTOM_RIGHT = [50, 180]; // [right, bottom] - account for footer nav bar
+
+// 200 yards in meters (for location tolerance)
+const LOCATION_TOLERANCE_METERS = 182.88;
+
+// Calculate distance between two lat/lng points using Haversine formula
+function getDistanceInMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371000; // Earth's radius in meters
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Format duration for display
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  } else if (minutes > 0) {
+    return `${minutes}m`;
+  } else {
+    return "Just arrived";
+  }
+}
 
 export default function VehicleLocationsPage() {
   const mapRef = useRef<any>(null);
-  const markersRef = useRef<Map<string, any>>(new Map()); // Store markers by IMEI for smooth updates
+  const markersRef = useRef<Map<string, any>>(new Map());
   const isFirstLoadRef = useRef<boolean>(true);
-  const followingVehicleRef = useRef<string | null>(null); // Track which vehicle to follow (by IMEI)
+  const followingVehicleRef = useRef<string | null>(null);
+  const locationArrivalsRef = useRef<Map<string, LocationArrival>>(new Map());
+
   const [vehicles, setVehicles] = useState<VehicleLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-  const [followingVehicle, setFollowingVehicle] = useState<string | null>(null); // Track for UI highlighting
-  const [mapReady, setMapReady] = useState(false); // Track when map is initialized
+  const [followingVehicle, setFollowingVehicle] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const [timeAtLocation, setTimeAtLocation] = useState<Map<string, number>>(new Map());
 
   // Initialize Leaflet map
   useEffect(() => {
     if (typeof window === "undefined") return;
 
-    // Load Leaflet CSS and JS
     const loadLeaflet = async () => {
-      // Add Leaflet CSS
       if (!document.getElementById("leaflet-css")) {
         const link = document.createElement("link");
         link.id = "leaflet-css";
@@ -78,7 +115,6 @@ export default function VehicleLocationsPage() {
         document.head.appendChild(link);
       }
 
-      // Load Leaflet JS
       if (!(window as any).L) {
         const script = document.createElement("script");
         script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
@@ -92,21 +128,18 @@ export default function VehicleLocationsPage() {
     loadLeaflet();
   }, []);
 
-  // Initialize map
   const initMap = () => {
-    if (mapRef.current) return; // Already initialized
+    if (mapRef.current) return;
 
     const L = (window as any).L;
     if (!L) return;
 
-    // Create map with temporary center (will auto-fit to vehicles once loaded)
     const map = L.map("map", {
-      center: [43.65, -116.42],  // Meridian, ID area (where vehicles are)
+      center: [43.65, -116.42],
       zoom: 13,
       zoomControl: true
     });
 
-    // Add CartoDB Voyager tile layer (same as OMW Text)
     L.tileLayer(
       "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
       {
@@ -117,7 +150,6 @@ export default function VehicleLocationsPage() {
 
     mapRef.current = map;
 
-    // Stop following vehicle when map is dragged or zoomed manually
     map.on('dragstart', () => {
       followingVehicleRef.current = null;
       setFollowingVehicle(null);
@@ -127,43 +159,43 @@ export default function VehicleLocationsPage() {
       setFollowingVehicle(null);
     });
 
-    // Start fetching vehicle locations immediately
     fetchVehicleLocations();
-
-    // Mark map as ready to trigger interval setup
     setMapReady(true);
   };
 
-  // Auto-refresh vehicle locations every 5 seconds
   useEffect(() => {
-    if (!mapReady) return; // Wait for map to be initialized
-
-    // Set up interval to fetch locations
+    if (!mapReady) return;
     const interval = setInterval(fetchVehicleLocations, 5000);
-
-    // Clean up interval when component unmounts
-    return () => {
-      clearInterval(interval);
-    };
+    return () => clearInterval(interval);
   }, [mapReady]);
 
-  // Fetch all vehicle locations
+  // Update time at location display every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const now = new Date();
+      const newTimes = new Map<string, number>();
+      locationArrivalsRef.current.forEach((arrival, imei) => {
+        newTimes.set(imei, now.getTime() - arrival.arrivalTime.getTime());
+      });
+      setTimeAtLocation(newTimes);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   const fetchVehicleLocations = async () => {
     try {
-      // Call the Bouncie API endpoint
       const response = await fetch("/api/vehicles/all");
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch vehicle locations");
-      }
+      if (!response.ok) throw new Error("Failed to fetch vehicle locations");
 
       const data = await response.json();
+
+      // Update location arrivals for time tracking
+      updateLocationArrivals(data.vehicles);
+
       setVehicles(data.vehicles);
       setLastUpdate(new Date());
       setLoading(false);
       setError(null);
-
-      // Update map markers
       updateMapMarkers(data.vehicles);
     } catch (err) {
       console.error("Error fetching vehicles:", err);
@@ -172,17 +204,51 @@ export default function VehicleLocationsPage() {
     }
   };
 
-  // Update markers on map - now updates existing markers instead of recreating them
+  // Track when vehicles arrive at new locations (with 200 yard tolerance)
+  const updateLocationArrivals = (vehicleData: VehicleLocation[]) => {
+    const now = new Date();
+
+    vehicleData.forEach(vehicle => {
+      if (!vehicle.latitude || !vehicle.longitude) return;
+
+      const existingArrival = locationArrivalsRef.current.get(vehicle.imei);
+
+      if (!existingArrival) {
+        // First time seeing this vehicle
+        locationArrivalsRef.current.set(vehicle.imei, {
+          latitude: vehicle.latitude,
+          longitude: vehicle.longitude,
+          arrivalTime: now
+        });
+      } else {
+        // Check if vehicle moved more than 200 yards
+        const distance = getDistanceInMeters(
+          existingArrival.latitude,
+          existingArrival.longitude,
+          vehicle.latitude,
+          vehicle.longitude
+        );
+
+        if (distance > LOCATION_TOLERANCE_METERS) {
+          // Vehicle moved - update arrival location and time
+          locationArrivalsRef.current.set(vehicle.imei, {
+            latitude: vehicle.latitude,
+            longitude: vehicle.longitude,
+            arrivalTime: now
+          });
+        }
+      }
+    });
+  };
+
   const updateMapMarkers = (vehicleData: VehicleLocation[]) => {
     if (!mapRef.current) return;
 
     const L = (window as any).L;
     if (!L) return;
 
-    // Track which vehicles we've seen this update
     const seenImeis = new Set<string>();
 
-    // Update or create markers for each vehicle
     vehicleData.forEach(vehicle => {
       if (vehicle.latitude && vehicle.longitude &&
           vehicle.latitude !== 0 && vehicle.longitude !== 0) {
@@ -190,41 +256,9 @@ export default function VehicleLocationsPage() {
         seenImeis.add(vehicle.imei);
         const existingMarker = markersRef.current.get(vehicle.imei);
 
-        // Create popup content
-        const fuelIcon = vehicle.fuelLevel > 50 ? '⛽' : vehicle.fuelLevel > 25 ? '🟡' : '🔴';
-        const popupContent = `
-          <div style="min-width: 200px;">
-            <h3 style="margin: 0 0 8px 0; font-weight: bold; color: ${vehicle.color};">
-              ${vehicle.name}
-            </h3>
-            <p style="margin: 4px 0; font-size: 14px;">
-              <strong>Speed:</strong> ${vehicle.speed} mph
-            </p>
-            <p style="margin: 4px 0; font-size: 14px;">
-              <strong>Status:</strong> ${vehicle.isRunning ? '🟢 Running' : '🔴 Stopped'}
-            </p>
-            <p style="margin: 4px 0; font-size: 14px;">
-              <strong>Fuel:</strong> ${fuelIcon} ${vehicle.fuelLevel}%
-            </p>
-            <p style="margin: 4px 0; font-size: 12px; color: #666;">
-              ${vehicle.address || 'Address unavailable'}
-            </p>
-            <p style="margin: 4px 0; font-size: 11px; color: #999;">
-              Updated: ${new Date(vehicle.timestamp).toLocaleTimeString()}
-            </p>
-            <p style="margin: 4px 0; font-size: 11px; color: #999;">
-              <em>Click marker to follow vehicle</em>
-            </p>
-          </div>
-        `;
-
         if (existingMarker) {
-          // Update existing marker position smoothly (no blink!)
           existingMarker.setLatLng([vehicle.latitude, vehicle.longitude]);
-          // Update popup content
-          existingMarker.setPopupContent(popupContent);
         } else {
-          // Create new marker only if it doesn't exist
           const customIcon = L.icon({
             iconUrl: vehicle.iconUrl,
             iconSize: [75, 75],
@@ -236,19 +270,11 @@ export default function VehicleLocationsPage() {
             icon: customIcon
           }).addTo(mapRef.current);
 
-          // Add click handler to follow this vehicle
+          // Click to select and follow vehicle (no popup)
           marker.on('click', () => {
             followingVehicleRef.current = vehicle.imei;
             setFollowingVehicle(vehicle.imei);
             mapRef.current.setView([vehicle.latitude, vehicle.longitude], 16);
-          });
-
-          marker.bindPopup(popupContent, {
-            autoClose: false,
-            closeOnClick: true,
-            closeButton: true,
-            autoPan: true,
-            maxWidth: 300
           });
 
           markersRef.current.set(vehicle.imei, marker);
@@ -256,7 +282,6 @@ export default function VehicleLocationsPage() {
       }
     });
 
-    // Remove markers for vehicles that are no longer in the data
     markersRef.current.forEach((marker, imei) => {
       if (!seenImeis.has(imei)) {
         marker.remove();
@@ -264,7 +289,6 @@ export default function VehicleLocationsPage() {
       }
     });
 
-    // Auto-fit map to show all vehicles ONLY on first load
     if (markersRef.current.size > 0 && isFirstLoadRef.current) {
       try {
         const markersArray = Array.from(markersRef.current.values());
@@ -279,10 +303,9 @@ export default function VehicleLocationsPage() {
       } catch (error) {
         console.log('Unable to fit bounds on initial load:', error);
       }
-      isFirstLoadRef.current = false; // Disable auto-fit after first load
+      isFirstLoadRef.current = false;
     }
 
-    // If following a vehicle, center on it
     if (followingVehicleRef.current) {
       const followedVehicle = vehicleData.find(v => v.imei === followingVehicleRef.current);
       if (followedVehicle && followedVehicle.latitude && followedVehicle.longitude) {
@@ -291,7 +314,6 @@ export default function VehicleLocationsPage() {
     }
   };
 
-  // Handle clicking a vehicle icon in the bottom nav
   const handleVehicleClick = (imei: string) => {
     const vehicle = vehicles.find(v => v.imei === imei);
     if (vehicle && vehicle.latitude && vehicle.longitude && mapRef.current) {
@@ -301,23 +323,17 @@ export default function VehicleLocationsPage() {
     }
   };
 
-  // Handle clicking "All Vehicles" button - show all vehicles (same as initial load)
   const handleShowAllVehicles = () => {
     const L = (window as any).L;
-
-    // Stop following any vehicle
     followingVehicleRef.current = null;
     setFollowingVehicle(null);
 
-    // Fit bounds to show all vehicles (same as initial load)
     const markersArray = Array.from(markersRef.current.values());
     if (markersArray.length > 0 && L && mapRef.current) {
       if (markersArray.length === 1) {
-        // If only one marker, just center on it
         const latLng = markersArray[0].getLatLng();
         mapRef.current.setView(latLng, 13);
       } else {
-        // If multiple markers, fit bounds
         try {
           const group = L.featureGroup(markersArray);
           mapRef.current.fitBounds(group.getBounds(), {
@@ -325,8 +341,6 @@ export default function VehicleLocationsPage() {
             paddingBottomRight: MAP_PADDING_BOTTOM_RIGHT
           });
         } catch (error) {
-          console.log('Unable to fit bounds, centering on first vehicle:', error);
-          // Fallback: center on first marker
           const latLng = markersArray[0].getLatLng();
           mapRef.current.setView(latLng, 13);
         }
@@ -334,29 +348,105 @@ export default function VehicleLocationsPage() {
     }
   };
 
+  // Get selected vehicle data
+  const selectedVehicle = followingVehicle
+    ? vehicles.find(v => v.imei === followingVehicle)
+    : null;
+
+  // Get time at location for selected vehicle
+  const selectedTimeAtLocation = followingVehicle
+    ? timeAtLocation.get(followingVehicle) || 0
+    : 0;
+
   return (
     <div className="h-screen w-screen relative">
-      {/* Menu Button - Top Left */}
-      <Link
-        href="/home"
-        className="fixed top-4 left-4 z-[1000] bg-white/90 backdrop-blur-sm hover:bg-white shadow-lg rounded-lg px-4 py-2 flex items-center gap-2 transition-all hover:scale-105"
-      >
-        <svg
-          className="w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
+      {/* Header Bar - Vehicle Status */}
+      <div className="fixed top-0 left-0 right-0 z-[1000] flex items-start">
+        {/* Menu Button */}
+        <Link
+          href="/home"
+          className="m-4 bg-white/90 backdrop-blur-sm hover:bg-white shadow-lg rounded-lg px-4 py-2 flex items-center gap-2 transition-all hover:scale-105 shrink-0"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M15 19l-7-7 7-7"
-          />
-        </svg>
-        <span className="font-medium text-gray-900">Menu</span>
-      </Link>
+          <svg
+            className="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M15 19l-7-7 7-7"
+            />
+          </svg>
+          <span className="font-medium text-gray-900">Menu</span>
+        </Link>
+
+        {/* Vehicle Status Header */}
+        {selectedVehicle && (
+          <div
+            className="flex-1 mr-4 mt-4 bg-white/95 backdrop-blur-sm shadow-lg rounded-lg px-4 py-3 border-l-4"
+            style={{ borderLeftColor: selectedVehicle.color }}
+          >
+            <div className="flex items-center justify-between gap-4 flex-wrap">
+              {/* Vehicle Name */}
+              <div className="flex items-center gap-2">
+                <span
+                  className="font-bold text-lg"
+                  style={{ color: selectedVehicle.color }}
+                >
+                  {selectedVehicle.name}
+                </span>
+              </div>
+
+              {/* Status Info */}
+              <div className="flex items-center gap-4 text-sm flex-wrap">
+                {/* Speed */}
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-500">Speed:</span>
+                  <span className="font-semibold">{selectedVehicle.speed} mph</span>
+                </div>
+
+                {/* Status */}
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-500">Status:</span>
+                  <span className={`font-semibold ${selectedVehicle.isRunning ? 'text-green-600' : 'text-red-600'}`}>
+                    {selectedVehicle.isRunning ? '● Running' : '● Stopped'}
+                  </span>
+                </div>
+
+                {/* Fuel */}
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-500">Fuel:</span>
+                  <span className={`font-semibold ${
+                    selectedVehicle.fuelLevel > 50 ? 'text-green-600' :
+                    selectedVehicle.fuelLevel > 25 ? 'text-yellow-600' : 'text-red-600'
+                  }`}>
+                    {selectedVehicle.fuelLevel}%
+                  </span>
+                </div>
+
+                {/* Time at Location */}
+                <div className="flex items-center gap-1">
+                  <span className="text-gray-500">Here:</span>
+                  <span className="font-semibold text-blue-600">
+                    {formatDuration(selectedTimeAtLocation)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Address */}
+            {selectedVehicle.address && (
+              <div className="mt-2 text-sm text-gray-600 truncate">
+                📍 {selectedVehicle.address}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Map Container - Full Screen */}
       <div id="map" className="h-full w-full"></div>
@@ -364,9 +454,7 @@ export default function VehicleLocationsPage() {
       {/* Bottom Navigation Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-sm border-t border-gray-200 shadow-lg z-[1000]">
         <div className="flex justify-around items-center px-4 py-3">
-          {/* Individual Vehicle Icons */}
           {VEHICLES.map((vehicle) => {
-            // Use small nav icons for the bottom bar
             const navIconUrl = vehicle.iconUrl.replace('-icon.png', '-nav.png');
             return (
               <button
@@ -391,7 +479,6 @@ export default function VehicleLocationsPage() {
             );
           })}
 
-          {/* All Vehicles Button */}
           <button
             onClick={handleShowAllVehicles}
             className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all ${
@@ -423,17 +510,9 @@ export default function VehicleLocationsPage() {
           border: none;
         }
 
-        .leaflet-popup-content-wrapper {
-          border-radius: 8px;
-        }
-
-        .leaflet-popup-content {
-          margin: 12px;
-        }
-
-        /* Move zoom controls below menu button */
+        /* Move zoom controls below header */
         .leaflet-top.leaflet-left {
-          top: 70px !important;
+          top: 100px !important;
         }
       `}</style>
     </div>
