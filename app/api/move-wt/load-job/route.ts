@@ -134,12 +134,20 @@ export async function POST(request: NextRequest) {
 
     // Priority 0: If quote number is provided, load directly from Supabase
     if (quoteNumber && quoteNumber.trim()) {
-      console.log(`[move-wt/load-job] Loading form by quote number: ${quoteNumber}`);
+      // Normalize quote number - add "q-" prefix if not present (case-insensitive)
+      let normalizedQuoteNumber = quoteNumber.trim();
+      if (!normalizedQuoteNumber.toLowerCase().startsWith('q-')) {
+        normalizedQuoteNumber = `q-${normalizedQuoteNumber}`;
+      }
+      // Ensure lowercase 'q-' format
+      normalizedQuoteNumber = normalizedQuoteNumber.toLowerCase().replace(/^q-/i, 'q-');
+
+      console.log(`[move-wt/load-job] Loading form by quote number: ${normalizedQuoteNumber} (input: ${quoteNumber})`);
 
       const { data: quoteData, error } = await supabase
         .from('move_quote')
         .select('*')
-        .eq('quote_number', quoteNumber.trim())
+        .eq('quote_number', normalizedQuoteNumber)
         .single();
 
       if (error || !quoteData) {

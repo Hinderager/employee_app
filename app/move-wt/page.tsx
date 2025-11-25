@@ -1423,7 +1423,14 @@ function MoveWalkthroughContent() {
 
       // Populate existing form data if available
       if (result.existingFormData) {
+        console.log('[handleLoadJob] existingFormData received:', result.existingFormData);
+        console.log('[handleLoadJob] existingFormData keys:', Object.keys(result.existingFormData));
+
         const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
+
+        console.log('[handleLoadJob] restFormData keys:', Object.keys(restFormData));
+        console.log('[handleLoadJob] Sample values - pickupLocationType:', restFormData.pickupLocationType,
+                    'gunSafes:', restFormData.gunSafes, 'serviceType:', restFormData.serviceType);
 
         setFormData(prev => ({
           ...prev,
@@ -1437,6 +1444,8 @@ function MoveWalkthroughContent() {
         if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
           setEmails(savedEmails);
         }
+      } else {
+        console.log('[handleLoadJob] No existingFormData in result');
       }
     } catch (error) {
       console.error('Load job error:', error);
