@@ -545,17 +545,16 @@ export default function JobLocationsPage() {
 
   return (
     <div className="h-screen w-screen relative">
-      {/* Menu Button - Top Left */}
+      {/* Back Button - Top Left */}
       <Link
         href="/home"
-        className="fixed top-4 left-4 z-[1000] bg-white/90 backdrop-blur-sm hover:bg-white shadow-lg rounded-lg px-4 py-2 flex items-center gap-2 transition-all hover:scale-105"
+        className="fixed top-4 left-4 z-[1000] bg-white/90 backdrop-blur-sm hover:bg-white shadow-lg rounded-full p-2 transition-all hover:scale-105"
       >
         <svg
-          className="w-5 h-5"
+          className="w-6 h-6 text-gray-700"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
-          xmlns="http://www.w3.org/2000/svg"
         >
           <path
             strokeLinecap="round"
@@ -564,11 +563,10 @@ export default function JobLocationsPage() {
             d="M15 19l-7-7 7-7"
           />
         </svg>
-        <span className="font-medium text-gray-900">Menu</span>
       </Link>
 
       {/* Date Navigation - Top Center */}
-      <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-lg px-4 py-2">
+      <div className="fixed top-4 left-1/2 transform -translate-x-1/2 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-lg px-3 py-2 ml-4">
         <div className="flex items-center justify-center gap-2">
           <button
             onClick={goToPreviousDay}
@@ -615,14 +613,10 @@ export default function JobLocationsPage() {
       </div>
 
       {/* Map Info - Top Right */}
-      <div className="fixed top-4 right-4 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-lg px-4 py-2">
-        <div className="text-sm">
-          <div className="font-bold text-gray-900">{jobs.length} Jobs</div>
-          {lastUpdate && (
-            <div className="text-xs text-gray-600">
-              Updated: {lastUpdate.toLocaleTimeString()}
-            </div>
-          )}
+      <div className="fixed top-4 right-4 z-[1000] bg-white/90 backdrop-blur-sm shadow-lg rounded-full px-4 py-2">
+        <div className="text-center">
+          <div className="text-xl font-bold text-gray-900">{jobs.length}</div>
+          <div className="text-xs text-gray-600">Jobs</div>
         </div>
       </div>
 

@@ -52,15 +52,15 @@ export async function GET(request: NextRequest) {
       targetDate = mstDate.toISOString().split('T')[0];
     }
 
-    // Fetch scheduled jobs from job_locations table for the target date
-    const { data: jobs, error } = await supabase
-      .from('job_locations')
+    // Fetch scheduled jobs from all_workiz_jobs table for the target date
+    const { data: rawJobs, error } = await supabase
+      .from('all_workiz_jobs')
       .select('*')
       .eq('scheduled_date', targetDate)
-      .eq('job_status', 'Submitted')
+      .eq('status', 'Submitted')
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
-      .order('job_start_time', { ascending: true });
+      .order('job_date_time', { ascending: true });
 
     if (error) {
       console.error('Supabase query error:', error);
@@ -70,8 +70,23 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    // Map all_workiz_jobs fields to the expected format
+    const jobs = (rawJobs || []).map(job => ({
+      id: job.id,
+      job_number: String(job.serial_id),
+      job_type: job.job_type || '',
+      job_start_time: job.job_date_time,
+      job_description: job.job_notes || '',
+      customer_name: [job.first_name, job.last_name].filter(Boolean).join(' ') || job.company || '',
+      customer_phone: job.phone || '',
+      address: job.address || '',
+      latitude: job.latitude,
+      longitude: job.longitude,
+      scheduled_date: job.scheduled_date
+    }));
+
     // Enrich jobs with estimate form data if Employee App DB is available
-    let enrichedJobs = jobs || [];
+    let enrichedJobs = jobs;
 
     if (employeeAppSupabase && jobs && jobs.length > 0) {
       // Get all job numbers to look up
