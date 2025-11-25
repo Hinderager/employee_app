@@ -298,14 +298,36 @@ export async function POST(request: NextRequest) {
       // Continue anyway - we still have the folderUrl to return
     }
 
-    // Check if there's existing form data for this address
-    const { data: existingFormData } = await supabase
+    // Check if there's existing form data for this job number first, then by address
+    let existingFormData = null;
+
+    // First try to find by job number (most accurate match)
+    const { data: formByJobNumber } = await supabase
       .from('move_quote')
       .select('*')
-      .eq('address', address)
+      .eq('job_number', jobNumber)
       .order('updated_at', { ascending: false })
       .limit(1)
       .single();
+
+    if (formByJobNumber) {
+      existingFormData = formByJobNumber;
+      console.log(`[move-wt/load-job] Found form data by job number:`, formByJobNumber.quote_number || 'no quote');
+    } else {
+      // Fall back to searching by address
+      const { data: formByAddress } = await supabase
+        .from('move_quote')
+        .select('*')
+        .eq('address', address)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+        .single();
+
+      if (formByAddress) {
+        existingFormData = formByAddress;
+        console.log(`[move-wt/load-job] Found form data by address:`, formByAddress.quote_number || 'no quote');
+      }
+    }
 
     console.log(`[move-wt/load-job] Existing form data:`, existingFormData ? 'Found' : 'Not found');
 
