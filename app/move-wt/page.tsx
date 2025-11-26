@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon } from "@heroicons/react/24/outline";
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
 import QuotePreview from "../components/QuotePreview";
 import Script from "next/script";
 
@@ -567,29 +567,6 @@ function MoveWalkthroughContent() {
   // Phone number normalization - strips all non-numeric characters
   const normalizePhoneNumber = (phone: string): string => {
     return phone.replace(/\D/g, '');
-  };
-
-  // Helper functions for date navigation
-  const adjustDate = (currentDate: string, days: number): string => {
-    if (!currentDate) {
-      // If no date, start from today
-      const today = new Date();
-      today.setDate(today.getDate() + days);
-      return today.toISOString().split('T')[0];
-    }
-    const date = new Date(currentDate + 'T00:00:00');
-    date.setDate(date.getDate() + days);
-    return date.toISOString().split('T')[0];
-  };
-
-  const handleWalkThroughDateNav = (days: number) => {
-    const newDate = adjustDate(formData.walkThroughDate, days);
-    setFormData(prev => ({ ...prev, walkThroughDate: newDate }));
-  };
-
-  const handleMoveDateNav = (days: number) => {
-    const newDate = adjustDate(formData.preferredDate, days);
-    setFormData(prev => ({ ...prev, preferredDate: newDate }));
   };
 
   // Phone number formatting - formats to (XXX) XXX-XXXX
@@ -4259,15 +4236,6 @@ function MoveWalkthroughContent() {
                 Walk-Through Date
               </label>
               <div className="flex items-center gap-6">
-                {/* Left arrow - desktop only */}
-                <button
-                  type="button"
-                  onClick={() => handleWalkThroughDateNav(-1)}
-                  className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
-                  title="Previous day"
-                >
-                  <ChevronLeftIcon className="h-5 w-5" />
-                </button>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <input
                     type="text"
@@ -4278,15 +4246,6 @@ function MoveWalkthroughContent() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
                   />
                 </div>
-                {/* Right arrow - desktop only */}
-                <button
-                  type="button"
-                  onClick={() => handleWalkThroughDateNav(1)}
-                  className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
-                  title="Next day"
-                >
-                  <ChevronRightIcon className="h-5 w-5" />
-                </button>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <select
                     name="walkThroughTime"
@@ -4406,15 +4365,6 @@ function MoveWalkthroughContent() {
                 Move Date
               </label>
               <div className="flex items-center gap-6">
-                {/* Left arrow - desktop only */}
-                <button
-                  type="button"
-                  onClick={() => handleMoveDateNav(-1)}
-                  className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
-                  title="Previous day"
-                >
-                  <ChevronLeftIcon className="h-5 w-5" />
-                </button>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <input
                     type="text"
@@ -4425,15 +4375,6 @@ function MoveWalkthroughContent() {
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
                   />
                 </div>
-                {/* Right arrow - desktop only */}
-                <button
-                  type="button"
-                  onClick={() => handleMoveDateNav(1)}
-                  className="hidden md:flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 transition-colors"
-                  title="Next day"
-                >
-                  <ChevronRightIcon className="h-5 w-5" />
-                </button>
                 <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
                   <select
                     name="preferredTime"

@@ -516,14 +516,24 @@ function SchedulePageContent() {
         </div>
 
         {/* Week Days - Continuous carousel showing 3 weeks */}
-        <div
-          ref={weekContainerRef}
-          className="overflow-hidden pb-3 cursor-grab active:cursor-grabbing"
-          onTouchStart={handleWeekTouchStart}
-          onTouchMove={handleWeekTouchMove}
-          onTouchEnd={handleWeekTouchEnd}
-        >
+        <div className="flex items-center pb-3">
+          {/* Left arrow - navigate to previous week */}
+          <button
+            onClick={goToPreviousWeek}
+            className="flex-shrink-0 p-2 hover:bg-gray-600 rounded-lg transition-colors ml-1"
+            title="Previous week"
+          >
+            <ChevronLeftIcon className="w-6 h-6 text-gray-300" />
+          </button>
+
           <div
+            ref={weekContainerRef}
+            className="flex-1 overflow-hidden cursor-grab active:cursor-grabbing"
+            onTouchStart={handleWeekTouchStart}
+            onTouchMove={handleWeekTouchMove}
+            onTouchEnd={handleWeekTouchEnd}
+          >
+            <div
             className="flex"
             style={{
               transform: `translateX(calc(-33.333% + ${weekSwipeOffset}px))`,
@@ -563,6 +573,16 @@ function SchedulePageContent() {
               </div>
             ))}
           </div>
+          </div>
+
+          {/* Right arrow - navigate to next week */}
+          <button
+            onClick={goToNextWeek}
+            className="flex-shrink-0 p-2 hover:bg-gray-600 rounded-lg transition-colors mr-1"
+            title="Next week"
+          >
+            <ChevronRightIcon className="w-6 h-6 text-gray-300" />
+          </button>
         </div>
       </header>
 
