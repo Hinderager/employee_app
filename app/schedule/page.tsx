@@ -429,8 +429,8 @@ function SchedulePageContent() {
     const startHour = parseTimeToHour(job.startTime);
     const duration = getJobDuration(job.startTime, job.endTime);
 
-    const top = (startHour - 6) * 60 + 2; // 60px per hour, starting from 6 AM, +2px gap
-    const height = duration * 60 - 4; // -4px to create gap between appointments
+    const top = (startHour - 6) * 60 + 4; // 60px per hour, starting from 6 AM, +4px gap
+    const height = duration * 60 - 8; // -8px to create gap between appointments
     
     const columnInfo = jobColumns.get(job.id) || { column: 0, totalColumns: 1 };
     const gap = 2; // 2px gap between columns
@@ -647,7 +647,7 @@ function SchedulePageContent() {
                 return (
                   <div
                     key={job.id}
-                    className="absolute bg-blue-100 border-l-4 border-blue-500 rounded-lg p-3 overflow-hidden shadow-sm"
+                    className="absolute bg-blue-100 border-l-4 border-blue-500 border-b-4 border-b-white rounded-lg p-3 overflow-hidden shadow-sm"
                     style={style}
                   >
                     <div className="text-xs font-bold text-gray-800">
