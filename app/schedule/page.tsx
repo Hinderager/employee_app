@@ -647,13 +647,13 @@ function SchedulePageContent() {
                 return (
                   <div
                     key={job.id}
-                    className="absolute bg-blue-100 border-l-4 border-blue-500 rounded-lg p-2 overflow-hidden shadow-sm"
+                    className="absolute bg-blue-100 border-l-4 border-blue-500 rounded-lg p-3 overflow-hidden shadow-sm"
                     style={style}
                   >
                     <div className="text-xs font-bold text-gray-800">
                       JOB #{job.serialId}
                     </div>
-                    <div className="text-xs text-gray-700 mt-1">
+                    <div className="text-xs text-gray-700 mt-2">
                       {job.tags.length > 0 && (
                         <span className="font-medium">
                           {job.tags.slice(0, 2).join(", ")}
@@ -667,13 +667,13 @@ function SchedulePageContent() {
                         </>
                       )}
                     </div>
-                    <div className="text-xs text-gray-600 mt-1">
+                    <div className="text-xs text-gray-600 mt-2">
                       {job.serialId} - {job.fullAddress}
                     </div>
 
                     {/* Tags Pills */}
                     {job.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
+                      <div className="flex flex-wrap gap-2 mt-3">
                         {job.tags.map((tag, idx) => (
                           <span
                             key={idx}
