@@ -12,21 +12,17 @@ const normalizePhoneNumber = (phone: string): string => {
   return phone.replace(/\D/g, '');
 };
 
-// Helper function to build full address string
-const buildFullAddress = (addressData: any, type: 'pickup' | 'delivery'): string => {
+// Helper function to build street address for uniqueness matching
+// Only uses street address + unit (NOT city/state/zip) to prevent duplicate records
+// when user fills in address fields incrementally
+const buildStreetAddress = (addressData: any, type: 'pickup' | 'delivery'): string => {
   const parts = [];
   if (type === 'pickup') {
     if (addressData.pickupAddress) parts.push(addressData.pickupAddress);
     if (addressData.pickupUnit) parts.push(`Unit ${addressData.pickupUnit}`);
-    if (addressData.pickupCity) parts.push(addressData.pickupCity);
-    if (addressData.pickupState) parts.push(addressData.pickupState);
-    if (addressData.pickupZip) parts.push(addressData.pickupZip);
   } else {
     if (addressData.deliveryAddress) parts.push(addressData.deliveryAddress);
     if (addressData.deliveryUnit) parts.push(`Unit ${addressData.deliveryUnit}`);
-    if (addressData.deliveryCity) parts.push(addressData.deliveryCity);
-    if (addressData.deliveryState) parts.push(addressData.deliveryState);
-    if (addressData.deliveryZip) parts.push(addressData.deliveryZip);
   }
   return parts.join(', ');
 };
@@ -44,13 +40,14 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine customer home address from the checkbox
+    // Only use street address + unit for uniqueness (not city/state/zip)
     const customerHomeAddressType = formData?.customerHomeAddressType;
     let customerHomeAddress = '';
 
     if (customerHomeAddressType === 'pickup') {
-      customerHomeAddress = buildFullAddress(formData, 'pickup');
+      customerHomeAddress = buildStreetAddress(formData, 'pickup');
     } else if (customerHomeAddressType === 'delivery') {
-      customerHomeAddress = buildFullAddress(formData, 'delivery');
+      customerHomeAddress = buildStreetAddress(formData, 'delivery');
     }
 
     // Extract and normalize ALL phone numbers from formData
