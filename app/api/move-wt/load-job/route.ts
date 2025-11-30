@@ -134,13 +134,13 @@ export async function POST(request: NextRequest) {
 
     // Priority 0: If quote number is provided, load directly from Supabase
     if (quoteNumber && quoteNumber.trim()) {
-      // Normalize quote number - add "q-" prefix if not present (case-insensitive)
+      // Normalize quote number - add "Q-" prefix if not present (database uses uppercase)
       let normalizedQuoteNumber = quoteNumber.trim();
-      if (!normalizedQuoteNumber.toLowerCase().startsWith('q-')) {
-        normalizedQuoteNumber = `q-${normalizedQuoteNumber}`;
+      if (!normalizedQuoteNumber.toUpperCase().startsWith('Q-')) {
+        normalizedQuoteNumber = `Q-${normalizedQuoteNumber}`;
       }
-      // Ensure lowercase 'q-' format
-      normalizedQuoteNumber = normalizedQuoteNumber.toLowerCase().replace(/^q-/i, 'q-');
+      // Ensure uppercase 'Q-' format to match database
+      normalizedQuoteNumber = normalizedQuoteNumber.toUpperCase().replace(/^Q-/i, 'Q-');
 
       console.log(`[move-wt/load-job] Loading form by quote number: ${normalizedQuoteNumber} (input: ${quoteNumber})`);
 

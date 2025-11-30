@@ -1478,20 +1478,20 @@ function MoveWalkthroughContent() {
 
         const selectedForm = result.forms[selectedIndex];
 
-        // Load the selected form
-        setAddress(result.address);
-        setJobNumber(result.job_number);
-        setFolderUrl(result.folderUrl || '');
+        // Load the selected form - use selectedForm properties, not result
+        setAddress(selectedForm.address || '');
+        setJobNumber(selectedForm.jobNumber || '');
+        setFolderUrl(selectedForm.folderUrl || '');
         setIsFolderLinkCopied(false);
         setIsFormSaved(true);
 
-        // Capture quote number if present
-        if (result.quoteNumber) {
-          setQuoteNumber(result.quoteNumber);
-          setSearchQuoteNum(result.quoteNumber);
+        // Capture quote number from selected form
+        if (selectedForm.quoteNumber) {
+          setQuoteNumber(selectedForm.quoteNumber);
+          setSearchQuoteNum(selectedForm.quoteNumber);
         }
 
-        // Load customer info if available
+        // Load customer info if available (from result, as it's shared across forms)
         if (result.customerInfo) {
           setFormData(prev => ({
             ...prev,
@@ -1507,9 +1507,9 @@ function MoveWalkthroughContent() {
           }));
         }
 
-        // Load form data
-        if (result.existingFormData) {
-          const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
+        // Load form data from selected form
+        if (selectedForm.formData) {
+          const { phones: savedPhones, emails: savedEmails, ...restFormData } = selectedForm.formData;
 
           setFormData(prev => ({
             ...prev,
@@ -3920,7 +3920,7 @@ function MoveWalkthroughContent() {
                 inputMode="numeric"
                 maxLength={4}
                 value={searchQuoteNum}
-                onChange={(e) => setSearchQuoteNum(e.target.value.replace(/D/g, '').slice(0, 4))}
+                onChange={(e) => setSearchQuoteNum(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 placeholder="Quote #"
                 className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
