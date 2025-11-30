@@ -5136,6 +5136,7 @@ function MoveWalkthroughContent() {
                       Street Address
                     </label>
                     <input
+                      key={`pickup-address-${autocompleteReinitKey}`}
                       ref={pickupAddressRef}
                       type="text"
                       name="pickupAddress"
@@ -5362,6 +5363,7 @@ function MoveWalkthroughContent() {
                         Street Address
                       </label>
                       <input
+                        key={`delivery-address-${autocompleteReinitKey}`}
                         ref={deliveryAddressRef}
                         type="text"
                         name="deliveryAddress"
@@ -5630,6 +5632,7 @@ function MoveWalkthroughContent() {
                         Street Address
                       </label>
                       <input
+                        key={`additionalStop-address-${autocompleteReinitKey}`}
                         ref={additionalStopAddressRef}
                         type="text"
                         name="additionalStopAddress"
@@ -5990,6 +5993,7 @@ function MoveWalkthroughContent() {
                           Street Address
                         </label>
                         <input
+                          key={`delivery-address-alt-${autocompleteReinitKey}`}
                           ref={deliveryAddressRef}
                           type="text"
                           name="deliveryAddress"
