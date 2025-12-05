@@ -56,12 +56,20 @@ export default function HazardousDropPage() {
   const goToPreviousDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() - 1);
+    // Skip to previous collection day (Mon-Thu only)
+    while (newDate.getDay() === 0 || newDate.getDay() === 5 || newDate.getDay() === 6) {
+      newDate.setDate(newDate.getDate() - 1);
+    }
     setSelectedDate(newDate);
   };
 
   const goToNextDay = () => {
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + 1);
+    // Skip to next collection day (Mon-Thu only)
+    while (newDate.getDay() === 0 || newDate.getDay() === 5 || newDate.getDay() === 6) {
+      newDate.setDate(newDate.getDate() + 1);
+    }
     setSelectedDate(newDate);
   };
 

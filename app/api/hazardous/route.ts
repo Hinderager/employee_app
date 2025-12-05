@@ -56,15 +56,13 @@ const QUARTERLY_MONTHS = [0, 3, 6, 9]; // 0-indexed months
 const QUARTERLY_NO_APRIL_MONTHS = [0, 6, 9]; // 0-indexed months
 
 /**
- * Calculate which week of the month it is (1-5)
+ * Calculate which occurrence of this weekday in the month (1st, 2nd, 3rd, 4th, 5th)
+ * E.g., Dec 2 = 1st Monday, Dec 9 = 2nd Monday, etc.
  */
 function getWeekOfMonth(date: Date): number {
-  const firstDayOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
-  const firstDayWeekday = firstDayOfMonth.getDay();
   const dayOfMonth = date.getDate();
-
-  // Calculate the week number (1-5)
-  return Math.ceil((dayOfMonth + firstDayWeekday) / 7);
+  // Which occurrence of this weekday in the month
+  return Math.ceil(dayOfMonth / 7);
 }
 
 /**
