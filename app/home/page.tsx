@@ -58,11 +58,11 @@ const menuItems = [
     color: "bg-teal-500",
   },
   {
-    title: "Move Quote",
-    description: "Move work tracking",
-    href: "/move-wt",
-    icon: TruckIcon,
-    color: "bg-red-500",
+    title: "Waste Drops",
+    description: "Waste collection sites",
+    href: "/hazardous",
+    icon: ExclamationTriangleIcon,
+    color: "bg-yellow-500",
   },
   {
     title: "Order Supplies",
@@ -72,11 +72,11 @@ const menuItems = [
     color: "bg-green-500",
   },
   {
-    title: "Hazardous Drop",
-    description: "Waste collection sites",
-    href: "/hazardous",
-    icon: ExclamationTriangleIcon,
-    color: "bg-yellow-500",
+    title: "Move Quote",
+    description: "Move work tracking",
+    href: "/move-wt",
+    icon: TruckIcon,
+    color: "bg-red-500",
   },
 ];
 
