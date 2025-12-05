@@ -4284,6 +4284,10 @@ function MoveWalkthroughContent() {
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium"
                   onClick={async () => {
                     // Validate required fields
+                    if (!formData.tags || formData.tags.length < 2) {
+                      alert('check tags');
+                      return;
+                    }
                     if (!formData.walkThroughDate) {
                       alert('Please select a walk-through date');
                       return;
@@ -4413,6 +4417,7 @@ function MoveWalkthroughContent() {
                   className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium"
                   onClick={async () => {
                     // Validate required fields
+                    if (!formData.tags || formData.tags.length < 2) { alert('check tags'); return; }
                     if (!formData.preferredDate) { alert('Please select a move date'); return; }
                     if (!formData.preferredTime) { alert('Please select a move time'); return; }
                     if (!formData.firstName || !formData.lastName) { alert('Please enter customer first and last name'); return; }

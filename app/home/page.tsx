@@ -11,6 +11,7 @@ import {
   DocumentTextIcon,
   TruckIcon,
   ClipboardDocumentListIcon,
+  ExclamationTriangleIcon,
 } from "@heroicons/react/24/outline";
 
 const menuItems = [
@@ -70,6 +71,13 @@ const menuItems = [
     icon: ShoppingCartIcon,
     color: "bg-green-500",
   },
+  {
+    title: "Hazardous Drop",
+    description: "Waste collection sites",
+    href: "/hazardous",
+    icon: ExclamationTriangleIcon,
+    color: "bg-yellow-500",
+  },
 ];
 
 export default function Home() {
@@ -90,7 +98,7 @@ export default function Home() {
       </header>
 
       {/* Main Content */}
-      <div className="px-4 py-8">
+      <div className="px-4 py-8 pb-32">
         <div className="max-w-4xl mx-auto grid grid-cols-2 gap-4">
           {menuItems.map((item) => (
             <Link
