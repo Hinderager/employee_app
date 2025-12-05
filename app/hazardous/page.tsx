@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Link from "next/link";
 
 interface Location {
@@ -13,128 +13,71 @@ interface Location {
   phone?: string;
 }
 
-// Static locations for different categories
-const APPLIANCES_LOCATIONS: Location[] = [
-  {
-    name: 'Capital Heating & Cooling',
-    address: '420 N Curtis Rd, Boise, ID 83706',
-    lat: 43.6142,
-    lng: -116.2529,
-    hours: 'Mon-Fri 8am-5pm',
-    phone: '(208) 343-8800'
-  },
-  {
-    name: 'Garrity Appliance',
-    address: '1207 3rd St S, Nampa, ID 83651',
-    lat: 43.5671,
-    lng: -116.5656,
-    hours: 'Mon-Sat 9am-6pm',
-    phone: '(208) 466-2566'
-  }
+// Location data without coordinates (will be geocoded in real-time)
+interface LocationData {
+  name: string;
+  address: string;
+  hours?: string;
+  phone?: string;
+}
+
+// Static location data - addresses only, coordinates fetched via API
+const APPLIANCES_DATA: LocationData[] = [
+  { name: 'Capital Heating & Cooling', address: '420 N Curtis Rd, Boise, ID 83706', hours: 'Mon-Fri 8am-5pm', phone: '(208) 343-8800' },
+  { name: 'Garrity Appliance', address: '1207 3rd St S, Nampa, ID 83651', hours: 'Mon-Sat 9am-6pm', phone: '(208) 466-2566' }
 ];
 
-const METAL_LOCATIONS: Location[] = [
-  {
-    name: 'Pacific Steel & Recycling (Boise)',
-    address: '5120 W Emerald St, Boise, ID 83706',
-    lat: 43.5980,
-    lng: -116.2730,
-    hours: 'Mon-Fri 7:30am-5pm, Sat 8am-12pm',
-    phone: '(208) 344-8552'
-  },
-  {
-    name: 'Pacific Steel & Recycling (Nampa)',
-    address: '1900 N 20th St, Nampa, ID 83687',
-    lat: 43.5890,
-    lng: -116.5560,
-    hours: 'Mon-Fri 7:30am-5pm, Sat 8am-12pm',
-    phone: '(208) 466-7841'
-  },
-  {
-    name: 'United Metals (Boise)',
-    address: '3809 S Eagleson Rd, Boise, ID 83705',
-    lat: 43.5730,
-    lng: -116.3030,
-    hours: 'Mon-Fri 8am-5pm, Sat 8am-12pm',
-    phone: '(208) 362-3697'
-  },
-  {
-    name: 'United Metals (Caldwell)',
-    address: '311 Albany St, Caldwell, ID 83605',
-    lat: 43.6630,
-    lng: -116.6870,
-    hours: 'Mon-Fri 8am-5pm, Sat 8am-12pm',
-    phone: '(208) 454-8800'
-  }
+const METAL_DATA: LocationData[] = [
+  { name: 'Pacific Steel & Recycling (Boise)', address: '5120 W Emerald St, Boise, ID 83706', hours: 'Mon-Fri 7:30am-5pm, Sat 8am-12pm', phone: '(208) 344-8552' },
+  { name: 'Pacific Steel & Recycling (Nampa)', address: '1900 N 20th St, Nampa, ID 83687', hours: 'Mon-Fri 7:30am-5pm, Sat 8am-12pm', phone: '(208) 466-7841' },
+  { name: 'United Metals (Boise)', address: '3809 S Eagleson Rd, Boise, ID 83705', hours: 'Mon-Fri 8am-5pm, Sat 8am-12pm', phone: '(208) 362-3697' },
+  { name: 'United Metals (Caldwell)', address: '311 Albany St, Caldwell, ID 83605', hours: 'Mon-Fri 8am-5pm, Sat 8am-12pm', phone: '(208) 454-8800' }
 ];
 
-const TIRES_LOCATIONS: Location[] = [
-  {
-    name: 'Tire Reclaim',
-    address: '311 Albany St, Caldwell, ID 83605',
-    lat: 43.6630,
-    lng: -116.6870,
-    hours: 'Mon-Fri 7am-4pm',
-    phone: '(208) 454-0097'
-  }
+const TIRES_DATA: LocationData[] = [
+  { name: 'Tire Reclaim', address: '311 Albany St, Caldwell, ID 83605', hours: 'Mon-Fri 7am-4pm', phone: '(208) 454-0097' }
 ];
 
-const CONCRETE_LOCATIONS: Location[] = [
-  {
-    name: 'Timber Creek (Nampa)',
-    address: '16933 Northside Blvd, Nampa, ID 83687',
-    lat: 43.6180,
-    lng: -116.5250,
-    hours: 'Mon-Fri 7am-5pm'
-  },
-  {
-    name: 'Vision Recycling',
-    address: '3824 E Victory Rd, Nampa, ID 83687',
-    lat: 43.5520,
-    lng: -116.5150,
-    hours: 'Mon-Fri 7am-5pm'
-  },
-  {
-    name: 'Diamond Street',
-    address: '5800 W Diamond St, Boise, ID 83705',
-    lat: 43.5850,
-    lng: -116.2780,
-    hours: 'Mon-Fri 7am-5pm'
-  },
-  {
-    name: 'Suncore',
-    address: '10988 Joplin Rd, Boise, ID 83714',
-    lat: 43.7150,
-    lng: -116.2650,
-    hours: 'Mon-Fri 7am-5pm'
-  },
-  {
-    name: 'Timber Creek (Meridian)',
-    address: '7695 S Locust Grove Rd, Meridian, ID 83642',
-    lat: 43.5380,
-    lng: -116.3520,
-    hours: 'Mon-Fri 7am-5pm'
-  }
+const CONCRETE_DATA: LocationData[] = [
+  { name: 'Timber Creek (Nampa)', address: '16933 Northside Blvd, Nampa, ID 83687', hours: 'Mon-Fri 7am-5pm' },
+  { name: 'Vision Recycling', address: '3824 E Victory Rd, Nampa, ID 83687', hours: 'Mon-Fri 7am-5pm' },
+  { name: 'Diamond Street', address: '5800 W Diamond St, Boise, ID 83705', hours: 'Mon-Fri 7am-5pm' },
+  { name: 'Suncore', address: '10988 Joplin Rd, Boise, ID 83714', hours: 'Mon-Fri 7am-5pm' },
+  { name: 'Timber Creek (Meridian)', address: '7695 S Locust Grove Rd, Meridian, ID 83642', hours: 'Mon-Fri 7am-5pm' }
 ];
 
-const LANDFILL_LOCATIONS: Location[] = [
-  {
-    name: 'Ada County Landfill',
-    address: '10319 N. Seaman\'s Gulch Road, Boise, ID 83714',
-    lat: 43.7250,
-    lng: -116.2950,
-    hours: 'Mon-Sat 7am-5pm',
-    phone: '(208) 577-4750'
-  },
-  {
-    name: 'Canyon County Landfill',
-    address: '15500 Missouri Ave, Nampa, ID 83686',
-    lat: 43.5410,
-    lng: -116.6250,
-    hours: 'Mon-Sat 7:30am-4:30pm',
-    phone: '(208) 454-7417'
-  }
+const LANDFILL_DATA: LocationData[] = [
+  { name: 'Ada County Landfill', address: '10319 N. Seamans Gulch Rd, Boise, ID 83714', hours: 'Mon-Sat 7am-5pm', phone: '(208) 577-4750' },
+  { name: 'Canyon County Landfill', address: '15500 Missouri Ave, Nampa, ID 83686', hours: 'Mon-Sat 7:30am-4:30pm', phone: '(208) 454-7417' }
 ];
+
+// Get location data for a category (without coordinates)
+function getLocationDataForCategory(category: string): LocationData[] {
+  switch (category) {
+    case "appliances": return APPLIANCES_DATA;
+    case "metal": return METAL_DATA;
+    case "tires": return TIRES_DATA;
+    case "concrete": return CONCRETE_DATA;
+    case "landfill": return LANDFILL_DATA;
+    default: return [];
+  }
+}
+
+// Geocode a single address using our API
+async function geocodeAddress(address: string): Promise<{ lat: number; lng: number } | null> {
+  try {
+    const response = await fetch(`/api/geocode?address=${encodeURIComponent(address)}`);
+    const data = await response.json();
+    if (data.success) {
+      return { lat: data.lat, lng: data.lng };
+    }
+    console.error('Geocoding failed for:', address, data.error);
+    return null;
+  } catch (error) {
+    console.error('Geocoding error for:', address, error);
+    return null;
+  }
+}
 
 interface HazardousData {
   success: boolean;
@@ -164,6 +107,8 @@ export default function HazardousDropPage() {
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [weekLocations, setWeekLocations] = useState<WeekLocation[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string>("paint");
+  const [categoryLocations, setCategoryLocations] = useState<Location[]>([]);
+  const [geocodingInProgress, setGeocodingInProgress] = useState(false);
 
   // Set date on client side only to avoid hydration mismatch
   useEffect(() => {
@@ -171,6 +116,39 @@ export default function HazardousDropPage() {
       setSelectedDate(new Date());
     }
   }, [selectedDate]);
+
+  // Geocode locations when category changes (for non-paint categories)
+  useEffect(() => {
+    if (selectedCategory === "paint") {
+      setCategoryLocations([]);
+      return;
+    }
+
+    const geocodeLocations = async () => {
+      setGeocodingInProgress(true);
+      const locationData = getLocationDataForCategory(selectedCategory);
+
+      const geocodedLocations: Location[] = [];
+      for (const loc of locationData) {
+        const coords = await geocodeAddress(loc.address);
+        if (coords) {
+          geocodedLocations.push({
+            name: loc.name,
+            address: loc.address,
+            lat: coords.lat,
+            lng: coords.lng,
+            hours: loc.hours,
+            phone: loc.phone
+          });
+        }
+      }
+
+      setCategoryLocations(geocodedLocations);
+      setGeocodingInProgress(false);
+    };
+
+    geocodeLocations();
+  }, [selectedCategory]);
 
   const getDayName = (dayOfWeek: number): string => {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -344,6 +322,8 @@ export default function HazardousDropPage() {
     if (selectedCategory === "paint" && loading) return;
     // For paint week view, wait for weekLocations to be populated
     if (selectedCategory === "paint" && viewMode === "week" && weekLocations.length === 0) return;
+    // For non-paint categories, wait for geocoding to complete
+    if (selectedCategory !== "paint" && (geocodingInProgress || categoryLocations.length === 0)) return;
 
     const L = (window as any).L;
     if (!L) return;
@@ -356,16 +336,9 @@ export default function HazardousDropPage() {
       } else if (viewMode === "week") {
         allLocations = weekLocations.map(wl => wl.location);
       }
-    } else if (selectedCategory === "appliances") {
-      allLocations = APPLIANCES_LOCATIONS;
-    } else if (selectedCategory === "metal") {
-      allLocations = METAL_LOCATIONS;
-    } else if (selectedCategory === "tires") {
-      allLocations = TIRES_LOCATIONS;
-    } else if (selectedCategory === "concrete") {
-      allLocations = CONCRETE_LOCATIONS;
-    } else if (selectedCategory === "landfill") {
-      allLocations = LANDFILL_LOCATIONS;
+    } else {
+      // Use geocoded locations for all other categories
+      allLocations = categoryLocations;
     }
 
     // Default center on Boise area if no locations
@@ -427,7 +400,7 @@ export default function HazardousDropPage() {
       const padding = viewMode === "week" ? [80, 80] : [50, 50];
       map.fitBounds(group.getBounds(), { padding });
     }
-  }, [leafletLoaded, data, weekLocations, loading, viewMode, selectedCategory]);
+  }, [leafletLoaded, data, weekLocations, loading, viewMode, selectedCategory, categoryLocations, geocodingInProgress]);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -659,15 +632,16 @@ export default function HazardousDropPage() {
               )}
             </>
           )
+        ) : geocodingInProgress ? (
+          // Loading state while geocoding
+          <div className="flex items-center justify-center h-32">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+            <span className="ml-3 text-gray-600">Loading locations...</span>
+          </div>
         ) : (
-          // Other categories - static locations
+          // Other categories - geocoded locations
           <>
-            {(selectedCategory === "appliances" ? APPLIANCES_LOCATIONS :
-              selectedCategory === "metal" ? METAL_LOCATIONS :
-              selectedCategory === "tires" ? TIRES_LOCATIONS :
-              selectedCategory === "concrete" ? CONCRETE_LOCATIONS :
-              LANDFILL_LOCATIONS
-            ).map((location, index) => (
+            {categoryLocations.map((location, index) => (
               <div key={index} className="bg-white rounded-2xl shadow-md p-4 mb-4 border border-gray-200">
                 <div className="flex items-start gap-3">
                   <div className="bg-amber-500 w-12 h-12 rounded-xl flex items-center justify-center">
