@@ -397,8 +397,9 @@ export default function HazardousDropPage() {
     if (allLocations.length > 1) {
       const group = L.featureGroup(markersRef.current);
       // Week view: more padding to zoom out further
-      const padding = viewMode === "week" ? [80, 80] : [50, 50];
-      map.fitBounds(group.getBounds(), { padding });
+      // Category view: use larger padding and maxZoom to show all pins (e.g., Metal spans Boise-Nampa-Caldwell)
+      const padding: [number, number] = viewMode === "week" ? [80, 80] : [100, 100];
+      map.fitBounds(group.getBounds(), { padding, maxZoom: 11 });
     }
   }, [leafletLoaded, data, weekLocations, loading, viewMode, selectedCategory, categoryLocations, geocodingInProgress]);
 
