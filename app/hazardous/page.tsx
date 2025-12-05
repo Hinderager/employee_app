@@ -21,6 +21,13 @@ interface HazardousData {
   hours: string;
 }
 
+interface WeekLocation {
+  location: Location;
+  date: Date;
+  dayName: string;
+  hours: string;
+}
+
 export default function HazardousDropPage() {
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -29,9 +36,18 @@ export default function HazardousDropPage() {
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [viewMode, setViewMode] = useState<"today" | "week">("today");
-  const [weekOffset, setWeekOffset] = useState(0); // 0 = this week, 1 = next week
-  const [weekData, setWeekData] = useState<Array<{ date: Date; data: HazardousData }>>([]);
+  const [viewMode, setViewMode] = useState<"day" | "week">("day");
+  const [weekLocations, setWeekLocations] = useState<WeekLocation[]>([]);
+
+  const getDayName = (dayOfWeek: number): string => {
+    const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return days[dayOfWeek] || "";
+  };
+
+  const getFullDayName = (dayOfWeek: number): string => {
+    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+    return days[dayOfWeek] || "";
+  };
 
   // Format date display (Today, Tomorrow, Yesterday, or date)
   const formatDateDisplay = (date: Date): string => {
@@ -79,7 +95,7 @@ export default function HazardousDropPage() {
 
   // Fetch hazardous collection data for single day
   useEffect(() => {
-    if (viewMode !== "today") return;
+    if (viewMode !== "day") return;
 
     const fetchData = async () => {
       setLoading(true);
@@ -98,7 +114,7 @@ export default function HazardousDropPage() {
     fetchData();
   }, [selectedDate, viewMode]);
 
-  // Fetch hazardous collection data for week
+  // Fetch hazardous collection data for rest of week
   useEffect(() => {
     if (viewMode !== "week") return;
 
@@ -106,32 +122,34 @@ export default function HazardousDropPage() {
       setLoading(true);
       try {
         const today = new Date();
-        const results: Array<{ date: Date; data: HazardousData }> = [];
+        today.setHours(0, 0, 0, 0);
+        const results: WeekLocation[] = [];
 
-        // Calculate start of the week to check
-        const startOffset = weekOffset === 0 ? 0 : 7;
-
-        // Get all Mon-Thu for the selected week
-        for (let i = startOffset; i < startOffset + 7; i++) {
+        // Get all Mon-Thu for this week and next that haven't passed
+        for (let i = 0; i < 14; i++) {
           const checkDate = new Date(today);
           checkDate.setDate(today.getDate() + i);
           const dayOfWeek = checkDate.getDay();
 
-          // Only Mon-Thu (1-4), and skip past days for this week
+          // Only Mon-Thu (1-4)
           if (dayOfWeek >= 1 && dayOfWeek <= 4) {
-            // For this week, skip days that have passed
-            if (weekOffset === 0 && checkDate < today) continue;
-
             const dateStr = checkDate.toISOString().split("T")[0];
             const response = await fetch(`/api/hazardous?date=${dateStr}`);
             const result = await response.json();
-            if (result.hasCollectionToday) {
-              results.push({ date: new Date(checkDate), data: result });
+            if (result.hasCollectionToday && result.locations) {
+              result.locations.forEach((loc: Location) => {
+                results.push({
+                  location: loc,
+                  date: new Date(checkDate),
+                  dayName: getDayName(checkDate.getDay()),
+                  hours: result.hours
+                });
+              });
             }
           }
         }
 
-        setWeekData(results);
+        setWeekLocations(results);
         setLoading(false);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to fetch data");
@@ -140,7 +158,7 @@ export default function HazardousDropPage() {
     };
 
     fetchWeekData();
-  }, [viewMode, weekOffset]);
+  }, [viewMode]);
 
   // Clear map when view changes
   useEffect(() => {
@@ -151,17 +169,17 @@ export default function HazardousDropPage() {
       mapRef.current = null;
       setMapReady(false);
     }
-  }, [selectedDate, viewMode, weekOffset]);
+  }, [selectedDate, viewMode]);
 
   // Initialize Leaflet map
   useEffect(() => {
     if (typeof window === "undefined" || loading) return;
 
-    // For today view, need data with collection
-    if (viewMode === "today" && !data?.hasCollectionToday) return;
+    // For day view, need data with collection
+    if (viewMode === "day" && !data?.hasCollectionToday) return;
 
     // For week view, need at least one location
-    if (viewMode === "week" && weekData.length === 0) return;
+    if (viewMode === "week" && weekLocations.length === 0) return;
 
     const loadLeaflet = async () => {
       if (!document.getElementById("leaflet-css")) {
@@ -183,7 +201,7 @@ export default function HazardousDropPage() {
     };
 
     loadLeaflet();
-  }, [data, weekData, loading, viewMode]);
+  }, [data, weekLocations, loading, viewMode]);
 
   const initMap = () => {
     if (mapRef.current) return;
@@ -193,12 +211,10 @@ export default function HazardousDropPage() {
 
     // Get locations based on view mode
     let allLocations: Location[] = [];
-    if (viewMode === "today" && data?.locations) {
+    if (viewMode === "day" && data?.locations) {
       allLocations = data.locations;
     } else if (viewMode === "week") {
-      weekData.forEach(item => {
-        allLocations.push(...item.data.locations);
-      });
+      allLocations = weekLocations.map(wl => wl.location);
     }
 
     if (allLocations.length === 0) return;
@@ -221,7 +237,7 @@ export default function HazardousDropPage() {
     mapRef.current = map;
     setMapReady(true);
 
-    const hours = viewMode === "today" ? data?.hours : "Noon - 7 p.m.";
+    const hours = viewMode === "day" ? data?.hours : "Noon - 7 p.m.";
 
     allLocations.forEach((location) => {
       const icon = L.divIcon({
@@ -249,11 +265,6 @@ export default function HazardousDropPage() {
     }
   };
 
-  const getDayName = (dayOfWeek: number): string => {
-    const days = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-    return days[dayOfWeek] || "";
-  };
-
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
       {/* Header */}
@@ -268,9 +279,9 @@ export default function HazardousDropPage() {
         </div>
       </header>
 
-      {/* Date Navigation - changes based on view mode */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        {viewMode === "today" ? (
+      {/* Date Navigation - only show in Day mode */}
+      {viewMode === "day" && (
+        <div className="bg-white border-b border-gray-200 px-4 py-3">
           <div className="flex items-center justify-center gap-4">
             <button
               onClick={goToPreviousDay}
@@ -304,61 +315,32 @@ export default function HazardousDropPage() {
               </svg>
             </button>
           </div>
-        ) : (
-          <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={() => setWeekOffset(0)}
-              disabled={weekOffset === 0}
-              className={`p-2 rounded-full transition-colors ${weekOffset === 0 ? "text-gray-300" : "hover:bg-gray-100 text-gray-600"}`}
-            >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-            <div className="flex flex-col items-center min-w-[140px] px-3 py-1">
-              <span className="text-lg font-semibold text-gray-900">
-                {weekOffset === 0 ? "This Week" : "Next Week"}
-              </span>
-              <span className="text-xs text-gray-500">
-                Mon - Thu
-              </span>
-            </div>
-            <button
-              onClick={() => setWeekOffset(1)}
-              disabled={weekOffset === 1}
-              className={`p-2 rounded-full transition-colors ${weekOffset === 1 ? "text-gray-300" : "hover:bg-gray-100 text-gray-600"}`}
-            >
-              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* View Mode Toggle */}
       <div className="bg-white border-b border-gray-200 px-4 py-3">
         <div className="flex justify-center">
           <div className="inline-flex rounded-lg border border-gray-300 p-1 bg-gray-100">
             <button
-              onClick={() => setViewMode("today")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === "today"
+              onClick={() => setViewMode("day")}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                viewMode === "day"
                   ? "bg-amber-500 text-white shadow-sm"
                   : "text-gray-600 hover:text-gray-900"
               }`}
             >
-              Today
+              Day
             </button>
             <button
               onClick={() => setViewMode("week")}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
                 viewMode === "week"
                   ? "bg-amber-500 text-white shadow-sm"
                   : "text-gray-600 hover:text-gray-900"
               }`}
             >
-              Rest of Week
+              Week
             </button>
           </div>
         </div>
@@ -372,14 +354,14 @@ export default function HazardousDropPage() {
         <div className="px-4 py-8 text-center">
           <p className="text-red-500">{error}</p>
         </div>
-      ) : viewMode === "today" && !data?.hasCollectionToday ? (
+      ) : viewMode === "day" && !data?.hasCollectionToday ? (
         <div className="px-4 py-8">
           <div className="max-w-md mx-auto bg-white rounded-2xl shadow-md p-6 border border-gray-200">
             <div className="text-center">
               <div className="text-4xl mb-4">📅</div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">No Collection</h2>
               <p className="text-gray-600">
-                No hazardous waste collection on {getDayName(selectedDate.getDay())}.
+                No hazardous waste collection on {getFullDayName(selectedDate.getDay())}.
                 Collections are Monday through Thursday only.
               </p>
               <a
@@ -393,14 +375,14 @@ export default function HazardousDropPage() {
             </div>
           </div>
         </div>
-      ) : viewMode === "week" && weekData.length === 0 ? (
+      ) : viewMode === "week" && weekLocations.length === 0 ? (
         <div className="px-4 py-8">
           <div className="max-w-md mx-auto bg-white rounded-2xl shadow-md p-6 border border-gray-200">
             <div className="text-center">
               <div className="text-4xl mb-4">📅</div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">No Collections</h2>
               <p className="text-gray-600">
-                No hazardous waste collections {weekOffset === 0 ? "remaining this week" : "next week"}.
+                No upcoming hazardous waste collections this week.
               </p>
             </div>
           </div>
@@ -412,7 +394,7 @@ export default function HazardousDropPage() {
             <div className="flex items-center justify-center gap-2">
               <span className="text-xl">☢️</span>
               <span className="text-amber-800 font-medium">
-                {viewMode === "today" ? `Collection: ${data?.hours}` : `${weekData.length} collection${weekData.length > 1 ? "s" : ""} ${weekOffset === 0 ? "this week" : "next week"}`}
+                {viewMode === "day" ? `Collection: ${data?.hours}` : `${weekLocations.length} upcoming collection${weekLocations.length > 1 ? "s" : ""}`}
               </span>
             </div>
           </div>
@@ -422,7 +404,7 @@ export default function HazardousDropPage() {
 
           {/* Location Cards */}
           <div className="px-4 py-4 pb-24">
-            {viewMode === "today" ? (
+            {viewMode === "day" ? (
               data?.locations.map((location, index) => (
                 <div
                   key={index}
@@ -455,42 +437,41 @@ export default function HazardousDropPage() {
                 </div>
               ))
             ) : (
-              weekData.map((dayItem, dayIndex) => (
-                <div key={dayIndex} className="mb-6">
-                  <h3 className="text-lg font-bold text-gray-900 mb-3">
-                    {dayItem.date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
-                  </h3>
-                  {dayItem.data.locations.map((location, locIndex) => (
-                    <div
-                      key={locIndex}
-                      className="bg-white rounded-2xl shadow-md p-4 mb-3 border border-gray-200"
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className="bg-amber-100 p-3 rounded-xl">
-                          <span className="text-2xl">☢️</span>
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-bold text-gray-900 text-lg">{location.name}</h3>
-                          <p className="text-gray-600 text-sm mt-1">{location.address}</p>
-                          <p className="text-amber-700 text-sm font-medium mt-2">
-                            Hours: {dayItem.data.hours}
-                          </p>
-                          <a
-                            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(location.address)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-600 transition-colors"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                            </svg>
-                            Get Directions
-                          </a>
-                        </div>
-                      </div>
+              weekLocations.map((item, index) => (
+                <div
+                  key={index}
+                  className="bg-white rounded-2xl shadow-md p-4 mb-4 border border-gray-200"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="bg-amber-100 p-3 rounded-xl relative">
+                      <span className="text-2xl">☢️</span>
+                      {/* Day flag */}
+                      <span className="absolute -top-1 -right-1 bg-amber-600 text-white text-xs font-bold px-1.5 py-0.5 rounded">
+                        {item.dayName}
+                      </span>
                     </div>
-                  ))}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-bold text-gray-900 text-lg">{item.location.name}</h3>
+                      </div>
+                      <p className="text-gray-600 text-sm mt-1">{item.location.address}</p>
+                      <p className="text-amber-700 text-sm font-medium mt-2">
+                        {item.date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })} • {item.hours}
+                      </p>
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.location.address)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-600 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        Get Directions
+                      </a>
+                    </div>
+                  </div>
                 </div>
               ))
             )}
