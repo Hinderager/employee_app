@@ -9,7 +9,132 @@ interface Location {
   lat: number;
   lng: number;
   quarterly?: boolean;
+  hours?: string;
+  phone?: string;
 }
+
+// Static locations for different categories
+const APPLIANCES_LOCATIONS: Location[] = [
+  {
+    name: 'Capital Heating & Cooling',
+    address: '420 N Curtis Rd, Boise, ID 83706',
+    lat: 43.6142,
+    lng: -116.2529,
+    hours: 'Mon-Fri 8am-5pm',
+    phone: '(208) 343-8800'
+  },
+  {
+    name: 'Garrity Appliance',
+    address: '1207 3rd St S, Nampa, ID 83651',
+    lat: 43.5671,
+    lng: -116.5656,
+    hours: 'Mon-Sat 9am-6pm',
+    phone: '(208) 466-2566'
+  }
+];
+
+const METAL_LOCATIONS: Location[] = [
+  {
+    name: 'Pacific Steel & Recycling (Boise)',
+    address: '5120 W Emerald St, Boise, ID 83706',
+    lat: 43.5980,
+    lng: -116.2730,
+    hours: 'Mon-Fri 7:30am-5pm, Sat 8am-12pm',
+    phone: '(208) 344-8552'
+  },
+  {
+    name: 'Pacific Steel & Recycling (Nampa)',
+    address: '1900 N 20th St, Nampa, ID 83687',
+    lat: 43.5890,
+    lng: -116.5560,
+    hours: 'Mon-Fri 7:30am-5pm, Sat 8am-12pm',
+    phone: '(208) 466-7841'
+  },
+  {
+    name: 'United Metals (Boise)',
+    address: '3809 S Eagleson Rd, Boise, ID 83705',
+    lat: 43.5730,
+    lng: -116.3030,
+    hours: 'Mon-Fri 8am-5pm, Sat 8am-12pm',
+    phone: '(208) 362-3697'
+  },
+  {
+    name: 'United Metals (Caldwell)',
+    address: '311 Albany St, Caldwell, ID 83605',
+    lat: 43.6630,
+    lng: -116.6870,
+    hours: 'Mon-Fri 8am-5pm, Sat 8am-12pm',
+    phone: '(208) 454-8800'
+  }
+];
+
+const TIRES_LOCATIONS: Location[] = [
+  {
+    name: 'Tire Reclaim',
+    address: '311 Albany St, Caldwell, ID 83605',
+    lat: 43.6630,
+    lng: -116.6870,
+    hours: 'Mon-Fri 7am-4pm',
+    phone: '(208) 454-0097'
+  }
+];
+
+const CONCRETE_LOCATIONS: Location[] = [
+  {
+    name: 'Timber Creek (Nampa)',
+    address: '16933 Northside Blvd, Nampa, ID 83687',
+    lat: 43.6180,
+    lng: -116.5250,
+    hours: 'Mon-Fri 7am-5pm'
+  },
+  {
+    name: 'Vision Recycling',
+    address: '3824 E Victory Rd, Nampa, ID 83687',
+    lat: 43.5520,
+    lng: -116.5150,
+    hours: 'Mon-Fri 7am-5pm'
+  },
+  {
+    name: 'Diamond Street',
+    address: '5800 W Diamond St, Boise, ID 83705',
+    lat: 43.5850,
+    lng: -116.2780,
+    hours: 'Mon-Fri 7am-5pm'
+  },
+  {
+    name: 'Suncore',
+    address: '10988 Joplin Rd, Boise, ID 83714',
+    lat: 43.7150,
+    lng: -116.2650,
+    hours: 'Mon-Fri 7am-5pm'
+  },
+  {
+    name: 'Timber Creek (Meridian)',
+    address: '7695 S Locust Grove Rd, Meridian, ID 83642',
+    lat: 43.5380,
+    lng: -116.3520,
+    hours: 'Mon-Fri 7am-5pm'
+  }
+];
+
+const LANDFILL_LOCATIONS: Location[] = [
+  {
+    name: 'Ada County Landfill',
+    address: '10319 N. Seaman\'s Gulch Road, Boise, ID 83714',
+    lat: 43.7250,
+    lng: -116.2950,
+    hours: 'Mon-Sat 7am-5pm',
+    phone: '(208) 577-4750'
+  },
+  {
+    name: 'Canyon County Landfill',
+    address: '15500 Missouri Ave, Nampa, ID 83686',
+    lat: 43.5410,
+    lng: -116.6250,
+    hours: 'Mon-Sat 7:30am-4:30pm',
+    phone: '(208) 454-7417'
+  }
+];
 
 interface HazardousData {
   success: boolean;
@@ -35,9 +160,17 @@ export default function HazardousDropPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [viewMode, setViewMode] = useState<"day" | "week">("day");
   const [weekLocations, setWeekLocations] = useState<WeekLocation[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>("paint");
+
+  // Set date on client side only to avoid hydration mismatch
+  useEffect(() => {
+    if (!selectedDate) {
+      setSelectedDate(new Date());
+    }
+  }, [selectedDate]);
 
   const getDayName = (dayOfWeek: number): string => {
     const days = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -50,7 +183,8 @@ export default function HazardousDropPage() {
   };
 
   // Format date display (Today, Tomorrow, Yesterday, or date)
-  const formatDateDisplay = (date: Date): string => {
+  const formatDateDisplay = (date: Date | null): string => {
+    if (!date) return "";
     const today = new Date();
     const tomorrow = new Date(today);
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -70,6 +204,7 @@ export default function HazardousDropPage() {
   };
 
   const goToPreviousDay = () => {
+    if (!selectedDate) return;
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() - 1);
     // Skip to previous collection day (Mon-Thu only)
@@ -80,6 +215,7 @@ export default function HazardousDropPage() {
   };
 
   const goToNextDay = () => {
+    if (!selectedDate) return;
     const newDate = new Date(selectedDate);
     newDate.setDate(newDate.getDate() + 1);
     // Skip to next collection day (Mon-Thu only)
@@ -96,6 +232,7 @@ export default function HazardousDropPage() {
   // Fetch hazardous collection data for single day
   useEffect(() => {
     if (viewMode !== "day") return;
+    if (!selectedDate) return;
 
     const fetchData = async () => {
       setLoading(true);
@@ -160,28 +297,13 @@ export default function HazardousDropPage() {
     fetchWeekData();
   }, [viewMode]);
 
-  // Clear map when view changes
+  const [leafletLoaded, setLeafletLoaded] = useState(false);
+
+  // Load Leaflet on mount
   useEffect(() => {
-    if (mapRef.current) {
-      markersRef.current.forEach(marker => marker.remove());
-      markersRef.current = [];
-      mapRef.current.remove();
-      mapRef.current = null;
-      setMapReady(false);
-    }
-  }, [selectedDate, viewMode]);
+    if (typeof window === "undefined") return;
 
-  // Initialize Leaflet map
-  useEffect(() => {
-    if (typeof window === "undefined" || loading) return;
-
-    // For day view, need data with collection
-    if (viewMode === "day" && !data?.hasCollectionToday) return;
-
-    // For week view, need at least one location
-    if (viewMode === "week" && weekLocations.length === 0) return;
-
-    const loadLeaflet = async () => {
+    const loadLeaflet = () => {
       if (!document.getElementById("leaflet-css")) {
         const link = document.createElement("link");
         link.id = "leaflet-css";
@@ -193,36 +315,65 @@ export default function HazardousDropPage() {
       if (!(window as any).L) {
         const script = document.createElement("script");
         script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
-        script.onload = () => initMap();
+        script.onload = () => setLeafletLoaded(true);
         document.head.appendChild(script);
       } else {
-        initMap();
+        setLeafletLoaded(true);
       }
     };
 
     loadLeaflet();
-  }, [data, weekLocations, loading, viewMode]);
+  }, []);
 
-  const initMap = () => {
+  // Clear map when view/category changes
+  useEffect(() => {
+    if (mapRef.current) {
+      markersRef.current.forEach(marker => marker.remove());
+      markersRef.current = [];
+      mapRef.current.remove();
+      mapRef.current = null;
+      setMapReady(false);
+    }
+  }, [selectedDate, viewMode, selectedCategory]);
+
+  // Initialize map when Leaflet is loaded and data is ready
+  useEffect(() => {
+    if (!leafletLoaded) return;
     if (mapRef.current) return;
+    // For paint category, wait for data to load
+    if (selectedCategory === "paint" && loading) return;
 
     const L = (window as any).L;
     if (!L) return;
 
-    // Get locations based on view mode
+    // Get locations based on selected category
     let allLocations: Location[] = [];
-    if (viewMode === "day" && data?.locations) {
-      allLocations = data.locations;
-    } else if (viewMode === "week") {
-      allLocations = weekLocations.map(wl => wl.location);
+    if (selectedCategory === "paint") {
+      if (viewMode === "day" && data?.locations) {
+        allLocations = data.locations;
+      } else if (viewMode === "week") {
+        allLocations = weekLocations.map(wl => wl.location);
+      }
+    } else if (selectedCategory === "appliances") {
+      allLocations = APPLIANCES_LOCATIONS;
+    } else if (selectedCategory === "metal") {
+      allLocations = METAL_LOCATIONS;
+    } else if (selectedCategory === "tires") {
+      allLocations = TIRES_LOCATIONS;
+    } else if (selectedCategory === "concrete") {
+      allLocations = CONCRETE_LOCATIONS;
+    } else if (selectedCategory === "landfill") {
+      allLocations = LANDFILL_LOCATIONS;
     }
 
-    if (allLocations.length === 0) return;
-
-    const firstLocation = allLocations[0];
+    // Default center on Boise area if no locations
+    const defaultCenter = { lat: 43.615, lng: -116.2023 };
+    const centerLocation = allLocations.length > 0 ? allLocations[0] : defaultCenter;
+    // Week view: zoom out more to show all locations
+    const defaultZoom = viewMode === "week" ? 9 : 10;
     const map = L.map("hazardous-map", {
-      center: [firstLocation.lat, firstLocation.lng],
-      zoom: 10,
+      center: [centerLocation.lat, centerLocation.lng],
+      zoom: defaultZoom,
       zoomControl: true
     });
 
@@ -237,12 +388,19 @@ export default function HazardousDropPage() {
     mapRef.current = map;
     setMapReady(true);
 
-    const hours = viewMode === "day" ? data?.hours : "Noon - 7 p.m.";
+    const hours = selectedCategory === "paint"
+      ? (viewMode === "day" ? data?.hours : "Noon - 7 p.m.")
+      : undefined;
 
-    allLocations.forEach((location) => {
+    allLocations.forEach((location, index) => {
+      // For week view paint, show numbered pins; otherwise show numbered pins for all
+      const pinContent = (selectedCategory === "paint" && viewMode === "day")
+        ? `<div style="transform: rotate(45deg); font-size: 20px;">☢️</div>`
+        : `<div style="transform: rotate(45deg); font-size: 16px; font-weight: bold; color: white;">${index + 1}</div>`;
+
       const icon = L.divIcon({
         className: "hazardous-marker",
-        html: `<div style="position: relative;"><div style="background-color: #f59e0b; width: 40px; height: 40px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;"><div style="transform: rotate(45deg); font-size: 20px;">\u2622\ufe0f</div></div></div>`,
+        html: `<div style="position: relative;"><div style="background-color: #f59e0b; width: 40px; height: 40px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">${pinContent}</div></div>`,
         iconSize: [40, 40],
         iconAnchor: [20, 40],
         popupAnchor: [0, -40]
@@ -251,7 +409,9 @@ export default function HazardousDropPage() {
       const marker = L.marker([location.lat, location.lng], { icon })
         .addTo(map);
 
-      marker.bindPopup(`<div style="min-width: 200px;"><h3 style="margin: 0 0 8px 0; font-weight: bold; color: #f59e0b;">${location.name}</h3><p style="margin: 4px 0; font-size: 14px;">${location.address}</p><p style="margin: 8px 0 4px 0; font-size: 13px; color: #666;"><strong>Hours:</strong> ${hours}</p><a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(location.address)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-top: 8px; padding: 8px 16px; background: #f59e0b; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 13px;">Get Directions</a></div>`, {
+      // Use location hours if available, otherwise use paint hours
+      const displayHours = location.hours || hours || "See website for hours";
+      marker.bindPopup(`<div style="min-width: 200px;"><h3 style="margin: 0 0 8px 0; font-weight: bold; color: #f59e0b;">${location.name}</h3><p style="margin: 4px 0; font-size: 14px;">${location.address}</p><p style="margin: 8px 0 4px 0; font-size: 13px; color: #666;"><strong>Hours:</strong> ${displayHours}</p>${location.phone ? `<p style="margin: 4px 0; font-size: 13px;"><a href="tel:${location.phone}" style="color: #2563eb;">${location.phone}</a></p>` : ''}<a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(location.address)}" target="_blank" rel="noopener noreferrer" style="display: inline-block; margin-top: 8px; padding: 8px 16px; background: #f59e0b; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 13px;">Get Directions</a></div>`, {
         closeOnClick: true,
         closeButton: true
       });
@@ -261,9 +421,11 @@ export default function HazardousDropPage() {
 
     if (allLocations.length > 1) {
       const group = L.featureGroup(markersRef.current);
-      map.fitBounds(group.getBounds(), { padding: [50, 50] });
+      // Week view: more padding to zoom out further
+      const padding = viewMode === "week" ? [80, 80] : [50, 50];
+      map.fitBounds(group.getBounds(), { padding });
     }
-  };
+  }, [leafletLoaded, data, weekLocations, loading, viewMode, selectedCategory]);
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -275,12 +437,67 @@ export default function HazardousDropPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
-          <h1 className="text-lg font-bold text-white">Hazardous Drop</h1>
+          <h1 className="text-lg font-bold text-white">Drop Sites</h1>
         </div>
       </header>
 
-      {/* Date Navigation - only show in Day mode */}
-      {viewMode === "day" && (
+      {/* Category Tiles - at the top */}
+      <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">
+        <div className="grid grid-cols-3 gap-2">
+          <button onClick={() => setSelectedCategory("paint")} className={`rounded-lg p-2 text-center shadow-sm border transition-colors ${selectedCategory === "paint" ? "bg-amber-100 border-amber-400" : "bg-white border-gray-200 hover:bg-amber-50"}`}>
+            <svg className="w-5 h-5 mx-auto" viewBox="0 0 24 24" fill="none">
+              {/* Handle */}
+              <path d="M8 4 C8 2 16 2 16 4" stroke="#666" strokeWidth="1.5" fill="none" strokeLinecap="round"/>
+              {/* Can body */}
+              <rect x="5" y="5" width="14" height="16" rx="1" fill="#f59e0b" stroke="#d97706" strokeWidth="0.5"/>
+              {/* Rim */}
+              <rect x="4" y="5" width="16" height="2" rx="0.5" fill="#888"/>
+              {/* Paint drip on side */}
+              <path d="M19 7 L19 12 Q19 14 18 15 L18 13 Q18 11 19 10 Z" fill="#c2410c"/>
+              {/* Paint on top */}
+              <ellipse cx="12" cy="6" rx="6" ry="1" fill="#c2410c"/>
+              {/* Drip from rim */}
+              <path d="M7 7 Q6.5 9 7 10 Q7.5 9 7 7" fill="#c2410c"/>
+            </svg>
+            <p className="text-xs font-medium text-gray-700 mt-1">Paint</p>
+          </button>
+          <button onClick={() => setSelectedCategory("appliances")} className={`rounded-lg p-2 text-center shadow-sm border transition-colors ${selectedCategory === "appliances" ? "bg-amber-100 border-amber-400" : "bg-white border-gray-200 hover:bg-amber-50"}`}>
+            <span className="text-lg">🧊</span>
+            <p className="text-xs font-medium text-gray-700 mt-1">Appliances</p>
+          </button>
+          <button onClick={() => setSelectedCategory("metal")} className={`rounded-lg p-2 text-center shadow-sm border transition-colors ${selectedCategory === "metal" ? "bg-amber-100 border-amber-400" : "bg-white border-gray-200 hover:bg-amber-50"}`}>
+            <span className="text-lg">🔩</span>
+            <p className="text-xs font-medium text-gray-700 mt-1">Metal</p>
+          </button>
+          <button onClick={() => setSelectedCategory("tires")} className={`rounded-lg p-2 text-center shadow-sm border transition-colors ${selectedCategory === "tires" ? "bg-amber-100 border-amber-400" : "bg-white border-gray-200 hover:bg-amber-50"}`}>
+            <svg className="w-5 h-5 mx-auto" viewBox="0 0 24 24" fill="none">
+              {/* Outer tire */}
+              <circle cx="12" cy="12" r="10" fill="#1a1a1a" stroke="#333" strokeWidth="0.5"/>
+              {/* Inner rim */}
+              <circle cx="12" cy="12" r="5" fill="#666"/>
+              {/* Hub */}
+              <circle cx="12" cy="12" r="2" fill="#888"/>
+              {/* Zigzag tread pattern */}
+              <path d="M12 2 L14 4 L12 6 L14 8 L12 10" stroke="#444" strokeWidth="1" fill="none"/>
+              <path d="M12 22 L14 20 L12 18 L14 16 L12 14" stroke="#444" strokeWidth="1" fill="none"/>
+              <path d="M2 12 L4 14 L6 12 L8 14 L10 12" stroke="#444" strokeWidth="1" fill="none"/>
+              <path d="M22 12 L20 14 L18 12 L16 14 L14 12" stroke="#444" strokeWidth="1" fill="none"/>
+            </svg>
+            <p className="text-xs font-medium text-gray-700 mt-1">Tires</p>
+          </button>
+          <button onClick={() => setSelectedCategory("concrete")} className={`rounded-lg p-2 text-center shadow-sm border transition-colors ${selectedCategory === "concrete" ? "bg-amber-100 border-amber-400" : "bg-white border-gray-200 hover:bg-amber-50"}`}>
+            <span className="text-lg">🧱</span>
+            <p className="text-xs font-medium text-gray-700 mt-1">Concrete</p>
+          </button>
+          <button onClick={() => setSelectedCategory("landfill")} className={`rounded-lg p-2 text-center shadow-sm border transition-colors ${selectedCategory === "landfill" ? "bg-amber-100 border-amber-400" : "bg-white border-gray-200 hover:bg-amber-50"}`}>
+            <span className="text-lg">🗑️</span>
+            <p className="text-xs font-medium text-gray-700 mt-1">Landfill</p>
+          </button>
+        </div>
+      </div>
+
+      {/* Date Navigation - only show for Paint in Day mode */}
+      {selectedCategory === "paint" && viewMode === "day" && selectedDate && (
         <div className="bg-white border-b border-gray-200 px-4 py-3">
           <div className="flex items-center justify-center gap-4">
             <button
@@ -294,11 +511,12 @@ export default function HazardousDropPage() {
             <button
               onClick={goToToday}
               className="flex flex-col items-center min-w-[140px] hover:bg-gray-50 rounded-lg px-3 py-1 transition-colors"
+              suppressHydrationWarning
             >
-              <span className="text-lg font-semibold text-gray-900">
+              <span className="text-lg font-semibold text-gray-900" suppressHydrationWarning>
                 {formatDateDisplay(selectedDate)}
               </span>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-gray-500" suppressHydrationWarning>
                 {selectedDate.toLocaleDateString("en-US", {
                   weekday: "long",
                   month: "long",
@@ -318,48 +536,53 @@ export default function HazardousDropPage() {
         </div>
       )}
 
-      {/* View Mode Toggle */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3">
-        <div className="flex justify-center">
-          <div className="inline-flex rounded-lg border border-gray-300 p-1 bg-gray-100">
-            <button
-              onClick={() => setViewMode("day")}
-              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === "day"
-                  ? "bg-amber-500 text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Day
-            </button>
-            <button
-              onClick={() => setViewMode("week")}
-              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
-                viewMode === "week"
-                  ? "bg-amber-500 text-white shadow-sm"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Week
-            </button>
+      {/* Map Container - always visible */}
+      <div id="hazardous-map" className="w-full" style={{ height: "500px" }}></div>
+
+      {/* View Mode Toggle - only for paint category */}
+      {selectedCategory === "paint" && (
+        <div className="bg-white border-b border-gray-200 px-4 py-3">
+          <div className="flex justify-center">
+            <div className="inline-flex rounded-lg border border-gray-300 p-1 bg-gray-100">
+              <button
+                onClick={() => setViewMode("day")}
+                className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === "day"
+                    ? "bg-amber-500 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Day
+              </button>
+              <button
+                onClick={() => setViewMode("week")}
+                className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                  viewMode === "week"
+                    ? "bg-amber-500 text-white shadow-sm"
+                    : "text-gray-600 hover:text-gray-900"
+                }`}
+              >
+                Week
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {loading ? (
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
-        </div>
-      ) : error ? (
-        <div className="px-4 py-8 text-center">
-          <p className="text-red-500">{error}</p>
-        </div>
-      ) : viewMode === "day" && !data?.hasCollectionToday ? (
-        <div className="px-4 py-8">
-          <div className="max-w-md mx-auto bg-white rounded-2xl shadow-md p-6 border border-gray-200">
+      {/* Content based on selected category */}
+      <div className="px-4 py-4 pb-24">
+        {selectedCategory === "paint" ? (
+          // Paint category - hazardous waste collection
+          loading ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-500"></div>
+            </div>
+          ) : error ? (
             <div className="text-center">
-              <div className="text-4xl mb-4">📅</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">No Collection</h2>
+              <p className="text-red-500">{error}</p>
+            </div>
+          ) : viewMode === "day" && !data?.hasCollectionToday && selectedDate ? (
+            <div className="bg-gray-100 rounded-xl p-4 text-center border border-gray-200">
               <p className="text-gray-600">
                 No hazardous waste collection on {getFullDayName(selectedDate.getDay())}.
                 Collections are Monday through Thursday only.
@@ -368,136 +591,106 @@ export default function HazardousDropPage() {
                 href="https://adacounty.id.gov/landfill/waste-types-solutions/hazardous-waste/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block mt-4 text-amber-600 hover:text-amber-700 font-medium"
+                className="inline-block mt-2 text-amber-600 hover:text-amber-700 font-medium text-sm"
               >
                 View Full Schedule →
               </a>
             </div>
-          </div>
-        </div>
-      ) : viewMode === "week" && weekLocations.length === 0 ? (
-        <div className="px-4 py-8">
-          <div className="max-w-md mx-auto bg-white rounded-2xl shadow-md p-6 border border-gray-200">
-            <div className="text-center">
-              <div className="text-4xl mb-4">📅</div>
-              <h2 className="text-xl font-bold text-gray-900 mb-2">No Collections</h2>
+          ) : viewMode === "week" && weekLocations.length === 0 ? (
+            <div className="bg-gray-100 rounded-xl p-4 text-center border border-gray-200">
               <p className="text-gray-600">
                 No upcoming hazardous waste collections this week.
               </p>
             </div>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* Alert Banner */}
-          <div className="bg-amber-50 border-b border-amber-200 px-4 py-3">
-            <div className="flex items-center justify-center gap-2">
-              <span className="text-xl">☢️</span>
-              <span className="text-amber-800 font-medium">
-                {viewMode === "day" ? `Collection: ${data?.hours}` : `${weekLocations.length} upcoming collection${weekLocations.length > 1 ? "s" : ""}`}
-              </span>
-            </div>
-          </div>
-
-          {/* Map Container */}
-          <div id="hazardous-map" className="w-full" style={{ height: "500px" }}></div>
-
-          {/* Location Cards */}
-          <div className="px-4 py-4 pb-24">
-            {viewMode === "day" ? (
-              data?.locations.map((location, index) => (
-                <div
-                  key={index}
-                  className="bg-white rounded-2xl shadow-md p-4 mb-4 border border-gray-200"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="bg-amber-100 p-3 rounded-xl">
-                      <span className="text-2xl">☢️</span>
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-gray-900 text-lg">{location.name}</h3>
-                      <p className="text-gray-600 text-sm mt-1">{location.address}</p>
-                      <p className="text-amber-700 text-sm font-medium mt-2">
-                        Hours: {data.hours}
-                      </p>
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(location.address)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-600 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Get Directions
-                      </a>
-                    </div>
-                  </div>
+          ) : (
+            <>
+              {/* Collection Times Banner */}
+              <div className="bg-amber-50 rounded-xl p-3 mb-4 border border-amber-200">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="text-xl">☢️</span>
+                  <span className="text-amber-800 font-medium">
+                    {viewMode === "day" ? `Collection: ${data?.hours}` : `${weekLocations.length} upcoming collection${weekLocations.length > 1 ? "s" : ""}`}
+                  </span>
                 </div>
-              ))
-            ) : (
-              weekLocations.map((item, index) => (
-                <div
-                  key={index}
-                  className="bg-white rounded-2xl shadow-md p-4 mb-4 border border-gray-200"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="bg-amber-100 p-3 rounded-xl relative">
-                      <span className="text-2xl">☢️</span>
-                      {/* Day flag */}
-                      <span className="absolute -top-1 -right-1 bg-amber-600 text-white text-xs font-bold px-1.5 py-0.5 rounded">
-                        {item.dayName}
-                      </span>
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-gray-900 text-lg">{item.location.name}</h3>
+              </div>
+
+              {/* Paint Location Cards */}
+              {viewMode === "day" ? (
+                data?.locations.map((location, index) => (
+                  <div key={index} className="bg-white rounded-2xl shadow-md p-4 mb-4 border border-gray-200">
+                    <div className="flex items-start gap-3">
+                      <div className="bg-amber-100 p-3 rounded-xl">
+                        <span className="text-2xl">☢️</span>
                       </div>
-                      <p className="text-gray-600 text-sm mt-1">{item.location.address}</p>
-                      <p className="text-amber-700 text-sm font-medium mt-2">
-                        {item.date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })} • {item.hours}
-                      </p>
-                      <a
-                        href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.location.address)}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-600 transition-colors"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
-                        </svg>
-                        Get Directions
-                      </a>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-gray-900 text-lg">{location.name}</h3>
+                        <p className="text-gray-600 text-sm mt-1">{location.address}</p>
+                        <p className="text-amber-700 text-sm font-medium mt-2">Hours: {data.hours}</p>
+                        <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(location.address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-600 transition-colors">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                          Get Directions
+                        </a>
+                      </div>
                     </div>
                   </div>
+                ))
+              ) : (
+                weekLocations.map((item, index) => (
+                  <div key={index} className="bg-white rounded-2xl shadow-md p-4 mb-4 border border-gray-200">
+                    <div className="flex items-start gap-3">
+                      <div className="bg-amber-500 w-12 h-12 rounded-xl flex items-center justify-center relative">
+                        <span className="text-xl font-bold text-white">{index + 1}</span>
+                        <span className="absolute -top-1 -right-1 bg-amber-700 text-white text-xs font-bold px-1.5 py-0.5 rounded">{item.dayName}</span>
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-gray-900 text-lg">{item.location.name}</h3>
+                        <p className="text-gray-600 text-sm mt-1">{item.location.address}</p>
+                        <p className="text-amber-700 text-sm font-medium mt-2">{item.date.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })} • {item.hours}</p>
+                        <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(item.location.address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-600 transition-colors">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                          Get Directions
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
+          )
+        ) : (
+          // Other categories - static locations
+          <>
+            {(selectedCategory === "appliances" ? APPLIANCES_LOCATIONS :
+              selectedCategory === "metal" ? METAL_LOCATIONS :
+              selectedCategory === "tires" ? TIRES_LOCATIONS :
+              selectedCategory === "concrete" ? CONCRETE_LOCATIONS :
+              LANDFILL_LOCATIONS
+            ).map((location, index) => (
+              <div key={index} className="bg-white rounded-2xl shadow-md p-4 mb-4 border border-gray-200">
+                <div className="flex items-start gap-3">
+                  <div className="bg-amber-500 w-12 h-12 rounded-xl flex items-center justify-center">
+                    <span className="text-xl font-bold text-white">{index + 1}</span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="font-bold text-gray-900 text-lg">{location.name}</h3>
+                    <p className="text-gray-600 text-sm mt-1">{location.address}</p>
+                    {location.hours && (
+                      <p className="text-amber-700 text-sm font-medium mt-2">Hours: {location.hours}</p>
+                    )}
+                    {location.phone && (
+                      <a href={`tel:${location.phone}`} className="text-blue-600 text-sm mt-1 block">{location.phone}</a>
+                    )}
+                    <a href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(location.address)}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-500 text-white rounded-lg font-medium text-sm hover:bg-amber-600 transition-colors">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+                      Get Directions
+                    </a>
+                  </div>
                 </div>
-              ))
-            )}
-
-            {/* Info Card */}
-            <div className="bg-gray-50 rounded-2xl p-4 border border-gray-200">
-              <h4 className="font-semibold text-gray-900 mb-2">Accepted Items</h4>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Paints, stains, solvents</li>
-                <li>• Pesticides, herbicides</li>
-                <li>• Automotive fluids (oil, antifreeze)</li>
-                <li>• Household cleaners, pool chemicals</li>
-                <li>• Batteries, fluorescent bulbs</li>
-              </ul>
-              <a
-                href="https://adacounty.id.gov/landfill/waste-types-solutions/hazardous-waste/"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-block mt-3 text-amber-600 hover:text-amber-700 font-medium text-sm"
-              >
-                View Full List →
-              </a>
-            </div>
-          </div>
-        </>
-      )}
+              </div>
+            ))}
+          </>
+        )}
+      </div>
 
       {/* Footer */}
       <footer className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 safe-bottom">
