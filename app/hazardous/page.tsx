@@ -342,6 +342,8 @@ export default function HazardousDropPage() {
     if (mapRef.current) return;
     // For paint category, wait for data to load
     if (selectedCategory === "paint" && loading) return;
+    // For paint week view, wait for weekLocations to be populated
+    if (selectedCategory === "paint" && viewMode === "week" && weekLocations.length === 0) return;
 
     const L = (window as any).L;
     if (!L) return;
