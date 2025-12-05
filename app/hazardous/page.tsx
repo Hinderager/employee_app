@@ -303,7 +303,7 @@ export default function HazardousDropPage() {
     loadLeaflet();
   }, []);
 
-  // Clear map when view/category changes
+  // Clear map when view/category/locations change
   useEffect(() => {
     if (mapRef.current) {
       markersRef.current.forEach(marker => marker.remove());
@@ -312,7 +312,7 @@ export default function HazardousDropPage() {
       mapRef.current = null;
       setMapReady(false);
     }
-  }, [selectedDate, viewMode, selectedCategory]);
+  }, [selectedDate, viewMode, selectedCategory, categoryLocations]);
 
   // Initialize map when Leaflet is loaded and data is ready
   useEffect(() => {
