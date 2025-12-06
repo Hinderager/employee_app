@@ -55,12 +55,6 @@ function MoveWalkthroughContent() {
     error?: string;
   }>>([]);
   const hasRestoredFromStorage = useRef(false);
-  const formDataRef = useRef(formData);  // Track latest formData for sessionStorage save
-
-  // Keep formDataRef in sync with formData
-  useEffect(() => {
-    formDataRef.current = formData;
-  }, [formData]);
 
   // Track the previous primary phone number to detect customer changes
   const previousPrimaryPhone = useRef<string>("");
@@ -436,6 +430,12 @@ function MoveWalkthroughContent() {
     toolCustom2: "",
     toolCustom3: "",
   });
+
+  // Ref to track latest formData for sessionStorage save (avoids stale closure)
+  const formDataRef = useRef(formData);
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
 
   // Restore form data from sessionStorage on mount (only once, and only if not coming from picker)
   useEffect(() => {
