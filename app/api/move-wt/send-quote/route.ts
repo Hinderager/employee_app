@@ -98,6 +98,13 @@ async function upsertGHLContact(contactData: {
   // First, search for existing contact
   const existingContact = await findGHLContact(contactData.phone);
 
+  console.log('[send-quote] ===== upsertGHLContact CALLED =====');
+  console.log('[send-quote] contactData received:', JSON.stringify(contactData, null, 2));
+  console.log('[send-quote] contactData.email value:', `"${contactData.email}"`);
+  console.log('[send-quote] contactData.email type:', typeof contactData.email);
+  console.log('[send-quote] contactData.email truthy?:', !!contactData.email);
+  console.log('[send-quote] contactData.email includes @?:', contactData.email?.includes('@'));
+
   const payload: any = {
     locationId: GHL_LOCATION_ID,
     firstName: contactData.firstName,
@@ -110,6 +117,12 @@ async function upsertGHLContact(contactData: {
   // Only include email if it's provided and valid
   if (contactData.email && contactData.email.includes('@')) {
     payload.email = contactData.email;
+    console.log('[send-quote] EMAIL ADDED TO PAYLOAD:', contactData.email);
+  } else {
+    console.log('[send-quote] EMAIL NOT ADDED - failed validation check');
+    console.log('[send-quote]   - email value:', `"${contactData.email}"`);
+    console.log('[send-quote]   - is truthy:', !!contactData.email);
+    console.log('[send-quote]   - includes @:', contactData.email?.includes('@'));
   }
 
   if (existingContact) {
@@ -391,26 +404,49 @@ export async function POST(request: NextRequest) {
 
     // Extract customer info from form_data
     const formData = quoteData.form_data || {};
+
+    console.log('[send-quote] ===== RAW FORM_DATA FROM SUPABASE =====');
+    console.log('[send-quote] formData.emails:', JSON.stringify(formData.emails));
+    console.log('[send-quote] formData.email:', JSON.stringify(formData.email));
+    console.log('[send-quote] formData.phones:', JSON.stringify(formData.phones));
+    console.log('[send-quote] formData.phone:', JSON.stringify(formData.phone));
+    console.log('[send-quote] formData.firstName:', formData.firstName);
+    console.log('[send-quote] formData.lastName:', formData.lastName);
+
     const firstName = formData.firstName || '';
     const lastName = formData.lastName || '';
     const company = formData.company || '';
 
     // Phone is stored in phones array: [{ number: string, name: string }]
     const phonesArray = formData.phones || [];
+    console.log('[send-quote] phonesArray:', JSON.stringify(phonesArray));
+    console.log('[send-quote] phonesArray.length:', phonesArray.length);
+    console.log('[send-quote] phonesArray[0]:', JSON.stringify(phonesArray[0]));
+    console.log('[send-quote] phonesArray[0]?.number:', phonesArray[0]?.number);
+
     const phone = phonesArray.length > 0 && phonesArray[0]?.number ? phonesArray[0].number : (formData.phone || '');
+    console.log('[send-quote] FINAL phone value:', phone);
 
     // Email is stored in emails array: [{ email: string, name: string }]
     const emailsArray = formData.emails || [];
-    const email = emailsArray.length > 0 && emailsArray[0]?.email ? emailsArray[0].email : (formData.email || '');
+    console.log('[send-quote] ===== EMAIL EXTRACTION =====');
+    console.log('[send-quote] emailsArray:', JSON.stringify(emailsArray));
+    console.log('[send-quote] emailsArray.length:', emailsArray.length);
+    console.log('[send-quote] emailsArray[0]:', JSON.stringify(emailsArray[0]));
+    console.log('[send-quote] emailsArray[0]?.email:', emailsArray[0]?.email);
+    console.log('[send-quote] Condition check: emailsArray.length > 0 =', emailsArray.length > 0);
+    console.log('[send-quote] Condition check: emailsArray[0]?.email truthy =', !!emailsArray[0]?.email);
 
-    console.log('[send-quote] Extracted contact info from form_data:', {
-      phonesArray,
-      extractedPhone: phone,
-      formDataPhone: formData.phone,
-      emailsArray,
-      extractedEmail: email,
-      formDataEmail: formData.email
-    });
+    const email = emailsArray.length > 0 && emailsArray[0]?.email ? emailsArray[0].email : (formData.email || '');
+    console.log('[send-quote] FINAL email value:', `"${email}"`);
+    console.log('[send-quote] (fallback formData.email was:', `"${formData.email || ''}")`);
+
+    console.log('[send-quote] ===== EXTRACTED VALUES SUMMARY =====');
+    console.log('[send-quote] firstName:', firstName);
+    console.log('[send-quote] lastName:', lastName);
+    console.log('[send-quote] phone:', phone);
+    console.log('[send-quote] email:', email);
+    console.log('[send-quote] company:', company);
 
     // Get customer home address
     const customerHomeAddress = quoteData.customer_home_address || quoteData.address || '';
