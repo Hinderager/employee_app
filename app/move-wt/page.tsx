@@ -179,6 +179,10 @@ function MoveWalkthroughContent() {
       }
 
       // Clear URL params after reading
+      // Clear sessionStorage after 2 seconds (no longer needed after restore)
+      setTimeout(() => {
+        sessionStorage.removeItem('moveWtFormData');
+      }, 2000);
       router.replace('/move-wt', { scroll: false });
     }
   }, [searchParams, router]);
@@ -444,48 +448,13 @@ function MoveWalkthroughContent() {
       return; // Don't restore yet, wait for picker to set the date first
     }
 
-    const savedState = sessionStorage.getItem('moveWtFormData');
-    if (savedState) {
-      try {
-        const parsed = JSON.parse(savedState);
-
-        // Check if this is the new format (has formData property) or old format (is formData directly)
-        const isNewFormat = parsed.formData !== undefined;
-        const restoredFormData = isNewFormat ? parsed.formData : parsed;
-
-        setFormData(restoredFormData);
-
-        // Restore other state if using new format
-        if (isNewFormat) {
-          if (parsed.phones && Array.isArray(parsed.phones) && parsed.phones.length > 0) {
-            setPhones(parsed.phones);
-          }
-          if (parsed.emails && Array.isArray(parsed.emails) && parsed.emails.length > 0) {
-            setEmails(parsed.emails);
-          }
-          if (parsed.jobNumber) setJobNumber(parsed.jobNumber);
-          if (parsed.searchPhone) setSearchPhone(parsed.searchPhone);
-          if (parsed.searchQuoteNum) setSearchQuoteNum(parsed.searchQuoteNum);
-          if (parsed.quoteNumber) setQuoteNumber(parsed.quoteNumber);
-          if (parsed.address) setAddress(parsed.address);
-          if (parsed.folderUrl) setFolderUrl(parsed.folderUrl);
-          if (parsed.sendHistory && Array.isArray(parsed.sendHistory)) {
-            setSendHistory(parsed.sendHistory);
-          }
-        }
-
-        hasRestoredFromStorage.current = true;
-      } catch (error) {
-        console.error('Error restoring form data:', error);
-      }
-    } else {
-      hasRestoredFromStorage.current = true;
-    }
+    // Skip sessionStorage restore on regular page load
+    // Only restore from sessionStorage when returning from date picker (handled in picker useEffect above)
+    hasRestoredFromStorage.current = true;
   }, [searchParams]);
 
-  // Save ALL form state to sessionStorage whenever it changes
-  // This preserves data when navigating to/from the date picker
-  useEffect(() => {
+  // Save form state to sessionStorage - called only when navigating to date picker
+  const saveFormDataToStorage = () => {
     const fullFormState = {
       formData,
       phones,
@@ -499,7 +468,7 @@ function MoveWalkthroughContent() {
       sendHistory,
     };
     sessionStorage.setItem('moveWtFormData', JSON.stringify(fullFormState));
-  }, [formData, phones, emails, jobNumber, searchPhone, searchQuoteNum, quoteNumber, address, folderUrl, sendHistory]);
+  };
 
   // Format number with commas
   const formatNumberWithCommas = (value: string): string => {
@@ -4242,7 +4211,7 @@ function MoveWalkthroughContent() {
                     readOnly
                     value={formData.walkThroughDate ? new Date(formData.walkThroughDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
                     placeholder="mm/dd/yyyy"
-                    onClick={() => router.push('/schedule?picker=walkthrough')}
+                    onClick={() => { saveFormDataToStorage(); router.push('/schedule?picker=walkthrough'); }}
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
                   />
                 </div>
@@ -4375,7 +4344,7 @@ function MoveWalkthroughContent() {
                     readOnly
                     value={formData.preferredDate ? new Date(formData.preferredDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
                     placeholder="mm/dd/yyyy"
-                    onClick={() => router.push('/schedule?picker=moving')}
+                    onClick={() => { saveFormDataToStorage(); router.push('/schedule?picker=moving'); }}
                     className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
                   />
                 </div>
