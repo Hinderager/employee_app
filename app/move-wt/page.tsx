@@ -7804,6 +7804,9 @@ function MoveWalkthroughContent() {
                   setIsSendingQuote(true);
 
                   try {
+                    // Save form data first to ensure Supabase has latest data
+                    await saveFormData(false);
+
                     const response = await fetch('/api/move-wt/send-quote', {
                       method: 'POST',
                       headers: {
