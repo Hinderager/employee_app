@@ -99,6 +99,7 @@ async function upsertGHLContact(contactData: {
   const existingContact = await findGHLContact(contactData.phone);
 
   const payload: any = {
+    locationId: GHL_LOCATION_ID,
     firstName: contactData.firstName,
     lastName: contactData.lastName,
     phone: normalizePhoneNumber(contactData.phone),
@@ -113,7 +114,7 @@ async function upsertGHLContact(contactData: {
 
   if (existingContact) {
     // Update existing contact
-    console.log('[send-quote] Updating contact:', existingContact.id, 'with payload:', payload);
+    console.log('[send-quote] Updating contact:', existingContact.id, 'with payload:', JSON.stringify(payload, null, 2));
     const response = await fetch(
       `${GHL_API_BASE}/contacts/${existingContact.id}`,
       {
@@ -138,10 +139,12 @@ async function upsertGHLContact(contactData: {
       throw new Error(`Failed to update GHL contact: ${response.statusText} - ${errorBody}`);
     }
 
-    return await response.json();
+    const updatedContact = await response.json();
+    console.log('[send-quote] Contact updated successfully:', JSON.stringify(updatedContact, null, 2));
+    return updatedContact;
   } else {
     // Create new contact
-    console.log('[send-quote] Creating new contact with payload:', payload);
+    console.log('[send-quote] Creating new contact with payload:', JSON.stringify(payload, null, 2));
     const response = await fetch(
       `${GHL_API_BASE}/contacts/`,
       {
@@ -166,7 +169,9 @@ async function upsertGHLContact(contactData: {
       throw new Error(`Failed to create GHL contact: ${response.statusText} - ${errorBody}`);
     }
 
-    return await response.json();
+    const newContact = await response.json();
+    console.log('[send-quote] Contact created successfully:', JSON.stringify(newContact, null, 2));
+    return newContact;
   }
 }
 
@@ -284,27 +289,31 @@ async function upsertGHLOpportunity(contactId: string, quoteNumber: string, quot
   }
 }
 
-// Send SMS via GHL
-async function sendGHLSMS(contactId: string, message: string) {
-  const response = await fetch(
-    `${GHL_API_BASE}/conversations/messages`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GHL_API_KEY}`,
-        'Version': '2021-07-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        type: 'SMS',
-        contactId: contactId,
-        message: message,
-      }),
-    }
-  );
+// n8n webhook URL for sending SMS via Twilio
+const N8N_SMS_WEBHOOK_URL = 'https://n8n.srv1041426.hstgr.cloud/webhook/send-quote-email';
+
+// Send SMS via n8n webhook (Twilio)
+async function sendSmsViaN8n(data: {
+  customerPhone: string;
+  smsMessage: string;
+}) {
+  const response = await fetch(N8N_SMS_WEBHOOK_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      customerPhone: data.customerPhone,
+      customerEmail: '', // Empty - no email via n8n
+      subject: '',
+      htmlBody: '',
+      smsMessage: data.smsMessage,
+    }),
+  });
 
   if (!response.ok) {
-    throw new Error(`Failed to send GHL SMS: ${response.statusText}`);
+    const errorBody = await response.text();
+    throw new Error(`Failed to send SMS via n8n: ${response.statusText} - ${errorBody}`);
   }
 
   return await response.json();
@@ -312,6 +321,16 @@ async function sendGHLSMS(contactId: string, message: string) {
 
 // Send Email via GHL
 async function sendGHLEmail(contactId: string, subject: string, body: string) {
+  const emailPayload = {
+    type: 'Email',
+    contactId: contactId,
+    subject: subject,
+    html: body,
+    emailFrom: 'info@topshelfpros.com',
+  };
+
+  console.log('[send-quote] Sending GHL email with payload:', JSON.stringify(emailPayload, null, 2));
+
   const response = await fetch(
     `${GHL_API_BASE}/conversations/messages`,
     {
@@ -321,20 +340,24 @@ async function sendGHLEmail(contactId: string, subject: string, body: string) {
         'Version': '2021-07-28',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        type: 'Email',
-        contactId: contactId,
-        subject: subject,
-        html: body,
-      }),
+      body: JSON.stringify(emailPayload),
     }
   );
 
   if (!response.ok) {
-    throw new Error(`Failed to send GHL email: ${response.statusText}`);
+    const errorBody = await response.text();
+    console.error('[send-quote] GHL email API error:', {
+      status: response.status,
+      statusText: response.statusText,
+      body: errorBody,
+      payload: emailPayload,
+    });
+    throw new Error(`Failed to send GHL email: ${response.statusText} - ${errorBody}`);
   }
 
-  return await response.json();
+  const result = await response.json();
+  console.log('[send-quote] GHL email sent successfully:', JSON.stringify(result, null, 2));
+  return result;
 }
 
 export async function POST(request: NextRequest) {
@@ -370,9 +393,24 @@ export async function POST(request: NextRequest) {
     const formData = quoteData.form_data || {};
     const firstName = formData.firstName || '';
     const lastName = formData.lastName || '';
-    const phone = formData.phone || '';
-    const email = formData.email || '';
     const company = formData.company || '';
+
+    // Phone is stored in phones array: [{ number: string, name: string }]
+    const phonesArray = formData.phones || [];
+    const phone = phonesArray.length > 0 && phonesArray[0]?.number ? phonesArray[0].number : (formData.phone || '');
+
+    // Email is stored in emails array: [{ email: string, name: string }]
+    const emailsArray = formData.emails || [];
+    const email = emailsArray.length > 0 && emailsArray[0]?.email ? emailsArray[0].email : (formData.email || '');
+
+    console.log('[send-quote] Extracted contact info from form_data:', {
+      phonesArray,
+      extractedPhone: phone,
+      formDataPhone: formData.phone,
+      emailsArray,
+      extractedEmail: email,
+      formDataEmail: formData.email
+    });
 
     // Get customer home address
     const customerHomeAddress = quoteData.customer_home_address || quoteData.address || '';
@@ -426,46 +464,63 @@ export async function POST(request: NextRequest) {
     console.log(`[send-quote] Quote URL: ${fullQuoteUrl}`);
     console.log(`[send-quote] Mover Sheet URL: ${fullMoverSheetUrl}`);
 
-    // Step 1: Create/Update GHL Contact
-    console.log(`[send-quote] Upserting GHL contact for ${firstName} ${lastName}`);
-    const contact = await upsertGHLContact({
-      firstName,
-      lastName,
-      phone,
-      email,
-      address: customerHomeAddress,
-      company,
+    // Step 1: Create/Update GHL Contact (creates new if doesn't exist)
+    let contactId = null;
+    let opportunityId = null;
+    try {
+      console.log(`[send-quote] Upserting GHL contact for ${firstName} ${lastName}`);
+      const contact = await upsertGHLContact({
+        firstName,
+        lastName,
+        phone,
+        email,
+        address: customerHomeAddress,
+        company,
+      });
+
+      contactId = contact.contact?.id || contact.id;
+      console.log(`[send-quote] GHL Contact ID: ${contactId}`);
+
+      // Step 2: Create/Update GHL Opportunity
+      try {
+        console.log(`[send-quote] Upserting GHL opportunity with value: $${quoteTotal || 0}`);
+        const opportunity = await upsertGHLOpportunity(contactId, quoteNumber, quoteTotal || 0);
+        opportunityId = opportunity.id;
+        console.log(`[send-quote] Opportunity ID: ${opportunityId}`);
+      } catch (oppError) {
+        console.log(`[send-quote] GHL opportunity creation skipped:`, oppError instanceof Error ? oppError.message : oppError);
+      }
+    } catch (contactError) {
+      console.error(`[send-quote] GHL contact creation failed:`, contactError instanceof Error ? contactError.message : contactError);
+      // Continue anyway - still send the quote via n8n
+    }
+
+    // Step 3: Send SMS via n8n/Twilio
+    const smsMessage = `Hi ${firstName}, your moving quote is ready! View it here: ${fullQuoteUrl}`;
+    console.log(`[send-quote] Sending SMS via n8n/Twilio`);
+    await sendSmsViaN8n({
+      customerPhone: phone.startsWith('+') ? phone : `+1${normalizePhoneNumber(phone)}`,
+      smsMessage: smsMessage,
     });
 
-    const contactId = contact.contact?.id || contact.id;
-    console.log(`[send-quote] GHL Contact ID: ${contactId}`);
-
-    // Step 2: Create/Update GHL Opportunity
-    console.log(`[send-quote] Upserting GHL opportunity with value: $${quoteTotal || 0}`);
-
-    const opportunity = await upsertGHLOpportunity(contactId, quoteNumber, quoteTotal || 0);
-    console.log(`[send-quote] Opportunity ID: ${opportunity.id}`);
-
-    // Step 3: Send SMS
-    const smsMessage = `Hi ${firstName}, your moving quote is ready! View it here: ${fullQuoteUrl}`;
-    console.log(`[send-quote] Sending SMS`);
-    await sendGHLSMS(contactId, smsMessage);
-
-    // Step 4: Send Email (only if email is provided)
-    if (email && email.includes('@')) {
+    // Step 4: Send Email via GHL (if contact exists and has email)
+    if (contactId && email && email.includes('@')) {
       const emailSubject = `Your Moving Quote is Ready - ${quoteNumber}`;
       const emailBody = `
         <p>Hi ${firstName},</p>
         <p>Your moving quote is ready!</p>
         <p>View your quote here:</p>
-        <p style="font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 4px;">${fullQuoteUrl}</p>
-        <p><em>Copy and paste the link above into your browser to view your quote.</em></p>
+        <p><a href="${fullQuoteUrl}" style="color: #2563eb; text-decoration: underline;">${fullQuoteUrl}</a></p>
         <p>Thank you for choosing Top Shelf Moving!</p>
       `;
-      console.log(`[send-quote] Sending email to ${email}`);
-      await sendGHLEmail(contactId, emailSubject, emailBody);
+      console.log(`[send-quote] Sending email via GHL to ${email}`);
+      try {
+        await sendGHLEmail(contactId, emailSubject, emailBody);
+      } catch (emailError) {
+        console.error(`[send-quote] GHL email failed:`, emailError instanceof Error ? emailError.message : emailError);
+      }
     } else {
-      console.log(`[send-quote] No email provided, skipping email send`);
+      console.log(`[send-quote] Skipping email - no GHL contact or no valid email`);
     }
 
     console.log(`[send-quote] Quote sent successfully`);
@@ -476,7 +531,7 @@ export async function POST(request: NextRequest) {
       quoteUrl: fullQuoteUrl,
       moverSheetUrl: fullMoverSheetUrl,
       contactId: contactId,
-      opportunityId: opportunity.id,
+      opportunityId: opportunityId,
     });
 
   } catch (error) {
