@@ -55,6 +55,12 @@ function MoveWalkthroughContent() {
     error?: string;
   }>>([]);
   const hasRestoredFromStorage = useRef(false);
+  const formDataRef = useRef(formData);  // Track latest formData for sessionStorage save
+
+  // Keep formDataRef in sync with formData
+  useEffect(() => {
+    formDataRef.current = formData;
+  }, [formData]);
 
   // Track the previous primary phone number to detect customer changes
   const previousPrimaryPhone = useRef<string>("");
@@ -456,7 +462,7 @@ function MoveWalkthroughContent() {
   // Save form state to sessionStorage - called only when navigating to date picker
   const saveFormDataToStorage = () => {
     const fullFormState = {
-      formData,
+      formData: formDataRef.current,
       phones,
       emails,
       jobNumber,
