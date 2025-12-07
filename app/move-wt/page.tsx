@@ -158,6 +158,9 @@ function MoveWalkthroughContent() {
           }
 
           hasRestoredFromStorage.current = true;
+
+          // Force re-initialization of Google Places Autocomplete after returning from schedule picker
+          setAutocompleteReinitKey(prev => prev + 1);
         } catch (error) {
           console.error('[Date Picker] Error restoring/merging data:', error);
         }
