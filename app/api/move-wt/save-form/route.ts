@@ -27,6 +27,31 @@ const buildStreetAddress = (addressData: any, type: 'pickup' | 'delivery'): stri
   return parts.join(', ');
 };
 
+// Helper function to trigger GHL sync after saving to Supabase
+// This calls the n8n webhook to sync form data to GHL contact
+const triggerGHLSync = async (formData: any, lastSyncSource: string, lastSyncAt: string) => {
+  try {
+    const webhookUrl = 'https://n8n.srv1041426.hstgr.cloud/webhook/move-quote-sync';
+    const response = await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        form_data: formData,
+        last_sync_source: lastSyncSource,
+        last_sync_at: lastSyncAt,
+      }),
+    });
+    if (!response.ok) {
+      console.error(`[move-wt/save-form] GHL sync webhook failed: ${response.status}`);
+    } else {
+      console.log(`[move-wt/save-form] GHL sync webhook triggered successfully`);
+    }
+  } catch (err) {
+    // Don't fail the save if webhook fails - just log the error
+    console.error('[move-wt/save-form] GHL sync webhook error:', err);
+  }
+};
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -146,6 +171,10 @@ export async function POST(request: NextRequest) {
 
         console.log(`[move-wt/save-form] Form updated successfully`);
 
+        // Trigger GHL sync (fire and forget - don't await)
+        const syncAt = new Date().toISOString();
+        triggerGHLSync(formData, 'form', syncAt);
+
         return NextResponse.json({
           success: true,
           message: 'Form updated successfully',
@@ -191,6 +220,10 @@ export async function POST(request: NextRequest) {
             );
           }
 
+          // Trigger GHL sync (fire and forget - don't await)
+          const syncAt = new Date().toISOString();
+          triggerGHLSync(formData, 'form', syncAt);
+
           return NextResponse.json({
             success: true,
             message: 'Form updated successfully',
@@ -227,6 +260,10 @@ export async function POST(request: NextRequest) {
           }
 
           console.log(`[move-wt/save-form] Form saved successfully with quote number: ${data[0]?.quote_number}`);
+
+          // Trigger GHL sync (fire and forget - don't await)
+          const syncAt = new Date().toISOString();
+          triggerGHLSync(formData, 'form', syncAt);
 
           return NextResponse.json({
             success: true,
@@ -270,6 +307,10 @@ export async function POST(request: NextRequest) {
       }
 
       console.log(`[move-wt/save-form] Form saved successfully`);
+
+      // Trigger GHL sync (fire and forget - don't await)
+      const syncAt = new Date().toISOString();
+      triggerGHLSync(formData, 'form', syncAt);
 
       return NextResponse.json({
         success: true,
