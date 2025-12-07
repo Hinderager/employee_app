@@ -674,10 +674,11 @@ function MoveWalkthroughContent() {
       clearTimeout(autoSaveTimeoutRef.current);
     }
 
-    // Debounce: wait 1 second after last change before saving
+    // Debounce: wait 15 seconds after last change before saving
+    // This prevents race conditions with bidirectional GHL sync
     autoSaveTimeoutRef.current = setTimeout(() => {
       saveFormData(false);
-    }, 1000);
+    }, 15000);
 
     // Cleanup timeout on unmount
     return () => {

@@ -130,6 +130,8 @@ export async function POST(request: NextRequest) {
             form_data: formData,
             move_date: formData?.preferredDate || null,
             updated_at: new Date().toISOString(),
+            last_sync_source: 'form', // Track that this update came from the form
+            last_sync_at: new Date().toISOString(),
           })
           .eq('customer_home_address', customerHomeAddress)
           .select();
@@ -175,6 +177,8 @@ export async function POST(request: NextRequest) {
               form_data: formData,
               move_date: formData?.preferredDate || null,
               updated_at: new Date().toISOString(),
+              last_sync_source: 'form',
+              last_sync_at: new Date().toISOString(),
             })
             .eq('job_number', jobNumber)
             .select();
@@ -209,6 +213,8 @@ export async function POST(request: NextRequest) {
               form_data: formData,
               move_date: formData?.preferredDate || null,
               updated_at: new Date().toISOString(),
+              last_sync_source: 'form',
+              last_sync_at: new Date().toISOString(),
             })
             .select();
 
@@ -246,6 +252,8 @@ export async function POST(request: NextRequest) {
             form_data: formData,
             move_date: formData?.preferredDate || null,
             updated_at: new Date().toISOString(),
+            last_sync_source: 'form',
+            last_sync_at: new Date().toISOString(),
           },
           {
             onConflict: 'job_number',

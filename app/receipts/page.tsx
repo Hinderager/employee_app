@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import {
   ArrowLeftIcon,
@@ -8,6 +8,7 @@ import {
   CheckCircleIcon,
   XCircleIcon,
   DocumentTextIcon,
+  ReceiptPercentIcon,
 } from "@heroicons/react/24/outline";
 
 interface ReceiptResult {
@@ -15,17 +16,47 @@ interface ReceiptResult {
   receipt_id?: string;
   merchant_name?: string;
   amount?: number;
+  receipt_date?: string;
   image_url?: string;
   error?: string;
+}
+
+interface RecentReceipt {
+  id: string;
+  merchantName: string;
+  amount: number | null;
+  receiptDate: string | null;
+  imageUrl: string | null;
+  createdAt: string;
 }
 
 export default function ReceiptsPage() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [result, setResult] = useState<ReceiptResult | null>(null);
+  const [recentReceipts, setRecentReceipts] = useState<RecentReceipt[]>([]);
+  const [loadingReceipts, setLoadingReceipts] = useState(true);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
   const N8N_WEBHOOK_URL = process.env.NEXT_PUBLIC_RECEIPT_WEBHOOK_URL || "";
+
+  useEffect(() => {
+    fetchRecentReceipts();
+  }, []);
+
+  const fetchRecentReceipts = async () => {
+    try {
+      const response = await fetch('/api/receipts/recent?limit=10');
+      const data = await response.json();
+      if (data.success) {
+        setRecentReceipts(data.receipts);
+      }
+    } catch (error) {
+      console.error('Failed to fetch recent receipts:', error);
+    } finally {
+      setLoadingReceipts(false);
+    }
+  };
 
   const handleCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -61,13 +92,26 @@ export default function ReceiptsPage() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Failed to process receipt");
+
       setResult({
         success: true,
         receipt_id: data.receipt_id,
         merchant_name: data.merchant_name,
         amount: data.amount,
+        receipt_date: data.receipt_date,
         image_url: data.image_url,
       });
+
+      const newReceipt: RecentReceipt = {
+        id: data.receipt_id || Date.now().toString(),
+        merchantName: data.merchant_name || 'Unknown Merchant',
+        amount: data.amount || null,
+        receiptDate: data.receipt_date || null,
+        imageUrl: data.image_url || null,
+        createdAt: new Date().toISOString(),
+      };
+      setRecentReceipts(prev => [newReceipt, ...prev].slice(0, 10));
+
       setCapturedImage(null);
       if (cameraInputRef.current) cameraInputRef.current.value = "";
     } catch (error) {
@@ -89,6 +133,17 @@ export default function ReceiptsPage() {
   const handleTakeAnother = () => {
     setResult(null);
     cameraInputRef.current?.click();
+  };
+
+  const formatDate = (dateStr: string | null) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const formatAmount = (amount: number | null) => {
+    if (amount === null || amount === undefined) return '--';
+    return `$${amount.toFixed(2)}`;
   };
 
   return (
@@ -198,6 +253,59 @@ export default function ReceiptsPage() {
             </ol>
           </div>
         )}
+
+        {/* Recent Expenses Section */}
+        <div className="mt-8">
+          <h2 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
+            <ReceiptPercentIcon className="h-6 w-6 text-gray-600" />
+            Recent Expenses
+          </h2>
+
+          {loadingReceipts ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-600"></div>
+            </div>
+          ) : recentReceipts.length === 0 ? (
+            <div className="bg-gray-100 rounded-xl p-6 text-center text-gray-500">
+              No receipts yet. Scan your first receipt above!
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentReceipts.map((receipt, index) => (
+                <div
+                  key={receipt.id}
+                  className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-center justify-between transition-all ${
+                    index === 0 ? 'ring-2 ring-green-400 ring-opacity-50' : ''
+                  }`}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-gray-900 truncate">
+                      {receipt.merchantName}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {formatDate(receipt.receiptDate || receipt.createdAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="font-bold text-gray-900 text-lg">
+                      {formatAmount(receipt.amount)}
+                    </span>
+                    {receipt.imageUrl && (
+                      <a
+                        href={receipt.imageUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-700 p-2"
+                      >
+                        <DocumentTextIcon className="h-5 w-5" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </main>
   );
