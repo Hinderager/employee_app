@@ -302,74 +302,51 @@ async function upsertGHLOpportunity(contactId: string, quoteNumber: string, quot
   }
 }
 
-// n8n webhook URL for sending SMS via Twilio
-const N8N_SMS_WEBHOOK_URL = 'https://n8n.srv1041426.hstgr.cloud/webhook/send-quote-email';
+// n8n webhook URL for sending quote via GHL (handles sync verification + SMS + Email)
+const N8N_SEND_QUOTE_WEBHOOK_URL = 'https://n8n.srv1041426.hstgr.cloud/webhook/send-quote-email';
 
-// Send SMS via n8n webhook (Twilio)
-async function sendSmsViaN8n(data: {
+// Send quote via n8n workflow (verifies GHL sync, then sends SMS + Email via GHL)
+async function sendQuoteViaN8n(data: {
   customerPhone: string;
+  customerEmail: string;
+  firstName: string;
+  lastName: string;
+  address: string;
+  subject: string;
+  htmlBody: string;
   smsMessage: string;
-}) {
-  const response = await fetch(N8N_SMS_WEBHOOK_URL, {
+  quoteUrl: string;
+  quoteNumber: string;
+  quoteTotal: number;
+}): Promise<{
+  success: boolean;
+  quoteUrl?: string;
+  syncVerified?: boolean;
+  sms: { sent: boolean; error?: string };
+  email: { sent: boolean; error?: string };
+}> {
+  console.log('[send-quote] Calling n8n webhook with data:', JSON.stringify(data, null, 2));
+
+  const response = await fetch(N8N_SEND_QUOTE_WEBHOOK_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      customerPhone: data.customerPhone,
-      customerEmail: '', // Empty - no email via n8n
-      subject: '',
-      htmlBody: '',
-      smsMessage: data.smsMessage,
-    }),
+    body: JSON.stringify(data),
   });
 
   if (!response.ok) {
     const errorBody = await response.text();
-    throw new Error(`Failed to send SMS via n8n: ${response.statusText} - ${errorBody}`);
-  }
-
-  return await response.json();
-}
-
-// Send Email via GHL
-async function sendGHLEmail(contactId: string, subject: string, body: string) {
-  const emailPayload = {
-    type: 'Email',
-    contactId: contactId,
-    subject: subject,
-    html: body,
-    emailFrom: 'info@topshelfpros.com',
-  };
-
-  console.log('[send-quote] Sending GHL email with payload:', JSON.stringify(emailPayload, null, 2));
-
-  const response = await fetch(
-    `${GHL_API_BASE}/conversations/messages`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GHL_API_KEY}`,
-        'Version': '2021-07-28',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(emailPayload),
-    }
-  );
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-    console.error('[send-quote] GHL email API error:', {
-      status: response.status,
-      statusText: response.statusText,
-      body: errorBody,
-      payload: emailPayload,
-    });
-    throw new Error(`Failed to send GHL email: ${response.statusText} - ${errorBody}`);
+    console.error('[send-quote] n8n webhook error:', response.status, errorBody);
+    return {
+      success: false,
+      sms: { sent: false, error: `Webhook failed: ${response.status}` },
+      email: { sent: false, error: `Webhook failed: ${response.status}` },
+    };
   }
 
   const result = await response.json();
-  console.log('[send-quote] GHL email sent successfully:', JSON.stringify(result, null, 2));
+  console.log('[send-quote] n8n webhook result:', JSON.stringify(result, null, 2));
   return result;
 }
 
@@ -500,74 +477,37 @@ export async function POST(request: NextRequest) {
     console.log(`[send-quote] Quote URL: ${fullQuoteUrl}`);
     console.log(`[send-quote] Mover Sheet URL: ${fullMoverSheetUrl}`);
 
-    // Step 1: Create/Update GHL Contact (creates new if doesn't exist)
-    let contactId = null;
-    let opportunityId = null;
-    try {
-      console.log(`[send-quote] Upserting GHL contact for ${firstName} ${lastName}`);
-      const contact = await upsertGHLContact({
-        firstName,
-        lastName,
-        phone,
-        email,
-        address: customerHomeAddress,
-        company,
-      });
-
-      contactId = contact.contact?.id || contact.id;
-      console.log(`[send-quote] GHL Contact ID: ${contactId}`);
-
-      // Step 2: Create/Update GHL Opportunity
-      try {
-        console.log(`[send-quote] Upserting GHL opportunity with value: $${quoteTotal || 0}`);
-        const opportunity = await upsertGHLOpportunity(contactId, quoteNumber, quoteTotal || 0);
-        opportunityId = opportunity.id;
-        console.log(`[send-quote] Opportunity ID: ${opportunityId}`);
-      } catch (oppError) {
-        console.log(`[send-quote] GHL opportunity creation skipped:`, oppError instanceof Error ? oppError.message : oppError);
-      }
-    } catch (contactError) {
-      console.error(`[send-quote] GHL contact creation failed:`, contactError instanceof Error ? contactError.message : contactError);
-      // Continue anyway - still send the quote via n8n
-    }
-
-    // Step 3: Send SMS via n8n/Twilio
+    // Prepare messages for SMS and Email
     const smsMessage = `Hi ${firstName}, your moving quote is ready! View it here: ${fullQuoteUrl}`;
-    console.log(`[send-quote] Sending SMS via n8n/Twilio`);
-    await sendSmsViaN8n({
+    const emailSubject = `Your Moving Quote is Ready - ${quoteNumber}`;
+    const emailBody = `<p>Hi ${firstName},</p><p>Your moving quote is ready!</p><p>View your quote here:</p><p><a href="${fullQuoteUrl}" style="color: #2563eb; text-decoration: underline;">${fullQuoteUrl}</a></p><p>Thank you for choosing Top Shelf Moving!</p>`;
+
+    // Send quote via n8n workflow (handles GHL sync verification + SMS + Email)
+    console.log(`[send-quote] Sending quote via n8n workflow`);
+    const sendResult = await sendQuoteViaN8n({
       customerPhone: phone.startsWith('+') ? phone : `+1${normalizePhoneNumber(phone)}`,
+      customerEmail: email,
+      firstName,
+      lastName,
+      address: customerHomeAddress,
+      subject: emailSubject,
+      htmlBody: emailBody,
       smsMessage: smsMessage,
+      quoteUrl: fullQuoteUrl,
+      quoteNumber: quoteNumber,
+      quoteTotal: quoteTotal || 0,
     });
 
-    // Step 4: Send Email via GHL (if contact exists and has email)
-    if (contactId && email && email.includes('@')) {
-      const emailSubject = `Your Moving Quote is Ready - ${quoteNumber}`;
-      const emailBody = `
-        <p>Hi ${firstName},</p>
-        <p>Your moving quote is ready!</p>
-        <p>View your quote here:</p>
-        <p><a href="${fullQuoteUrl}" style="color: #2563eb; text-decoration: underline;">${fullQuoteUrl}</a></p>
-        <p>Thank you for choosing Top Shelf Moving!</p>
-      `;
-      console.log(`[send-quote] Sending email via GHL to ${email}`);
-      try {
-        await sendGHLEmail(contactId, emailSubject, emailBody);
-      } catch (emailError) {
-        console.error(`[send-quote] GHL email failed:`, emailError instanceof Error ? emailError.message : emailError);
-      }
-    } else {
-      console.log(`[send-quote] Skipping email - no GHL contact or no valid email`);
-    }
-
-    console.log(`[send-quote] Quote sent successfully`);
+    console.log(`[send-quote] n8n result:`, JSON.stringify(sendResult, null, 2));
 
     return NextResponse.json({
-      success: true,
-      message: 'Quote sent to customer',
+      success: sendResult.success,
+      message: sendResult.success ? 'Quote sent to customer' : 'Failed to send quote',
       quoteUrl: fullQuoteUrl,
       moverSheetUrl: fullMoverSheetUrl,
-      contactId: contactId,
-      opportunityId: opportunityId,
+      syncVerified: sendResult.syncVerified,
+      sms: sendResult.sms,
+      email: sendResult.email,
     });
 
   } catch (error) {

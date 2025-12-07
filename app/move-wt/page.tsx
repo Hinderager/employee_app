@@ -48,6 +48,7 @@ function MoveWalkthroughContent() {
   const [showQuotePreview, setShowQuotePreview] = useState(false);
   const [quoteSent, setQuoteSent] = useState(false);
   const [isSendingQuote, setIsSendingQuote] = useState(false);
+  const [sentQuoteUrl, setSentQuoteUrl] = useState<string>("");
   const [sendHistory, setSendHistory] = useState<Array<{
     timestamp: string;
     method: 'sms' | 'email';
@@ -7805,30 +7806,49 @@ function MoveWalkthroughContent() {
 
                     console.log(`Quote sent successfully to ${formData.firstName}. URL: ${result.quoteUrl}`);
 
-                    // Record successful send
+                    // Store the quote URL
+                    if (result.quoteUrl) {
+                      setSentQuoteUrl(result.quoteUrl);
+                    }
+
+                    const timestamp = new Date().toISOString();
+
+                    // Record SMS status
                     setSendHistory(prev => [...prev, {
-                      timestamp: new Date().toISOString(),
-                      method: result.method || 'sms', // Assume SMS for now
-                      status: 'success'
+                      timestamp,
+                      method: 'sms',
+                      status: result.sms?.sent ? 'success' : 'failed',
+                      error: result.sms?.error
                     }]);
 
-                    // Show "Sent" for 3 seconds
-                    setQuoteSent(true);
-                    setTimeout(() => {
-                      setQuoteSent(false);
-                    }, 3000);
+                    // Record Email status
+                    setSendHistory(prev => [...prev, {
+                      timestamp,
+                      method: 'email',
+                      status: result.email?.sent ? 'success' : 'failed',
+                      error: result.email?.error
+                    }]);
+
+                    // Show "Sent" for 3 seconds if at least SMS was successful
+                    if (result.sms?.sent) {
+                      setQuoteSent(true);
+                      setTimeout(() => {
+                        setQuoteSent(false);
+                      }, 3000);
+                    }
                   } catch (error) {
                     console.error('Send quote error:', error);
 
-                    // Record failed send
-                    setSendHistory(prev => [...prev, {
-                      timestamp: new Date().toISOString(),
-                      method: 'sms', // Assume SMS for now
-                      status: 'failed',
-                      error: error instanceof Error ? error.message : 'Failed to send quote'
-                    }]);
+                    const timestamp = new Date().toISOString();
+                    const errorMsg = error instanceof Error ? error.message : 'Failed to send quote';
 
-                    alert(error instanceof Error ? error.message : 'Failed to send quote. Please try again.');
+                    // Record failed sends for both
+                    setSendHistory(prev => [...prev,
+                      { timestamp, method: 'sms', status: 'failed', error: errorMsg },
+                      { timestamp, method: 'email', status: 'failed', error: errorMsg }
+                    ]);
+
+                    alert(errorMsg);
                   } finally {
                     setIsSendingQuote(false);
                   }
@@ -7841,6 +7861,32 @@ function MoveWalkthroughContent() {
                 }}
               >
                 {isSendingQuote ? 'Sending...' : (quoteSent ? 'Sent' : 'Send to Customer')}
+              </button>
+            </div>
+          </section>
+        )}
+
+        {/* Quote Link Display */}
+        {sentQuoteUrl && (
+          <section className="bg-blue-50 rounded-lg shadow p-4 border border-blue-200">
+            <h3 className="text-sm font-semibold text-blue-800 mb-2">Quote Link Sent</h3>
+            <div className="flex items-center gap-2">
+              <a
+                href={sentQuoteUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 text-sm underline break-all hover:text-blue-800"
+              >
+                {sentQuoteUrl}
+              </a>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText(sentQuoteUrl);
+                }}
+                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+              >
+                Copy
               </button>
             </div>
           </section>
