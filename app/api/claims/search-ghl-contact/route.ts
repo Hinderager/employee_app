@@ -25,9 +25,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Search for contact by phone
+    // Search for contact by phone using the general contacts search endpoint
+    // The query parameter searches across phone numbers
     const searchResponse = await fetch(
-      `${GHL_API_BASE}/contacts/search/duplicate?locationId=${GHL_LOCATION_ID}&phone=${normalizedPhone}`,
+      `${GHL_API_BASE}/contacts/?locationId=${GHL_LOCATION_ID}&query=${normalizedPhone}&limit=10`,
       {
         headers: {
           Authorization: `Bearer ${GHL_API_KEY}`,
@@ -38,8 +39,14 @@ export async function POST(request: NextRequest) {
 
     const searchResult = await searchResponse.json();
 
-    if (searchResult.contacts && searchResult.contacts.length > 0) {
-      const contact = searchResult.contacts[0];
+    // Filter results to find contacts where the phone actually matches
+    const matchingContacts = (searchResult.contacts || []).filter((c: { phone?: string }) => {
+      const contactPhone = (c.phone || "").replace(/\D/g, "");
+      return contactPhone.endsWith(normalizedPhone) || normalizedPhone.endsWith(contactPhone);
+    });
+
+    if (matchingContacts.length > 0) {
+      const contact = matchingContacts[0];
       console.log("[search-ghl-contact] Found contact:", contact.id, contact);
 
       // Build full address from GHL contact fields

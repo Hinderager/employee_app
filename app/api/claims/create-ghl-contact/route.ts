@@ -23,10 +23,10 @@ export async function POST(request: NextRequest) {
     // Normalize phone number
     const normalizedPhone = phone ? phone.replace(/\D/g, "") : "";
 
-    // Check if contact already exists by phone
+    // Check if contact already exists by phone using general contacts search
     if (normalizedPhone) {
       const searchResponse = await fetch(
-        `${GHL_API_BASE}/contacts/search/duplicate?locationId=${GHL_LOCATION_ID}&phone=${normalizedPhone}`,
+        `${GHL_API_BASE}/contacts/?locationId=${GHL_LOCATION_ID}&query=${normalizedPhone}&limit=10`,
         {
           headers: {
             Authorization: `Bearer ${GHL_API_KEY}`,
@@ -37,9 +37,15 @@ export async function POST(request: NextRequest) {
 
       const searchResult = await searchResponse.json();
 
-      if (searchResult.contacts && searchResult.contacts.length > 0) {
+      // Filter to find exact phone matches
+      const matchingContacts = (searchResult.contacts || []).filter((c: { phone?: string }) => {
+        const contactPhone = (c.phone || "").replace(/\D/g, "");
+        return contactPhone.endsWith(normalizedPhone) || normalizedPhone.endsWith(contactPhone);
+      });
+
+      if (matchingContacts.length > 0) {
         // Contact exists, return existing ID
-        const existingContact = searchResult.contacts[0];
+        const existingContact = matchingContacts[0];
         console.log("[create-ghl-contact] Found existing contact:", existingContact.id);
         return NextResponse.json({
           success: true,
