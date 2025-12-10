@@ -12,6 +12,7 @@ import {
   TruckIcon,
   ClipboardDocumentListIcon,
   ExclamationTriangleIcon,
+  ExclamationCircleIcon,
 } from "@heroicons/react/24/outline";
 
 const menuItems = [
@@ -77,6 +78,13 @@ const menuItems = [
     href: "/move-wt",
     icon: TruckIcon,
     color: "bg-red-500",
+  },
+  {
+    title: "Claims",
+    description: "Damage claims",
+    href: "/claims",
+    icon: ExclamationCircleIcon,
+    color: "bg-rose-500",
   },
 ];
 
