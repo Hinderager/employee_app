@@ -1330,19 +1330,19 @@ export default function ClaimsPage() {
                   />
                 </div>
 
-                {/* Contact is Customer Checkbox */}
+                {/* Use Different Contact Checkbox */}
                 <div className="flex items-center gap-3 py-2">
                   <input
                     type="checkbox"
-                    id="contact_is_customer"
-                    checked={newClaimForm.contact_is_customer}
+                    id="use_different_contact"
+                    checked={!newClaimForm.contact_is_customer}
                     onChange={(e) =>
-                      setNewClaimForm({ ...newClaimForm, contact_is_customer: e.target.checked })
+                      setNewClaimForm({ ...newClaimForm, contact_is_customer: !e.target.checked })
                     }
                     className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                   />
-                  <label htmlFor="contact_is_customer" className="text-sm font-medium text-gray-700">
-                    Contact is the customer
+                  <label htmlFor="use_different_contact" className="text-sm font-medium text-gray-700">
+                    Use different contact
                   </label>
                 </div>
 
