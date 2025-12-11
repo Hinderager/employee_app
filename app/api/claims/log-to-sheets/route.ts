@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
       refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
     });
 
+    // Refresh the access token
+    await oauth2Client.getAccessToken();
+
     const sheets = google.sheets({ version: "v4", auth: oauth2Client });
 
     // Append row to sheet (columns B, C, D, E starting from row 3 since headers in row 2)
@@ -41,10 +44,22 @@ export async function POST(request: NextRequest) {
     console.log("[log-to-sheets] Added row:", { date, claimId, customerName, amountSpent });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
-    console.error("[log-to-sheets] Error:", error);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("[log-to-sheets] Error:", errorMessage);
+
+    // Check for common issues and provide helpful messages
+    let userMessage = "Failed to log to Google Sheets";
+    if (errorMessage.includes("API has not been used") || errorMessage.includes("is disabled")) {
+      userMessage = "Google Sheets API not enabled. Enable it at: https://console.developers.google.com/apis/api/sheets.googleapis.com/overview";
+    } else if (errorMessage.includes("invalid_grant") || errorMessage.includes("Token has been expired")) {
+      userMessage = "Google OAuth token expired. Re-authenticate with Google.";
+    } else if (errorMessage.includes("PERMISSION_DENIED")) {
+      userMessage = "Permission denied. Check that the Google account has access to the spreadsheet.";
+    }
+
     return NextResponse.json(
-      { success: false, error: "Failed to log to Google Sheets" },
+      { success: false, error: userMessage, details: errorMessage },
       { status: 500 }
     );
   }

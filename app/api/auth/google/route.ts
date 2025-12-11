@@ -16,6 +16,7 @@ export async function GET() {
       access_type: 'offline', // Request refresh token
       scope: [
         'https://www.googleapis.com/auth/drive', // Access to create and manage files
+        'https://www.googleapis.com/auth/spreadsheets', // Access to read/write spreadsheets
       ],
       prompt: 'consent', // Force consent screen to get refresh token
     });

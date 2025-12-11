@@ -66,6 +66,9 @@ export async function POST(request: NextRequest) {
       refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
     });
 
+    // Refresh the access token
+    await oauth2Client.getAccessToken();
+
     const drive = google.drive({ version: "v3", auth: oauth2Client });
 
     // Create Claims folder structure: Pictures > Claims Photos > [CLM-XXXX]

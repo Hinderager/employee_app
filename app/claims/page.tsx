@@ -93,6 +93,9 @@ export default function ClaimsPage() {
   const [claimPhotos, setClaimPhotos] = useState<ClaimPhoto[]>([]);
   const [updatePhotos, setUpdatePhotos] = useState<ClaimPhoto[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [editingContact, setEditingContact] = useState(false);
+  const [editContactName, setEditContactName] = useState("");
+  const [editContactPhone, setEditContactPhone] = useState("");
 
   const claimFileInputRef = useRef<HTMLInputElement>(null);
   const claimCameraInputRef = useRef<HTMLInputElement>(null);
@@ -207,6 +210,7 @@ export default function ClaimsPage() {
     setSelectedClaim(null);
     setShowAddUpdate(false);
     setEditingUpdate(null);
+    setEditingContact(false);
     // Clear any pending update photos
     updatePhotos.forEach((p) => URL.revokeObjectURL(p.preview));
     setUpdatePhotos([]);
@@ -223,7 +227,7 @@ export default function ClaimsPage() {
         year: "numeric",
       });
 
-      await fetch("/api/claims/log-to-sheets", {
+      const response = await fetch("/api/claims/log-to-sheets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -233,8 +237,15 @@ export default function ClaimsPage() {
           amountSpent,
         }),
       });
+
+      const result = await response.json();
+      if (!result.success) {
+        console.error("Failed to log to Google Sheets:", result.error, result.details);
+        alert(`Warning: Amount saved but failed to log to Google Sheets.\n\n${result.error}`);
+      }
     } catch (err) {
       console.error("Error logging to sheets:", err);
+      alert("Warning: Amount saved but failed to connect to Google Sheets API.");
     }
   };
 
@@ -591,6 +602,87 @@ export default function ClaimsPage() {
     }
   };
 
+  // Start editing alternate contact
+  const startEditContact = () => {
+    if (!selectedClaim) return;
+    setEditContactName(selectedClaim.contact_name || "");
+    setEditContactPhone(selectedClaim.contact_phone || "");
+    setEditingContact(true);
+  };
+
+  // Save edited alternate contact
+  const handleSaveContact = async () => {
+    if (!selectedClaim) return;
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("claims")
+        .update({
+          contact_name: editContactName.trim(),
+          contact_phone: editContactPhone.trim(),
+        })
+        .eq("id", selectedClaim.id);
+
+      if (error) {
+        console.error("Error updating contact:", error);
+        alert("Failed to update contact");
+        return;
+      }
+
+      setSelectedClaim({
+        ...selectedClaim,
+        contact_name: editContactName.trim(),
+        contact_phone: editContactPhone.trim(),
+      });
+      setEditingContact(false);
+      fetchClaims();
+    } catch (err) {
+      console.error("Error:", err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Delete alternate contact
+  const handleDeleteContact = async () => {
+    if (!selectedClaim) return;
+    if (!confirm("Remove alternate contact? The customer will be used as the contact.")) return;
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("claims")
+        .update({
+          contact_is_customer: true,
+          contact_name: "",
+          contact_phone: "",
+          contact_ghl_id: "",
+        })
+        .eq("id", selectedClaim.id);
+
+      if (error) {
+        console.error("Error deleting contact:", error);
+        alert("Failed to remove contact");
+        return;
+      }
+
+      setSelectedClaim({
+        ...selectedClaim,
+        contact_is_customer: true,
+        contact_name: "",
+        contact_phone: "",
+        contact_ghl_id: "",
+      });
+      setEditingContact(false);
+      fetchClaims();
+    } catch (err) {
+      console.error("Error:", err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Get GHL contact link
   const getGHLLink = (contactId: string) => {
     return `https://app.gohighlevel.com/v2/location/${GHL_LOCATION_ID}/contacts/detail/${contactId}`;
@@ -810,8 +902,15 @@ export default function ClaimsPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
                     <h3 className="font-semibold text-gray-900">
-                      {claim.customer_name}
+                      {!claim.contact_is_customer && claim.contact_name
+                        ? claim.contact_name
+                        : claim.customer_name}
                     </h3>
+                    {!claim.contact_is_customer && claim.contact_name && (
+                      <p className="text-xs text-gray-400">
+                        Customer: {claim.customer_name}
+                      </p>
+                    )}
                     <p className="text-sm text-gray-500">
                       {formatDate(claim.created_at)}
                     </p>
@@ -919,34 +1018,91 @@ export default function ClaimsPage() {
               {/* Alternate Contact Info (if different from customer) */}
               {!selectedClaim.contact_is_customer && selectedClaim.contact_name && (
                 <div className="bg-white rounded-xl p-4 space-y-3">
-                  <h3 className="font-semibold text-gray-900">Alternate Contact</h3>
-
-                  <div className="text-gray-700 font-medium">
-                    {selectedClaim.contact_name}
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">Alternate Contact</h3>
+                    {!editingContact && (
+                      <button
+                        onClick={startEditContact}
+                        className="text-blue-600 text-sm font-medium"
+                      >
+                        Edit
+                      </button>
+                    )}
                   </div>
 
-                  {selectedClaim.contact_phone && (
-                    <div className="flex items-center gap-3">
-                      <PhoneIcon className="h-5 w-5 text-gray-400" />
-                      <a
-                        href={`tel:${selectedClaim.contact_phone}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        {selectedClaim.contact_phone}
-                      </a>
+                  {editingContact ? (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Name</label>
+                        <input
+                          type="text"
+                          value={editContactName}
+                          onChange={(e) => setEditContactName(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                        <input
+                          type="tel"
+                          value={editContactPhone}
+                          onChange={(e) => setEditContactPhone(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={handleSaveContact}
+                          disabled={!editContactName.trim() || submitting}
+                          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {submitting ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          onClick={() => setEditingContact(false)}
+                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          onClick={handleDeleteContact}
+                          disabled={submitting}
+                          className="px-4 py-2 bg-red-100 text-red-600 rounded-lg font-medium hover:bg-red-200 transition-colors"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     </div>
-                  )}
+                  ) : (
+                    <>
+                      <div className="text-gray-700 font-medium">
+                        {selectedClaim.contact_name}
+                      </div>
 
-                  {/* Contact GHL Button */}
-                  {selectedClaim.contact_ghl_id && (
-                    <a
-                      href={getGHLLink(selectedClaim.contact_ghl_id)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block w-full bg-orange-500 text-white text-center py-3 rounded-xl font-semibold hover:bg-orange-600 transition-colors"
-                    >
-                      Contact in GoHighLevel
-                    </a>
+                      {selectedClaim.contact_phone && (
+                        <div className="flex items-center gap-3">
+                          <PhoneIcon className="h-5 w-5 text-gray-400" />
+                          <a
+                            href={`tel:${selectedClaim.contact_phone}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            {selectedClaim.contact_phone}
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Contact GHL Button */}
+                      {selectedClaim.contact_ghl_id && (
+                        <a
+                          href={getGHLLink(selectedClaim.contact_ghl_id)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block w-full bg-orange-500 text-white text-center py-3 rounded-xl font-semibold hover:bg-orange-600 transition-colors"
+                        >
+                          Contact in GoHighLevel
+                        </a>
+                      )}
+                    </>
                   )}
                 </div>
               )}
@@ -1204,16 +1360,6 @@ export default function ClaimsPage() {
                   <p className="text-gray-500 text-sm">No updates yet</p>
                 )}
               </div>
-            </div>
-
-            {/* Modal Footer - Call Button */}
-            <div className="bg-white border-t border-gray-200 p-4 flex-shrink-0">
-              <a
-                href={`tel:${selectedClaim.phone}`}
-                className="block w-full bg-green-600 text-white text-center py-3 rounded-xl font-semibold hover:bg-green-700 transition-colors"
-              >
-                Call {selectedClaim.customer_name.split(" ")[0]}
-              </a>
             </div>
           </div>
         </div>

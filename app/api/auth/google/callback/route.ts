@@ -35,6 +35,14 @@ export async function GET(request: NextRequest) {
     // Exchange authorization code for tokens
     const { tokens } = await oauth2Client.getToken(code);
 
+    // Log refresh token so it can be saved to .env.local
+    if (tokens.refresh_token) {
+      console.log('\n========================================');
+      console.log('NEW REFRESH TOKEN - Save this to .env.local:');
+      console.log('GOOGLE_REFRESH_TOKEN="' + tokens.refresh_token + '"');
+      console.log('========================================\n');
+    }
+
     // Store tokens in HTTP-only cookies for security
     const cookieStore = cookies();
 
