@@ -567,6 +567,47 @@ export default function ClaimsPage() {
     });
   };
 
+  // Compress image to WebP at 30% resolution
+  const compressImage = async (file: File): Promise<File> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        // Resize to 30% of original dimensions
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(img.width * 0.3);
+        canvas.height = Math.round(img.height * 0.3);
+
+        const ctx = canvas.getContext("2d");
+        if (!ctx) {
+          resolve(file); // Fallback to original if canvas fails
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File(
+                [blob],
+                file.name.replace(/\.[^.]+$/, ".webp"),
+                { type: "image/webp" }
+              );
+              console.log(`[compressImage] ${file.name}: ${(file.size/1024).toFixed(0)}KB -> ${(blob.size/1024).toFixed(0)}KB (${Math.round(blob.size/file.size*100)}%)`);
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          "image/webp",
+          0.85 // Quality 85% for WebP
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = URL.createObjectURL(file);
+    });
+  };
+
   // Upload photos to Supabase Storage
   const uploadPhotos = async (
     photos: LocalClaimPhoto[],
@@ -576,12 +617,17 @@ export default function ClaimsPage() {
   ): Promise<string[]> => {
     if (photos.length === 0) return [];
 
+    // Compress all photos before upload
+    const compressedFiles = await Promise.all(
+      photos.map((photo) => compressImage(photo.file))
+    );
+
     const formData = new FormData();
     formData.append("claimNumber", claimNumber);
     if (claimId) formData.append("claimId", claimId);
     if (updateId) formData.append("updateId", updateId);
-    photos.forEach((photo) => {
-      formData.append("files", photo.file);
+    compressedFiles.forEach((file) => {
+      formData.append("files", file);
     });
 
     try {
