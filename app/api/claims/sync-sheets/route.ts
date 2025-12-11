@@ -5,10 +5,10 @@ import { createClient } from "@supabase/supabase-js";
 const SPREADSHEET_ID = "1JqnB9FJ_2iYdpNKfSLhmgiZw1iVXv-8P8uBeVcmv2zc";
 const SHEET_NAME = "Sheet1";
 
-// Initialize Supabase client (Employee App Supabase)
+// Initialize Supabase client (Employee App Claims Supabase)
 const supabase = createClient(
-  process.env.EMPLOYEE_APP_SUPABASE_URL || process.env.SUPABASE_URL!,
-  process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY!
+  process.env.EMPLOYEE_APP_CLAIMS_SUPABASE_URL || process.env.SUPABASE_URL!,
+  process.env.EMPLOYEE_APP_CLAIMS_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY!
 );
 
 export async function POST(request: NextRequest) {
