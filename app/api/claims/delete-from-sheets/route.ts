@@ -47,19 +47,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get all data from the sheet (columns B through E, starting from row 3)
+    // Get all data from the sheet (columns B through F, starting from row 3)
+    // New column layout: B=Status, C=Date, D=ClaimId, E=CustomerName, F=Amount
     const response = await sheets.spreadsheets.values.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!B3:E`,
+      range: `${SHEET_NAME}!B3:F`,
     });
 
     const rows = response.data.values || [];
 
-    // Find row indices that match the claim number (column C is index 1 in this range)
+    // Find row indices that match the claim number (column D is index 2 in this range)
     // Rows are 0-indexed in the array, but we need to add 3 to get the actual row number (header + offset)
     const rowsToDelete: number[] = [];
     rows.forEach((row, index) => {
-      if (row[1] === claimNumber) {
+      if (row[2] === claimNumber) {
         // Row number in sheet = index + 3 (since we start from row 3)
         rowsToDelete.push(index + 3);
       }

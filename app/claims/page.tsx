@@ -14,10 +14,23 @@ import {
 } from "@heroicons/react/24/outline";
 import { createClient } from "@/lib/supabase-client";
 
-interface ClaimPhoto {
+// Local photo state (for uploads before saving)
+interface LocalClaimPhoto {
   id: string;
   file: File;
   preview: string;
+}
+
+// Database stored photo
+interface StoredClaimPhoto {
+  id: string;
+  claim_id: string;
+  update_id: string | null;
+  storage_path: string;
+  file_name: string;
+  file_type: string | null;
+  file_size: number | null;
+  created_at: string;
 }
 
 interface ClaimUpdate {
@@ -27,6 +40,7 @@ interface ClaimUpdate {
   amount_spent: number;
   created_by: string;
   created_at: string;
+  sheets_done?: boolean;
 }
 
 interface Claim {
@@ -47,6 +61,7 @@ interface Claim {
   created_at: string;
   updated_at: string;
   claim_updates?: ClaimUpdate[];
+  claim_photos?: StoredClaimPhoto[];
 }
 
 const GHL_LOCATION_ID = "YhoyYQ8IA9po8T9NeyvQ";
@@ -98,8 +113,8 @@ export default function ClaimsPage() {
     email: string;
     address: string;
   } | null>(null);
-  const [claimPhotos, setClaimPhotos] = useState<ClaimPhoto[]>([]);
-  const [updatePhotos, setUpdatePhotos] = useState<ClaimPhoto[]>([]);
+  const [claimPhotos, setClaimPhotos] = useState<LocalClaimPhoto[]>([]);
+  const [updatePhotos, setUpdatePhotos] = useState<LocalClaimPhoto[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const [editContactName, setEditContactName] = useState("");
@@ -121,7 +136,8 @@ export default function ClaimsPage() {
         .from("claims")
         .select(`
           *,
-          claim_updates (*)
+          claim_updates (*),
+          claim_photos (*)
         `)
         .order("created_at", { ascending: false });
 
@@ -207,30 +223,15 @@ export default function ClaimsPage() {
     }).format(amount);
   };
 
-  // Extract photo URLs from claim updates
-  const getClaimPhotos = (claim: Claim): string[] => {
-    const photos: string[] = [];
-    if (claim.claim_updates) {
-      claim.claim_updates.forEach((update) => {
-        // Look for "Photos: url1, url2" pattern in notes
-        const photosMatch = update.note.match(/Photos:\s*(.+)$/);
-        if (photosMatch) {
-          const urls = photosMatch[1].split(",").map((url) => url.trim());
-          photos.push(...urls);
-        }
-      });
-    }
-    return photos;
+  // Get Supabase storage URL for a claim photo
+  const getSupabasePhotoUrl = (storagePath: string): string => {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://jvflufcpcxlsnszlvolj.supabase.co";
+    return `${supabaseUrl}/storage/v1/object/public/claim-photos/${storagePath}`;
   };
 
-  // Convert Google Drive view URL to thumbnail URL
-  const getDriveThumbnailUrl = (viewUrl: string): string => {
-    // Extract file ID from various Google Drive URL formats
-    const match = viewUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (match) {
-      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
-    }
-    return viewUrl;
+  // Get all photos for a claim from Supabase
+  const getClaimStoredPhotos = (claim: Claim): StoredClaimPhoto[] => {
+    return claim.claim_photos || [];
   };
 
   // Open claim detail
@@ -293,30 +294,31 @@ export default function ClaimsPage() {
     setSubmitting(true);
     try {
       const amountValue = parseFloat(newAmount) || 0;
+      const claimNumber = selectedClaim.claim_number || `CLM-${selectedClaim.id.slice(0, 8)}`;
 
-      // Upload photos if any
-      let photoNote = newNote.trim();
-      if (updatePhotos.length > 0) {
-        setUploadingPhotos(true);
-        const claimNumber = selectedClaim.claim_number || `CLM-${selectedClaim.id.slice(0, 8)}`;
-        const photoUrls = await uploadPhotos(updatePhotos, claimNumber);
-        if (photoUrls.length > 0) {
-          photoNote += `\n\nPhotos: ${photoUrls.join(", ")}`;
-        }
-        setUploadingPhotos(false);
-      }
+      // First create the update to get its ID
+      const { data: newUpdate, error } = await supabase
+        .from("claim_updates")
+        .insert({
+          claim_id: selectedClaim.id,
+          note: newNote.trim(),
+          amount_spent: amountValue,
+          created_by: "Employee",
+        })
+        .select()
+        .single();
 
-      const { error } = await supabase.from("claim_updates").insert({
-        claim_id: selectedClaim.id,
-        note: photoNote,
-        amount_spent: amountValue,
-        created_by: "Employee",
-      });
-
-      if (error) {
+      if (error || !newUpdate) {
         console.error("Error adding update:", error);
         alert("Failed to add update");
         return;
+      }
+
+      // Upload photos if any (with claimId and updateId)
+      if (updatePhotos.length > 0) {
+        setUploadingPhotos(true);
+        await uploadPhotos(updatePhotos, claimNumber, selectedClaim.id, newUpdate.id);
+        setUploadingPhotos(false);
       }
 
       // Update total amount spent in claims table
@@ -536,7 +538,7 @@ export default function ClaimsPage() {
     const files = e.target.files;
     if (!files) return;
 
-    const newPhotos: ClaimPhoto[] = [];
+    const newPhotos: LocalClaimPhoto[] = [];
     Array.from(files).forEach((file) => {
       if (file.type.startsWith("image/")) {
         newPhotos.push({
@@ -555,7 +557,7 @@ export default function ClaimsPage() {
     const files = e.target.files;
     if (!files) return;
 
-    const newPhotos: ClaimPhoto[] = [];
+    const newPhotos: LocalClaimPhoto[] = [];
     Array.from(files).forEach((file) => {
       if (file.type.startsWith("image/")) {
         newPhotos.push({
@@ -587,12 +589,19 @@ export default function ClaimsPage() {
     });
   };
 
-  // Upload photos to Google Drive
-  const uploadPhotos = async (photos: ClaimPhoto[], claimNumber: string): Promise<string[]> => {
+  // Upload photos to Supabase Storage
+  const uploadPhotos = async (
+    photos: LocalClaimPhoto[],
+    claimNumber: string,
+    claimId?: string,
+    updateId?: string
+  ): Promise<string[]> => {
     if (photos.length === 0) return [];
 
     const formData = new FormData();
     formData.append("claimNumber", claimNumber);
+    if (claimId) formData.append("claimId", claimId);
+    if (updateId) formData.append("updateId", updateId);
     photos.forEach((photo) => {
       formData.append("files", photo.file);
     });
@@ -1075,18 +1084,10 @@ export default function ClaimsPage() {
         await logToSheets(claimNumber, finalName, initialAmount);
       }
 
-      // Upload photos if any
-      if (claimPhotos.length > 0) {
+      // Upload photos if any (with claimId for Supabase storage)
+      if (claimPhotos.length > 0 && newClaim) {
         setUploadingPhotos(true);
-        const uploadResult = await uploadPhotos(claimPhotos, claimNumber);
-        if (uploadResult.length > 0) {
-          // Update claim with photos folder URL
-          const folderUrl = `https://drive.google.com/drive/folders/${claimNumber}`;
-          await supabase
-            .from("claims")
-            .update({ photos_folder_url: folderUrl })
-            .eq("claim_number", claimNumber);
-        }
+        await uploadPhotos(claimPhotos, claimNumber, newClaim.id);
         setUploadingPhotos(false);
       }
 
@@ -1663,23 +1664,23 @@ export default function ClaimsPage() {
               </div>
 
               {/* Photos Section */}
-              {getClaimPhotos(selectedClaim).length > 0 && (
+              {getClaimStoredPhotos(selectedClaim).length > 0 && (
                 <div className="bg-white rounded-xl p-4">
                   <h3 className="font-semibold text-gray-900 mb-3">
-                    Photos ({getClaimPhotos(selectedClaim).length})
+                    Photos ({getClaimStoredPhotos(selectedClaim).length})
                   </h3>
                   <div className="grid grid-cols-3 gap-2">
-                    {getClaimPhotos(selectedClaim).map((url, index) => (
+                    {getClaimStoredPhotos(selectedClaim).map((photo) => (
                       <a
-                        key={index}
-                        href={url}
+                        key={photo.id}
+                        href={getSupabasePhotoUrl(photo.storage_path)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="block aspect-square rounded-lg overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity"
                       >
                         <img
-                          src={getDriveThumbnailUrl(url)}
-                          alt={`Claim photo ${index + 1}`}
+                          src={getSupabasePhotoUrl(photo.storage_path)}
+                          alt={photo.file_name}
                           className="w-full h-full object-cover"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' /%3E%3C/svg%3E";

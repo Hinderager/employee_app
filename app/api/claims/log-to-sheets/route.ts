@@ -6,7 +6,7 @@ const SHEET_NAME = "Sheet1";
 
 export async function POST(request: NextRequest) {
   try {
-    const { date, claimId, customerName, amountSpent } = await request.json();
+    const { date, claimId, customerName, amountSpent, updateId } = await request.json();
 
     if (!date || !claimId || !customerName || amountSpent === undefined) {
       return NextResponse.json(
@@ -67,19 +67,58 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Now update the new row 3 with our data (columns B, C, D, E)
+    // Now update the new row 3 with our data
+    // Column layout: B=Status, C=Date, D=ClaimId, E=CustomerName, F=Amount
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!B3:E3`,
+      range: `${SHEET_NAME}!B3:F3`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [[date, claimId, customerName, amountSpent]],
+        values: [["New", date, claimId, customerName, amountSpent]],
       },
     });
 
-    console.log("[log-to-sheets] Inserted row at top:", { date, claimId, customerName, amountSpent });
+    // Add data validation dropdown for the Status cell (B3)
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            setDataValidation: {
+              range: {
+                sheetId: sheetId,
+                startRowIndex: 2, // Row 3 (0-indexed)
+                endRowIndex: 3,
+                startColumnIndex: 1, // Column B (0-indexed)
+                endColumnIndex: 2,
+              },
+              rule: {
+                condition: {
+                  type: "ONE_OF_LIST",
+                  values: [
+                    { userEnteredValue: "New" },
+                    { userEnteredValue: "Done" },
+                  ],
+                },
+                showCustomUi: true,
+                strict: true,
+              },
+            },
+          },
+        ],
+      },
+    });
 
-    return NextResponse.json({ success: true });
+    console.log("[log-to-sheets] Inserted row at top:", {
+      status: "New",
+      date,
+      claimId,
+      customerName,
+      amountSpent,
+      updateId,
+    });
+
+    return NextResponse.json({ success: true, rowNumber: 3 });
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("[log-to-sheets] Error:", errorMessage);

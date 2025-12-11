@@ -1,52 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
-import { google } from "googleapis";
-import { Readable } from "stream";
+import { createClient } from "@supabase/supabase-js";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Claims photos folder in Google Drive
-const CLAIMS_FOLDER_ID = "1aDVWwz_DFbLiImO-3FB_LAML7OKXUjiL"; // Pictures folder - will create subfolder
-
-function bufferToStream(buffer: Buffer): Readable {
-  const stream = new Readable();
-  stream.push(buffer);
-  stream.push(null);
-  return stream;
-}
-
-async function getOrCreateFolder(
-  drive: ReturnType<typeof google.drive>,
-  parentId: string,
-  folderName: string
-): Promise<string> {
-  // Search for existing folder
-  const search = await drive.files.list({
-    q: `name='${folderName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
-    fields: "files(id, name)",
-  });
-
-  if (search.data.files && search.data.files.length > 0) {
-    return search.data.files[0].id!;
-  }
-
-  // Create new folder
-  const folder = await drive.files.create({
-    requestBody: {
-      name: folderName,
-      mimeType: "application/vnd.google-apps.folder",
-      parents: [parentId],
-    },
-    fields: "id",
-  });
-
-  return folder.data.id!;
-}
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!
+);
 
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const claimNumber = formData.get("claimNumber") as string;
+    const claimId = formData.get("claimId") as string | null;
+    const updateId = formData.get("updateId") as string | null;
     const files = formData.getAll("files") as File[];
 
     if (!files || files.length === 0) {
@@ -56,62 +25,85 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Set up Google Drive API
-    const oauth2Client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET
-    );
-
-    oauth2Client.setCredentials({
-      refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
-    });
-
-    // Refresh the access token
-    await oauth2Client.getAccessToken();
-
-    const drive = google.drive({ version: "v3", auth: oauth2Client });
-
-    // Create Claims folder structure: Pictures > Claims Photos > [CLM-XXXX]
-    const claimsParentFolderId = await getOrCreateFolder(drive, CLAIMS_FOLDER_ID, "Claims Photos");
-    const claimFolderId = await getOrCreateFolder(drive, claimsParentFolderId, claimNumber || "Uncategorized");
-
     const photoUrls: string[] = [];
+    const photoRecords: Array<{
+      claim_id?: string;
+      update_id?: string;
+      storage_path: string;
+      file_name: string;
+      file_type: string;
+      file_size: number;
+    }> = [];
 
-    // Upload each file
+    // Upload each file to Supabase Storage
     for (const file of files) {
       const buffer = Buffer.from(await file.arrayBuffer());
-      const stream = bufferToStream(buffer);
-
       const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-      const fileName = `${claimNumber}_${timestamp}_${file.name}`;
+      const sanitizedName = file.name.replace(/[^a-zA-Z0-9.-]/g, "_");
+      const fileName = `${claimNumber}/${timestamp}_${sanitizedName}`;
 
-      const uploadedFile = await drive.files.create({
-        requestBody: {
-          name: fileName,
-          parents: [claimFolderId],
-        },
-        media: {
-          mimeType: file.type,
-          body: stream,
-        },
-        fields: "id, name, webViewLink, webContentLink",
-      });
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
+        .from("claim-photos")
+        .upload(fileName, buffer, {
+          contentType: file.type,
+          upsert: false,
+        });
 
-      if (uploadedFile.data.webViewLink) {
-        photoUrls.push(uploadedFile.data.webViewLink);
+      if (uploadError) {
+        console.error("[upload-photos] Storage upload error:", uploadError);
+        continue; // Skip this file but continue with others
+      }
+
+      // Get public URL
+      const { data: urlData } = supabase.storage
+        .from("claim-photos")
+        .getPublicUrl(fileName);
+
+      if (urlData?.publicUrl) {
+        photoUrls.push(urlData.publicUrl);
+
+        // Prepare record for claim_photos table
+        photoRecords.push({
+          claim_id: claimId || undefined,
+          update_id: updateId || undefined,
+          storage_path: fileName,
+          file_name: file.name,
+          file_type: file.type,
+          file_size: buffer.length,
+        });
       }
     }
 
-    // Get folder URL
-    const folderUrl = `https://drive.google.com/drive/folders/${claimFolderId}`;
+    // Insert photo records into claim_photos table
+    if (photoRecords.length > 0 && claimId) {
+      const recordsToInsert = photoRecords.map((r) => ({
+        ...r,
+        claim_id: claimId,
+        update_id: updateId || null,
+      }));
 
-    console.log("[upload-photos] Uploaded", files.length, "photos for claim", claimNumber);
+      const { error: insertError } = await supabase
+        .from("claim_photos")
+        .insert(recordsToInsert);
+
+      if (insertError) {
+        console.error("[upload-photos] DB insert error:", insertError);
+        // Photos are uploaded, just failed to record - not fatal
+      }
+    }
+
+    console.log(
+      "[upload-photos] Uploaded",
+      photoUrls.length,
+      "photos for claim",
+      claimNumber
+    );
 
     return NextResponse.json({
       success: true,
       photoUrls,
-      folderUrl,
-      folderId: claimFolderId,
+      count: photoUrls.length,
     });
   } catch (error) {
     console.error("[upload-photos] Error:", error);
