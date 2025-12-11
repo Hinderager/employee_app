@@ -898,12 +898,12 @@ export default function ClaimsPage() {
   };
 
   // Create GHL contact (for alternate contacts)
-  const createGHLContact = async (name: string, phone: string, email?: string) => {
+  const createGHLContact = async (name: string, phone: string, email?: string, address?: string) => {
     try {
       const response = await fetch("/api/claims/create-ghl-contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, phone, email }),
+        body: JSON.stringify({ name, phone, email, address }),
       });
       const result = await response.json();
       if (result.success && result.contactId) {
@@ -981,17 +981,36 @@ export default function ClaimsPage() {
       if (!customerGhlId) {
         const customerGhl = await searchGHLContact(newClaimForm.phone.trim());
         if (!customerGhl.found) {
-          alert("GHL contact not found for this phone number. Please use the Find button to create a contact first.");
-          setCreatingClaim(false);
-          return;
+          // No contact found - create a new one with form data
+          const newContactId = await createGHLContact(
+            newClaimForm.customer_name.trim(),
+            newClaimForm.phone.trim(),
+            newClaimForm.email?.trim(),
+            newClaimForm.address?.trim()
+          );
+          if (newContactId) {
+            customerGhlId = newContactId;
+            ghlContactData = {
+              contactId: newContactId,
+              contactName: newClaimForm.customer_name.trim(),
+              email: newClaimForm.email?.trim() || "",
+              address: newClaimForm.address?.trim() || "",
+            };
+          } else {
+            alert("Failed to create GHL contact. Please try again.");
+            setCreatingClaim(false);
+            return;
+          }
+        } else {
+          // Contact found - store the data
+          customerGhlId = customerGhl.contactId!;
+          ghlContactData = {
+            contactId: customerGhlId,
+            contactName: customerGhl.contactName,
+            email: customerGhl.email,
+            address: customerGhl.address,
+          };
         }
-        customerGhlId = customerGhl.contactId!;
-        ghlContactData = {
-          contactId: customerGhlId,
-          contactName: customerGhl.contactName,
-          email: customerGhl.email,
-          address: customerGhl.address,
-        };
       }
 
       // Check for mismatch between form and GHL data (only if not already confirmed)
