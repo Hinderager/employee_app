@@ -9,6 +9,7 @@ import {
   MapPinIcon,
   PlusIcon,
   ChevronRightIcon,
+  ChevronLeftIcon,
   CameraIcon,
   PhotoIcon,
 } from "@heroicons/react/24/outline";
@@ -127,6 +128,11 @@ export default function ClaimsPage() {
   const updateFileInputRef = useRef<HTMLInputElement>(null);
   const updateCameraInputRef = useRef<HTMLInputElement>(null);
 
+  // Photo viewer state
+  const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null);
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+
   const supabase = createClient();
 
   // Fetch claims
@@ -209,6 +215,50 @@ export default function ClaimsPage() {
   // Get all photos for a claim from Supabase
   const getClaimStoredPhotos = (claim: Claim): StoredClaimPhoto[] => {
     return claim.claim_photos || [];
+  };
+
+  // Photo viewer handlers
+  const openPhotoViewer = (index: number) => {
+    setViewingPhotoIndex(index);
+  };
+
+  const closePhotoViewer = () => {
+    setViewingPhotoIndex(null);
+    touchStartX.current = null;
+    touchEndX.current = null;
+  };
+
+  const navigatePhoto = (direction: "prev" | "next") => {
+    if (!selectedClaim || viewingPhotoIndex === null) return;
+    const photos = getClaimStoredPhotos(selectedClaim);
+    if (direction === "prev") {
+      setViewingPhotoIndex(viewingPhotoIndex === 0 ? photos.length - 1 : viewingPhotoIndex - 1);
+    } else {
+      setViewingPhotoIndex(viewingPhotoIndex === photos.length - 1 ? 0 : viewingPhotoIndex + 1);
+    }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    touchEndX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchEnd = () => {
+    if (!touchStartX.current || !touchEndX.current) return;
+    const diff = touchStartX.current - touchEndX.current;
+    const minSwipeDistance = 50;
+    if (Math.abs(diff) > minSwipeDistance) {
+      if (diff > 0) {
+        navigatePhoto("next"); // Swipe left = next
+      } else {
+        navigatePhoto("prev"); // Swipe right = prev
+      }
+    }
+    touchStartX.current = null;
+    touchEndX.current = null;
   };
 
   // Open claim detail
@@ -1731,13 +1781,11 @@ export default function ClaimsPage() {
                 </h3>
                 {getClaimStoredPhotos(selectedClaim).length > 0 ? (
                   <div className="grid grid-cols-3 gap-2">
-                    {getClaimStoredPhotos(selectedClaim).map((photo) => (
-                      <a
+                    {getClaimStoredPhotos(selectedClaim).map((photo, index) => (
+                      <button
                         key={photo.id}
-                        href={getSupabasePhotoUrl(photo.storage_path)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block aspect-square rounded-lg overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity"
+                        onClick={() => openPhotoViewer(index)}
+                        className="block aspect-square rounded-lg overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity focus:ring-2 focus:ring-blue-500"
                       >
                         <img
                           src={getSupabasePhotoUrl(photo.storage_path)}
@@ -1747,7 +1795,7 @@ export default function ClaimsPage() {
                             (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' /%3E%3C/svg%3E";
                           }}
                         />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 ) : (
@@ -2068,6 +2116,72 @@ export default function ClaimsPage() {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Viewer Modal */}
+      {selectedClaim && viewingPhotoIndex !== null && (
+        <div
+          className="fixed inset-0 bg-black z-[60] flex items-center justify-center"
+          onClick={closePhotoViewer}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Close button */}
+          <button
+            onClick={closePhotoViewer}
+            className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white z-10 transition-colors"
+          >
+            <XMarkIcon className="h-6 w-6" />
+          </button>
+
+          {/* Photo counter */}
+          <div className="absolute top-4 left-4 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
+            {viewingPhotoIndex + 1} / {getClaimStoredPhotos(selectedClaim).length}
+          </div>
+
+          {/* Previous button */}
+          {getClaimStoredPhotos(selectedClaim).length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigatePhoto("prev");
+              }}
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+            >
+              <ChevronLeftIcon className="h-8 w-8" />
+            </button>
+          )}
+
+          {/* Photo */}
+          <img
+            src={getSupabasePhotoUrl(getClaimStoredPhotos(selectedClaim)[viewingPhotoIndex].storage_path)}
+            alt={getClaimStoredPhotos(selectedClaim)[viewingPhotoIndex].file_name}
+            className="max-w-full max-h-full object-contain p-4"
+            onClick={(e) => e.stopPropagation()}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' /%3E%3C/svg%3E";
+            }}
+          />
+
+          {/* Next button */}
+          {getClaimStoredPhotos(selectedClaim).length > 1 && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                navigatePhoto("next");
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+            >
+              <ChevronRightIcon className="h-8 w-8" />
+            </button>
+          )}
+
+          {/* Swipe hint (shown on mobile) */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 bg-black/50 rounded-full text-white text-xs sm:hidden">
+            Swipe to navigate
           </div>
         </div>
       )}
