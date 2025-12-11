@@ -96,6 +96,11 @@ interface WeekLocation {
   hours: string;
 }
 
+interface FourWDStatus {
+  status: 'required' | 'recommended' | 'mentioned' | 'none';
+  message: string;
+}
+
 export default function HazardousDropPage() {
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
@@ -109,6 +114,24 @@ export default function HazardousDropPage() {
   const [selectedCategory, setSelectedCategory] = useState<string>("paint");
   const [categoryLocations, setCategoryLocations] = useState<Location[]>([]);
   const [geocodingInProgress, setGeocodingInProgress] = useState(false);
+  const [fourWDStatus, setFourWDStatus] = useState<FourWDStatus | null>(null);
+  const [fourWDAlertDismissed, setFourWDAlertDismissed] = useState(false);
+
+  // Fetch 4WD status from Ada County Landfill on mount
+  useEffect(() => {
+    const fetch4WDStatus = async () => {
+      try {
+        const response = await fetch('/api/landfill-4wd');
+        const result = await response.json();
+        if (result.success) {
+          setFourWDStatus({ status: result.status, message: result.message });
+        }
+      } catch (err) {
+        console.error('Failed to fetch 4WD status:', err);
+      }
+    };
+    fetch4WDStatus();
+  }, []);
 
   // Set date on client side only to avoid hydration mismatch
   useEffect(() => {
@@ -416,6 +439,36 @@ export default function HazardousDropPage() {
           <h1 className="text-lg font-bold text-white">Drop Sites</h1>
         </div>
       </header>
+
+      {/* 4WD Alert Banner - shown at top when 4WD is recommended or required */}
+      {fourWDStatus && (fourWDStatus.status === 'required' || fourWDStatus.status === 'recommended') && !fourWDAlertDismissed && (
+        <div className={`px-4 py-3 ${fourWDStatus.status === 'required' ? 'bg-red-600' : 'bg-orange-500'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🚗</span>
+              <div>
+                <p className="text-white font-bold text-sm">
+                  {fourWDStatus.status === 'required' ? '4WD REQUIRED' : '4WD Recommended'}
+                </p>
+                <p className="text-white/90 text-xs">
+                  {fourWDStatus.status === 'required'
+                    ? 'Ada County Landfill requires 4-wheel drive today'
+                    : 'Ada County Landfill recommends 4-wheel drive today'}
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setFourWDAlertDismissed(true)}
+              className="text-white/80 hover:text-white p-1"
+              aria-label="Dismiss alert"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Category Tiles - at the top */}
       <div className="px-4 py-3 bg-gray-50 border-b border-gray-200">

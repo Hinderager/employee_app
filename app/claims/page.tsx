@@ -156,29 +156,6 @@ export default function ClaimsPage() {
 
   useEffect(() => {
     fetchClaims();
-
-    // Set up real-time subscription
-    const claimsChannel = supabase
-      .channel("claims-realtime")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "claims" },
-        () => {
-          fetchClaims();
-        }
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "claim_updates" },
-        () => {
-          fetchClaims();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(claimsChannel);
-    };
   }, []);
 
   // Calculate total spent for a claim
@@ -236,6 +213,7 @@ export default function ClaimsPage() {
 
   // Open claim detail
   const openClaimDetail = (claim: Claim) => {
+    console.log("[openClaimDetail] Claim photos:", claim.claim_photos);
     setSelectedClaim(claim);
     setShowAddUpdate(false);
     setNewNote("");
@@ -349,7 +327,7 @@ export default function ClaimsPage() {
       // Refresh selected claim
       const { data: updatedClaim } = await supabase
         .from("claims")
-        .select(`*, claim_updates (*)`)
+        .select(`*, claim_updates (*), claim_photos (*)`)
         .eq("id", selectedClaim.id)
         .single();
 
@@ -419,7 +397,7 @@ export default function ClaimsPage() {
       // Refresh selected claim
       const { data: updatedClaim } = await supabase
         .from("claims")
-        .select(`*, claim_updates (*)`)
+        .select(`*, claim_updates (*), claim_photos (*)`)
         .eq("id", selectedClaim.id)
         .single();
 
@@ -607,11 +585,13 @@ export default function ClaimsPage() {
     });
 
     try {
+      console.log("[uploadPhotos] Uploading", photos.length, "photos for claim:", claimNumber, "claimId:", claimId, "updateId:", updateId);
       const response = await fetch("/api/claims/upload-photos", {
         method: "POST",
         body: formData,
       });
       const result = await response.json();
+      console.log("[uploadPhotos] API response:", result);
       if (result.success) {
         return result.photoUrls || [];
       }
@@ -659,7 +639,7 @@ export default function ClaimsPage() {
       // Refresh selected claim
       const { data: updatedClaim } = await supabase
         .from("claims")
-        .select(`*, claim_updates (*)`)
+        .select(`*, claim_updates (*), claim_photos (*)`)
         .eq("id", selectedClaim.id)
         .single();
 
@@ -1683,11 +1663,11 @@ export default function ClaimsPage() {
               </div>
 
               {/* Photos Section */}
-              {getClaimStoredPhotos(selectedClaim).length > 0 && (
-                <div className="bg-white rounded-xl p-4">
-                  <h3 className="font-semibold text-gray-900 mb-3">
-                    Photos ({getClaimStoredPhotos(selectedClaim).length})
-                  </h3>
+              <div className="bg-white rounded-xl p-4">
+                <h3 className="font-semibold text-gray-900 mb-3">
+                  Photos ({getClaimStoredPhotos(selectedClaim).length})
+                </h3>
+                {getClaimStoredPhotos(selectedClaim).length > 0 ? (
                   <div className="grid grid-cols-3 gap-2">
                     {getClaimStoredPhotos(selectedClaim).map((photo) => (
                       <a
@@ -1708,8 +1688,10 @@ export default function ClaimsPage() {
                       </a>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-gray-500 text-sm">No photos uploaded yet</p>
+                )}
+              </div>
 
               {/* Delete Claim Button */}
               <div className="pt-4 border-t border-gray-200">
