@@ -12,6 +12,7 @@ import {
   ChevronLeftIcon,
   CameraIcon,
   PhotoIcon,
+  ArrowDownTrayIcon,
 } from "@heroicons/react/24/outline";
 import { createClient } from "@/lib/supabase-client";
 
@@ -130,8 +131,16 @@ export default function ClaimsPage() {
 
   // Photo viewer state
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null);
+  const [slideDirection, setSlideDirection] = useState<"left" | "right" | null>(null);
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const [photoScale, setPhotoScale] = useState(1);
+  const [photoPosition, setPhotoPosition] = useState({ x: 0, y: 0 });
   const touchStartX = useRef<number | null>(null);
-  const touchEndX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const lastTouchDistance = useRef<number | null>(null);
+  const isDragging = useRef(false);
+  const lastPanPosition = useRef({ x: 0, y: 0 });
 
   const supabase = createClient();
 
@@ -220,45 +229,146 @@ export default function ClaimsPage() {
   // Photo viewer handlers
   const openPhotoViewer = (index: number) => {
     setViewingPhotoIndex(index);
+    setPhotoScale(1);
+    setPhotoPosition({ x: 0, y: 0 });
+    setSwipeOffset(0);
+    setSlideDirection(null);
   };
 
   const closePhotoViewer = () => {
     setViewingPhotoIndex(null);
+    setPhotoScale(1);
+    setPhotoPosition({ x: 0, y: 0 });
+    setSwipeOffset(0);
+    setSlideDirection(null);
+    setIsAnimating(false);
     touchStartX.current = null;
-    touchEndX.current = null;
+    touchStartY.current = null;
+    lastTouchDistance.current = null;
   };
 
   const navigatePhoto = (direction: "prev" | "next") => {
-    if (!selectedClaim || viewingPhotoIndex === null) return;
+    if (!selectedClaim || viewingPhotoIndex === null || isAnimating) return;
     const photos = getClaimStoredPhotos(selectedClaim);
-    if (direction === "prev") {
-      setViewingPhotoIndex(viewingPhotoIndex === 0 ? photos.length - 1 : viewingPhotoIndex - 1);
-    } else {
-      setViewingPhotoIndex(viewingPhotoIndex === photos.length - 1 ? 0 : viewingPhotoIndex + 1);
+    if (photos.length <= 1) return;
+
+    setIsAnimating(true);
+    setSlideDirection(direction === "next" ? "left" : "right");
+
+    setTimeout(() => {
+      if (direction === "prev") {
+        setViewingPhotoIndex(viewingPhotoIndex === 0 ? photos.length - 1 : viewingPhotoIndex - 1);
+      } else {
+        setViewingPhotoIndex(viewingPhotoIndex === photos.length - 1 ? 0 : viewingPhotoIndex + 1);
+      }
+      setSlideDirection(null);
+      setSwipeOffset(0);
+      setPhotoScale(1);
+      setPhotoPosition({ x: 0, y: 0 });
+      setIsAnimating(false);
+    }, 200);
+  };
+
+  const getTouchDistance = (touches: React.TouchList) => {
+    return Math.hypot(
+      touches[0].clientX - touches[1].clientX,
+      touches[0].clientY - touches[1].clientY
+    );
+  };
+
+  const handlePhotoTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // Pinch zoom start
+      lastTouchDistance.current = getTouchDistance(e.touches);
+      isDragging.current = false;
+    } else if (e.touches.length === 1) {
+      touchStartX.current = e.touches[0].clientX;
+      touchStartY.current = e.touches[0].clientY;
+      lastPanPosition.current = { ...photoPosition };
+      isDragging.current = photoScale > 1;
     }
   };
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    touchStartX.current = e.touches[0].clientX;
-  };
+  const handlePhotoTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 2 && lastTouchDistance.current !== null) {
+      // Pinch zoom
+      const newDistance = getTouchDistance(e.touches);
+      const scaleDiff = newDistance / lastTouchDistance.current;
+      const newScale = Math.min(Math.max(photoScale * scaleDiff, 1), 4);
+      setPhotoScale(newScale);
+      lastTouchDistance.current = newDistance;
 
-  const handleTouchMove = (e: React.TouchEvent) => {
-    touchEndX.current = e.touches[0].clientX;
-  };
+      // Reset position if zoomed out
+      if (newScale <= 1) {
+        setPhotoPosition({ x: 0, y: 0 });
+      }
+    } else if (e.touches.length === 1 && touchStartX.current !== null) {
+      const deltaX = e.touches[0].clientX - touchStartX.current;
+      const deltaY = e.touches[0].clientY - touchStartY.current!;
 
-  const handleTouchEnd = () => {
-    if (!touchStartX.current || !touchEndX.current) return;
-    const diff = touchStartX.current - touchEndX.current;
-    const minSwipeDistance = 50;
-    if (Math.abs(diff) > minSwipeDistance) {
-      if (diff > 0) {
-        navigatePhoto("next"); // Swipe left = next
-      } else {
-        navigatePhoto("prev"); // Swipe right = prev
+      if (photoScale > 1 && isDragging.current) {
+        // Pan when zoomed in
+        setPhotoPosition({
+          x: lastPanPosition.current.x + deltaX,
+          y: lastPanPosition.current.y + deltaY,
+        });
+      } else if (photoScale === 1) {
+        // Swipe to navigate when not zoomed
+        setSwipeOffset(deltaX * 0.5);
       }
     }
-    touchStartX.current = null;
-    touchEndX.current = null;
+  };
+
+  const handlePhotoTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length === 0) {
+      // Check for swipe navigation (only when not zoomed)
+      if (photoScale === 1 && touchStartX.current !== null) {
+        const minSwipeDistance = 80;
+        if (Math.abs(swipeOffset) > minSwipeDistance) {
+          if (swipeOffset < 0) {
+            navigatePhoto("next");
+          } else {
+            navigatePhoto("prev");
+          }
+        } else {
+          // Snap back
+          setSwipeOffset(0);
+        }
+      }
+
+      touchStartX.current = null;
+      touchStartY.current = null;
+      lastTouchDistance.current = null;
+      isDragging.current = false;
+    }
+  };
+
+  const handleDoubleTap = () => {
+    if (photoScale > 1) {
+      setPhotoScale(1);
+      setPhotoPosition({ x: 0, y: 0 });
+    } else {
+      setPhotoScale(2.5);
+    }
+  };
+
+  const downloadPhoto = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Download failed:", err);
+      // Fallback: open in new tab
+      window.open(url, "_blank");
+    }
   };
 
   // Open claim detail
@@ -2163,65 +2273,110 @@ export default function ClaimsPage() {
       {/* Photo Viewer Modal */}
       {selectedClaim && viewingPhotoIndex !== null && (
         <div
-          className="fixed inset-0 bg-black z-[60] flex items-center justify-center"
-          onClick={closePhotoViewer}
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
+          className="fixed inset-0 bg-black z-[60] flex items-center justify-center overflow-hidden"
+          onClick={photoScale === 1 ? closePhotoViewer : undefined}
         >
-          {/* Close button */}
-          <button
-            onClick={closePhotoViewer}
-            className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white z-10 transition-colors"
-          >
-            <XMarkIcon className="h-6 w-6" />
-          </button>
+          {/* Top bar with controls */}
+          <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 bg-gradient-to-b from-black/70 to-transparent">
+            {/* Photo counter */}
+            <div className="px-3 py-1 bg-black/50 rounded-full text-white text-sm">
+              {viewingPhotoIndex + 1} / {getClaimStoredPhotos(selectedClaim).length}
+            </div>
 
-          {/* Photo counter */}
-          <div className="absolute top-4 left-4 px-3 py-1 bg-black/50 rounded-full text-white text-sm">
-            {viewingPhotoIndex + 1} / {getClaimStoredPhotos(selectedClaim).length}
+            {/* Right controls */}
+            <div className="flex items-center gap-2">
+              {/* Download button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const photo = getClaimStoredPhotos(selectedClaim)[viewingPhotoIndex];
+                  downloadPhoto(getSupabasePhotoUrl(photo.storage_path), photo.file_name);
+                }}
+                className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+              >
+                <ArrowDownTrayIcon className="h-6 w-6" />
+              </button>
+
+              {/* Close button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closePhotoViewer();
+                }}
+                className="p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+              >
+                <XMarkIcon className="h-6 w-6" />
+              </button>
+            </div>
           </div>
 
           {/* Previous button */}
-          {getClaimStoredPhotos(selectedClaim).length > 1 && (
+          {getClaimStoredPhotos(selectedClaim).length > 1 && photoScale === 1 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 navigatePhoto("prev");
               }}
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors z-10"
             >
               <ChevronLeftIcon className="h-8 w-8" />
             </button>
           )}
 
-          {/* Photo */}
-          <img
-            src={getSupabasePhotoUrl(getClaimStoredPhotos(selectedClaim)[viewingPhotoIndex].storage_path)}
-            alt={getClaimStoredPhotos(selectedClaim)[viewingPhotoIndex].file_name}
-            className="max-w-full max-h-full object-contain p-4"
-            onClick={(e) => e.stopPropagation()}
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' /%3E%3C/svg%3E";
+          {/* Photo container with animations */}
+          <div
+            className="w-full h-full flex items-center justify-center touch-none"
+            onTouchStart={handlePhotoTouchStart}
+            onTouchMove={handlePhotoTouchMove}
+            onTouchEnd={handlePhotoTouchEnd}
+            onDoubleClick={handleDoubleTap}
+            style={{
+              transform: `translateX(${swipeOffset + (slideDirection === "left" ? -100 : slideDirection === "right" ? 100 : 0)}px)`,
+              transition: isAnimating || swipeOffset === 0 ? "transform 0.2s ease-out" : "none",
+              opacity: isAnimating ? 0.7 : 1,
             }}
-          />
+          >
+            <img
+              src={getSupabasePhotoUrl(getClaimStoredPhotos(selectedClaim)[viewingPhotoIndex].storage_path)}
+              alt={getClaimStoredPhotos(selectedClaim)[viewingPhotoIndex].file_name}
+              className="max-w-full max-h-full object-contain select-none"
+              draggable={false}
+              style={{
+                transform: `scale(${photoScale}) translate(${photoPosition.x / photoScale}px, ${photoPosition.y / photoScale}px)`,
+                transition: photoScale === 1 && !isDragging.current ? "transform 0.2s ease-out" : "none",
+              }}
+              onClick={(e) => e.stopPropagation()}
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' /%3E%3C/svg%3E";
+              }}
+            />
+          </div>
 
           {/* Next button */}
-          {getClaimStoredPhotos(selectedClaim).length > 1 && (
+          {getClaimStoredPhotos(selectedClaim).length > 1 && photoScale === 1 && (
             <button
               onClick={(e) => {
                 e.stopPropagation();
                 navigatePhoto("next");
               }}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 bg-black/50 hover:bg-black/70 rounded-full text-white transition-colors z-10"
             >
               <ChevronRightIcon className="h-8 w-8" />
             </button>
           )}
 
-          {/* Swipe hint (shown on mobile) */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 px-3 py-1 bg-black/50 rounded-full text-white text-xs sm:hidden">
-            Swipe to navigate
+          {/* Bottom hints */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-10">
+            {photoScale > 1 && (
+              <div className="px-3 py-1 bg-black/50 rounded-full text-white text-xs">
+                {Math.round(photoScale * 100)}% - Double-tap to reset
+              </div>
+            )}
+            {photoScale === 1 && getClaimStoredPhotos(selectedClaim).length > 1 && (
+              <div className="px-3 py-1 bg-black/50 rounded-full text-white text-xs sm:hidden">
+                Swipe or pinch to zoom
+              </div>
+            )}
           </div>
         </div>
       )}
