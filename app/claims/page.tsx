@@ -617,11 +617,15 @@ export default function ClaimsPage() {
     });
   };
 
-  // Compress image to WebP at 30% resolution
+  // Compress image to 30% resolution with WebP/JPEG fallback
   const compressImage = async (file: File): Promise<File> => {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const img = new Image();
+      const objectUrl = URL.createObjectURL(file);
+
       img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+
         // Resize to 30% of original dimensions
         const canvas = document.createElement("canvas");
         canvas.width = Math.round(img.width * 0.3);
@@ -629,36 +633,66 @@ export default function ClaimsPage() {
 
         const ctx = canvas.getContext("2d");
         if (!ctx) {
-          resolve(file); // Fallback to original if canvas fails
+          console.log(`[compressImage] Canvas failed for ${file.name}, using original`);
+          resolve(file);
           return;
         }
 
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-        canvas.toBlob(
-          (blob) => {
-            if (blob) {
-              const compressedFile = new File(
-                [blob],
-                file.name.replace(/\.[^.]+$/, ".webp"),
-                { type: "image/webp" }
-              );
-              console.log(`[compressImage] ${file.name}: ${(file.size/1024).toFixed(0)}KB -> ${(blob.size/1024).toFixed(0)}KB (${Math.round(blob.size/file.size*100)}%)`);
-              resolve(compressedFile);
-            } else {
-              resolve(file);
-            }
-          },
-          "image/webp",
-          0.85 // Quality 85% for WebP
-        );
+        // Try WebP first, fall back to JPEG
+        const tryFormat = (format: string, quality: number, ext: string) => {
+          return new Promise<File | null>((resolveFormat) => {
+            canvas.toBlob(
+              (blob) => {
+                if (blob && blob.size < file.size) {
+                  const compressedFile = new File(
+                    [blob],
+                    file.name.replace(/\.[^.]+$/, ext),
+                    { type: format }
+                  );
+                  resolveFormat(compressedFile);
+                } else {
+                  resolveFormat(null);
+                }
+              },
+              format,
+              quality
+            );
+          });
+        };
+
+        // Try WebP first
+        tryFormat("image/webp", 0.8, ".webp").then((webpFile) => {
+          if (webpFile) {
+            console.log(`[compressImage] ${file.name}: ${(file.size/1024).toFixed(0)}KB -> ${(webpFile.size/1024).toFixed(0)}KB (WebP)`);
+            resolve(webpFile);
+          } else {
+            // Fall back to JPEG
+            tryFormat("image/jpeg", 0.7, ".jpg").then((jpegFile) => {
+              if (jpegFile) {
+                console.log(`[compressImage] ${file.name}: ${(file.size/1024).toFixed(0)}KB -> ${(jpegFile.size/1024).toFixed(0)}KB (JPEG fallback)`);
+                resolve(jpegFile);
+              } else {
+                console.log(`[compressImage] Compression failed for ${file.name}, using original`);
+                resolve(file);
+              }
+            });
+          }
+        });
       };
-      img.onerror = () => resolve(file);
-      img.src = URL.createObjectURL(file);
+
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        console.log(`[compressImage] Failed to load ${file.name}, using original`);
+        resolve(file);
+      };
+
+      img.src = objectUrl;
     });
   };
 
-  // Upload photos to Supabase Storage
+  // Upload photos to Supabase Storage (one at a time to avoid body size limits)
   const uploadPhotos = async (
     photos: LocalClaimPhoto[],
     claimNumber: string,
@@ -667,52 +701,58 @@ export default function ClaimsPage() {
   ): Promise<string[]> => {
     if (photos.length === 0) return [];
 
-    // Compress all photos before upload
-    const compressedFiles = await Promise.all(
-      photos.map((photo) => compressImage(photo.file))
-    );
+    const allPhotoUrls: string[] = [];
+    const uploadErrors: string[] = [];
 
-    const formData = new FormData();
-    formData.append("claimNumber", claimNumber);
-    if (claimId) formData.append("claimId", claimId);
-    if (updateId) formData.append("updateId", updateId);
-    compressedFiles.forEach((file) => {
-      formData.append("files", file);
-    });
+    // Upload photos one at a time (sequential) to avoid Vercel body size limit
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      console.log(`[uploadPhotos] Processing photo ${i + 1}/${photos.length}: ${photo.file.name}`);
 
-    try {
-      console.log("[uploadPhotos] Uploading", photos.length, "photos for claim:", claimNumber, "claimId:", claimId, "updateId:", updateId);
-      const response = await fetch("/api/claims/upload-photos", {
-        method: "POST",
-        body: formData,
-      });
+      // Compress the photo
+      const compressedFile = await compressImage(photo.file);
+      console.log(`[uploadPhotos] Compressed size: ${(compressedFile.size / 1024).toFixed(0)}KB`);
 
-      // Check if response is OK before parsing JSON
-      if (!response.ok) {
-        const text = await response.text();
-        console.error("[uploadPhotos] Server error:", response.status, text);
-        alert(`Photo upload failed (${response.status}): Server error. Try uploading fewer photos.`);
-        return [];
-      }
+      const formData = new FormData();
+      formData.append("claimNumber", claimNumber);
+      if (claimId) formData.append("claimId", claimId);
+      if (updateId) formData.append("updateId", updateId);
+      formData.append("files", compressedFile);
 
-      const result = await response.json();
-      console.log("[uploadPhotos] API response:", result);
-      if (result.success) {
-        if (result.errors && result.errors.length > 0) {
-          alert(`Some photos failed to upload:\n${result.errors.join("\n")}`);
+      try {
+        const response = await fetch("/api/claims/upload-photos", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          console.error(`[uploadPhotos] Server error for photo ${i + 1}:`, response.status, text);
+          uploadErrors.push(`Photo ${i + 1}: Server error (${response.status})`);
+          continue;
         }
-        return result.photoUrls || [];
+
+        const result = await response.json();
+        if (result.success && result.photoUrls) {
+          allPhotoUrls.push(...result.photoUrls);
+          console.log(`[uploadPhotos] Photo ${i + 1} uploaded successfully`);
+        } else {
+          uploadErrors.push(`Photo ${i + 1}: ${result.error || "Unknown error"}`);
+        }
+      } catch (err) {
+        console.error(`[uploadPhotos] Error uploading photo ${i + 1}:`, err);
+        uploadErrors.push(`Photo ${i + 1}: ${err}`);
       }
-      // Show detailed error
-      const errorDetails = result.errors ? result.errors.join("\n") : result.error || "Unknown error";
-      alert(`Photo upload failed:\n${errorDetails}`);
-      console.error("Photo upload failed:", result.error, result.errors);
-      return [];
-    } catch (err) {
-      console.error("Error uploading photos:", err);
-      alert(`Photo upload error: ${err}\n\nTry uploading one photo at a time.`);
-      return [];
     }
+
+    if (uploadErrors.length > 0 && allPhotoUrls.length > 0) {
+      alert(`Some photos failed to upload:\n${uploadErrors.join("\n")}`);
+    } else if (uploadErrors.length > 0 && allPhotoUrls.length === 0) {
+      alert(`All photo uploads failed:\n${uploadErrors.join("\n")}`);
+    }
+
+    console.log(`[uploadPhotos] Done: ${allPhotoUrls.length} uploaded, ${uploadErrors.length} failed`);
+    return allPhotoUrls;
   };
 
   // Delete update
