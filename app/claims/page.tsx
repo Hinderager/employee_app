@@ -590,6 +590,15 @@ export default function ClaimsPage() {
         method: "POST",
         body: formData,
       });
+
+      // Check if response is OK before parsing JSON
+      if (!response.ok) {
+        const text = await response.text();
+        console.error("[uploadPhotos] Server error:", response.status, text);
+        alert(`Photo upload failed (${response.status}): Server error. Try uploading fewer photos.`);
+        return [];
+      }
+
       const result = await response.json();
       console.log("[uploadPhotos] API response:", result);
       if (result.success) {
@@ -605,7 +614,7 @@ export default function ClaimsPage() {
       return [];
     } catch (err) {
       console.error("Error uploading photos:", err);
-      alert(`Photo upload error: ${err}`);
+      alert(`Photo upload error: ${err}\n\nTry uploading one photo at a time.`);
       return [];
     }
   };
