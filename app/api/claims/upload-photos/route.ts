@@ -4,10 +4,10 @@ import { createClient } from "@supabase/supabase-js";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
-// Initialize Supabase client
+// Initialize Supabase client (Employee App Supabase)
 const supabase = createClient(
-  process.env.SUPABASE_URL!,
-  process.env.SUPABASE_ANON_KEY!
+  process.env.EMPLOYEE_APP_SUPABASE_URL || process.env.SUPABASE_URL!,
+  process.env.EMPLOYEE_APP_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY!
 );
 
 export async function POST(request: NextRequest) {
