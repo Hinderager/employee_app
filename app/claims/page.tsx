@@ -131,7 +131,6 @@ export default function ClaimsPage() {
 
   // Photo viewer state
   const [viewingPhotoIndex, setViewingPhotoIndex] = useState<number | null>(null);
-  const [slideDirection, setSlideDirection] = useState<"left" | "right" | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [photoScale, setPhotoScale] = useState(1);
@@ -232,7 +231,6 @@ export default function ClaimsPage() {
     setPhotoScale(1);
     setPhotoPosition({ x: 0, y: 0 });
     setSwipeOffset(0);
-    setSlideDirection(null);
   };
 
   const closePhotoViewer = () => {
@@ -240,7 +238,6 @@ export default function ClaimsPage() {
     setPhotoScale(1);
     setPhotoPosition({ x: 0, y: 0 });
     setSwipeOffset(0);
-    setSlideDirection(null);
     setIsAnimating(false);
     touchStartX.current = null;
     touchStartY.current = null;
@@ -253,20 +250,21 @@ export default function ClaimsPage() {
     if (photos.length <= 1) return;
 
     setIsAnimating(true);
-    setSlideDirection(direction === "next" ? "left" : "right");
+
+    // Calculate new index
+    const newIndex = direction === "prev"
+      ? (viewingPhotoIndex === 0 ? photos.length - 1 : viewingPhotoIndex - 1)
+      : (viewingPhotoIndex === photos.length - 1 ? 0 : viewingPhotoIndex + 1);
+
+    // Update index immediately - the CSS transition handles the animation
+    setViewingPhotoIndex(newIndex);
+    setSwipeOffset(0);
+    setPhotoScale(1);
+    setPhotoPosition({ x: 0, y: 0 });
 
     setTimeout(() => {
-      if (direction === "prev") {
-        setViewingPhotoIndex(viewingPhotoIndex === 0 ? photos.length - 1 : viewingPhotoIndex - 1);
-      } else {
-        setViewingPhotoIndex(viewingPhotoIndex === photos.length - 1 ? 0 : viewingPhotoIndex + 1);
-      }
-      setSlideDirection(null);
-      setSwipeOffset(0);
-      setPhotoScale(1);
-      setPhotoPosition({ x: 0, y: 0 });
       setIsAnimating(false);
-    }, 200);
+    }, 300);
   };
 
   const getTouchDistance = (touches: React.TouchList) => {
@@ -2323,33 +2321,46 @@ export default function ClaimsPage() {
             </button>
           )}
 
-          {/* Photo container with animations */}
+          {/* Photo carousel container */}
           <div
-            className="w-full h-full flex items-center justify-center touch-none"
+            className="w-full h-full overflow-hidden touch-none"
             onTouchStart={handlePhotoTouchStart}
             onTouchMove={handlePhotoTouchMove}
             onTouchEnd={handlePhotoTouchEnd}
             onDoubleClick={handleDoubleTap}
-            style={{
-              transform: `translateX(${swipeOffset + (slideDirection === "left" ? -100 : slideDirection === "right" ? 100 : 0)}px)`,
-              transition: isAnimating || swipeOffset === 0 ? "transform 0.2s ease-out" : "none",
-              opacity: isAnimating ? 0.7 : 1,
-            }}
           >
-            <img
-              src={getSupabasePhotoUrl(getClaimStoredPhotos(selectedClaim)[viewingPhotoIndex].storage_path)}
-              alt={getClaimStoredPhotos(selectedClaim)[viewingPhotoIndex].file_name}
-              className="max-w-full max-h-full object-contain select-none"
-              draggable={false}
+            {/* Carousel track - all images laid out horizontally */}
+            <div
+              className="h-full flex"
               style={{
-                transform: `scale(${photoScale}) translate(${photoPosition.x / photoScale}px, ${photoPosition.y / photoScale}px)`,
-                transition: photoScale === 1 && !isDragging.current ? "transform 0.2s ease-out" : "none",
+                width: `${getClaimStoredPhotos(selectedClaim).length * 100}%`,
+                transform: `translateX(calc(-${viewingPhotoIndex * (100 / getClaimStoredPhotos(selectedClaim).length)}% + ${swipeOffset}px))`,
+                transition: swipeOffset === 0 ? "transform 0.3s ease-out" : "none",
               }}
-              onClick={(e) => e.stopPropagation()}
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' /%3E%3C/svg%3E";
-              }}
-            />
+            >
+              {getClaimStoredPhotos(selectedClaim).map((photo, index) => (
+                <div
+                  key={photo.id}
+                  className="h-full flex items-center justify-center"
+                  style={{ width: `${100 / getClaimStoredPhotos(selectedClaim).length}%` }}
+                >
+                  <img
+                    src={getSupabasePhotoUrl(photo.storage_path)}
+                    alt={photo.file_name}
+                    className="max-w-full max-h-full object-contain select-none p-4"
+                    draggable={false}
+                    style={index === viewingPhotoIndex ? {
+                      transform: `scale(${photoScale}) translate(${photoPosition.x / photoScale}px, ${photoPosition.y / photoScale}px)`,
+                      transition: photoScale === 1 && !isDragging.current ? "transform 0.2s ease-out" : "none",
+                    } : undefined}
+                    onClick={(e) => e.stopPropagation()}
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' /%3E%3C/svg%3E";
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Next button */}
