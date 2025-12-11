@@ -30,18 +30,54 @@ export async function POST(request: NextRequest) {
 
     const sheets = google.sheets({ version: "v4", auth: oauth2Client });
 
-    // Append row to sheet (columns B, C, D, E starting from row 3 since headers in row 2)
-    // Column A is empty, B=Date, C=Claim ID, D=Customer Name, E=Amount Spent
-    await sheets.spreadsheets.values.append({
+    // Get the sheet ID first
+    const spreadsheet = await sheets.spreadsheets.get({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!B3:E`,
+    });
+
+    const sheet = spreadsheet.data.sheets?.find(
+      (s) => s.properties?.title === SHEET_NAME
+    );
+    const sheetId = sheet?.properties?.sheetId;
+
+    if (sheetId === undefined) {
+      return NextResponse.json(
+        { success: false, error: "Sheet not found" },
+        { status: 404 }
+      );
+    }
+
+    // Insert a new row at row 3 (index 2, 0-based) to keep newest at top
+    await sheets.spreadsheets.batchUpdate({
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            insertDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: "ROWS",
+                startIndex: 2, // Row 3 (0-indexed)
+                endIndex: 3,
+              },
+              inheritFromBefore: false,
+            },
+          },
+        ],
+      },
+    });
+
+    // Now update the new row 3 with our data (columns B, C, D, E)
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SPREADSHEET_ID,
+      range: `${SHEET_NAME}!B3:E3`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
         values: [[date, claimId, customerName, amountSpent]],
       },
     });
 
-    console.log("[log-to-sheets] Added row:", { date, claimId, customerName, amountSpent });
+    console.log("[log-to-sheets] Inserted row at top:", { date, claimId, customerName, amountSpent });
 
     return NextResponse.json({ success: true });
   } catch (error: unknown) {

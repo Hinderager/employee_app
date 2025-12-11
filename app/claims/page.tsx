@@ -60,6 +60,7 @@ interface NewClaimForm {
   contact_name: string;
   contact_phone: string;
   initial_claim_details: string;
+  initial_amount: string;
 }
 
 const emptyClaimForm: NewClaimForm = {
@@ -71,6 +72,7 @@ const emptyClaimForm: NewClaimForm = {
   contact_name: "",
   contact_phone: "",
   initial_claim_details: "",
+  initial_amount: "",
 };
 
 export default function ClaimsPage() {
@@ -90,12 +92,20 @@ export default function ClaimsPage() {
   const [editAmount, setEditAmount] = useState("");
   const [findStatus, setFindStatus] = useState<"idle" | "searching" | "found" | "not_found">("idle");
   const [foundGhlContactId, setFoundGhlContactId] = useState<string>("");
+  const [foundGhlContactData, setFoundGhlContactData] = useState<{
+    contactId?: string;
+    contactName: string;
+    email: string;
+    address: string;
+  } | null>(null);
   const [claimPhotos, setClaimPhotos] = useState<ClaimPhoto[]>([]);
   const [updatePhotos, setUpdatePhotos] = useState<ClaimPhoto[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [editingContact, setEditingContact] = useState(false);
   const [editContactName, setEditContactName] = useState("");
   const [editContactPhone, setEditContactPhone] = useState("");
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [editDetailsText, setEditDetailsText] = useState("");
 
   const claimFileInputRef = useRef<HTMLInputElement>(null);
   const claimCameraInputRef = useRef<HTMLInputElement>(null);
@@ -211,6 +221,7 @@ export default function ClaimsPage() {
     setShowAddUpdate(false);
     setEditingUpdate(null);
     setEditingContact(false);
+    setEditingDetails(false);
     // Clear any pending update photos
     updatePhotos.forEach((p) => URL.revokeObjectURL(p.preview));
     setUpdatePhotos([]);
@@ -401,7 +412,7 @@ export default function ClaimsPage() {
     setEditAmount("");
   };
 
-  // Find contact by phone and fill form
+  // Find contact by phone and fill form, or create new contact if not found
   const handleFindContact = async () => {
     if (!newClaimForm.phone.trim()) {
       alert("Please enter a phone number first");
@@ -410,6 +421,7 @@ export default function ClaimsPage() {
 
     setFindStatus("searching");
     try {
+      // First, try to find existing contact
       const response = await fetch("/api/claims/search-ghl-contact", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -420,7 +432,13 @@ export default function ClaimsPage() {
       if (result.success && result.found) {
         setFindStatus("found");
         setFoundGhlContactId(result.contactId);
-        // Auto-fill the form fields
+        // Store original GHL data for later comparison
+        setFoundGhlContactData({
+          contactName: result.contactName || "",
+          email: result.email || "",
+          address: result.address || "",
+        });
+        // Auto-fill the form fields from found contact
         setNewClaimForm({
           ...newClaimForm,
           customer_name: result.contactName || newClaimForm.customer_name,
@@ -428,11 +446,50 @@ export default function ClaimsPage() {
           address: result.address || newClaimForm.address,
         });
       } else {
-        setFindStatus("not_found");
-        setFoundGhlContactId("");
+        // Contact not found - create a new one if we have a name
+        if (!newClaimForm.customer_name.trim()) {
+          alert("Contact not found. Please enter the customer name, then click Find to create a new contact.");
+          setFindStatus("not_found");
+          setFoundGhlContactId("");
+          return;
+        }
+
+        // Create new GHL contact with available info
+        const createResponse = await fetch("/api/claims/create-ghl-contact", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newClaimForm.customer_name.trim(),
+            phone: newClaimForm.phone.trim(),
+            email: newClaimForm.email.trim() || undefined,
+            address: newClaimForm.address.trim() || undefined,
+          }),
+        });
+        const createResult = await createResponse.json();
+
+        if (createResult.success && createResult.contactId) {
+          setFindStatus("found");
+          setFoundGhlContactId(createResult.contactId);
+          // Store the contact data (what we sent to create it)
+          setFoundGhlContactData({
+            contactName: newClaimForm.customer_name.trim(),
+            email: newClaimForm.email.trim(),
+            address: newClaimForm.address.trim(),
+          });
+          // Show whether it was existing or newly created
+          if (createResult.existing) {
+            console.log("Found existing GHL contact:", createResult.contactId);
+          } else {
+            console.log("Created new GHL contact:", createResult.contactId);
+          }
+        } else {
+          setFindStatus("not_found");
+          setFoundGhlContactId("");
+          alert("Failed to create GHL contact. Please try again.");
+        }
       }
     } catch (err) {
-      console.error("Error finding contact:", err);
+      console.error("Error finding/creating contact:", err);
       setFindStatus("not_found");
       setFoundGhlContactId("");
     }
@@ -444,6 +501,7 @@ export default function ClaimsPage() {
     if (findStatus !== "idle") {
       setFindStatus("idle");
       setFoundGhlContactId("");
+      setFoundGhlContactData(null);
     }
   };
 
@@ -683,12 +741,103 @@ export default function ClaimsPage() {
     }
   };
 
+  // Start editing initial claim details
+  const startEditDetails = () => {
+    if (!selectedClaim) return;
+    setEditDetailsText(selectedClaim.initial_claim_details || "");
+    setEditingDetails(true);
+  };
+
+  // Save edited initial claim details
+  const handleSaveDetails = async () => {
+    if (!selectedClaim || !editDetailsText.trim()) return;
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("claims")
+        .update({ initial_claim_details: editDetailsText.trim() })
+        .eq("id", selectedClaim.id);
+
+      if (error) {
+        console.error("Error updating details:", error);
+        alert("Failed to update details");
+        return;
+      }
+
+      setSelectedClaim({
+        ...selectedClaim,
+        initial_claim_details: editDetailsText.trim(),
+      });
+      setEditingDetails(false);
+      fetchClaims();
+    } catch (err) {
+      console.error("Error:", err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Delete entire claim
+  const handleDeleteClaim = async () => {
+    if (!selectedClaim) return;
+
+    const claimNumber = selectedClaim.claim_number || `CLM-${selectedClaim.id.slice(0, 8)}`;
+    if (!confirm(`Are you sure you want to delete claim ${claimNumber}?\n\nThis will remove the claim and all associated line items from Google Sheets.`)) {
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // First, delete from Google Sheets
+      const sheetsResponse = await fetch("/api/claims/delete-from-sheets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ claimNumber }),
+      });
+      const sheetsResult = await sheetsResponse.json();
+      if (!sheetsResult.success) {
+        console.error("Failed to delete from sheets:", sheetsResult.error);
+        // Continue with deletion even if sheets fails
+      } else {
+        console.log(`Deleted ${sheetsResult.rowsDeleted} rows from Google Sheets`);
+      }
+
+      // Delete all updates for this claim
+      await supabase
+        .from("claim_updates")
+        .delete()
+        .eq("claim_id", selectedClaim.id);
+
+      // Delete the claim
+      const { error } = await supabase
+        .from("claims")
+        .delete()
+        .eq("id", selectedClaim.id);
+
+      if (error) {
+        console.error("Error deleting claim:", error);
+        alert("Failed to delete claim");
+        return;
+      }
+
+      // Close modal and refresh
+      setSelectedClaim(null);
+      fetchClaims();
+    } catch (err) {
+      console.error("Error:", err);
+      alert("Failed to delete claim");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Get GHL contact link
   const getGHLLink = (contactId: string) => {
     return `https://app.gohighlevel.com/v2/location/${GHL_LOCATION_ID}/contacts/detail/${contactId}`;
   };
 
-  // Search for GHL contact by phone
+  // Search for GHL contact by phone - returns full contact details
   const searchGHLContact = async (phone: string) => {
     try {
       const response = await fetch("/api/claims/search-ghl-contact", {
@@ -698,12 +847,18 @@ export default function ClaimsPage() {
       });
       const result = await response.json();
       if (result.success && result.found) {
-        return { found: true, contactId: result.contactId };
+        return {
+          found: true,
+          contactId: result.contactId,
+          contactName: result.contactName || "",
+          email: result.email || "",
+          address: result.address || "",
+        };
       }
-      return { found: false, contactId: null };
+      return { found: false, contactId: null, contactName: "", email: "", address: "" };
     } catch (err) {
       console.error("Error searching GHL contact:", err);
-      return { found: false, contactId: null };
+      return { found: false, contactId: null, contactName: "", email: "", address: "" };
     }
   };
 
@@ -741,8 +896,30 @@ export default function ClaimsPage() {
     return "CLM-0001";
   };
 
+  // Helper to check if form data matches GHL contact data
+  const checkGhlMismatch = (ghlData: { contactName: string; email: string; address: string }) => {
+    const formName = newClaimForm.customer_name.trim().toLowerCase();
+    const ghlName = ghlData.contactName.trim().toLowerCase();
+    const formEmail = newClaimForm.email.trim().toLowerCase();
+    const ghlEmail = ghlData.email.trim().toLowerCase();
+    const formAddress = newClaimForm.address.trim().toLowerCase();
+    const ghlAddress = ghlData.address.trim().toLowerCase();
+
+    const mismatches: string[] = [];
+    if (ghlName && formName && formName !== ghlName) {
+      mismatches.push(`Name: "${newClaimForm.customer_name.trim()}" → "${ghlData.contactName}"`);
+    }
+    if (ghlEmail && formEmail && formEmail !== ghlEmail) {
+      mismatches.push(`Email: "${newClaimForm.email.trim()}" → "${ghlData.email}"`);
+    }
+    if (ghlAddress && formAddress && formAddress !== ghlAddress) {
+      mismatches.push(`Address: "${newClaimForm.address.trim()}" → "${ghlData.address}"`);
+    }
+    return mismatches;
+  };
+
   // Create new claim
-  const handleCreateClaim = async () => {
+  const handleCreateClaim = async (confirmedGhlData?: { contactId: string; contactName: string; email: string; address: string }) => {
     if (!newClaimForm.customer_name.trim() || !newClaimForm.initial_claim_details.trim()) {
       alert("Please fill in customer name and claim details");
       return;
@@ -761,16 +938,55 @@ export default function ClaimsPage() {
 
     setCreatingClaim(true);
     try {
-      // Use pre-found GHL contact ID or search for it
-      let customerGhlId = foundGhlContactId;
+      // If we have confirmed GHL data passed in, use it directly
+      let customerGhlId = confirmedGhlData?.contactId || foundGhlContactId;
+      let ghlContactData = confirmedGhlData || foundGhlContactData;
+
+      // Search for contact if we don't have one yet
       if (!customerGhlId) {
         const customerGhl = await searchGHLContact(newClaimForm.phone.trim());
         if (!customerGhl.found) {
-          alert("GHL contact not found for this phone number. Please use the Find button or create the contact in GoHighLevel first.");
+          alert("GHL contact not found for this phone number. Please use the Find button to create a contact first.");
           setCreatingClaim(false);
           return;
         }
-        customerGhlId = customerGhl.contactId;
+        customerGhlId = customerGhl.contactId!;
+        ghlContactData = {
+          contactId: customerGhlId,
+          contactName: customerGhl.contactName,
+          email: customerGhl.email,
+          address: customerGhl.address,
+        };
+      }
+
+      // Check for mismatch between form and GHL data (only if not already confirmed)
+      if (!confirmedGhlData && ghlContactData) {
+        const mismatches = checkGhlMismatch(ghlContactData);
+        if (mismatches.length > 0) {
+          setCreatingClaim(false);
+          const confirmed = confirm(
+            `This phone number is linked to a GHL contact with different information:\n\n${mismatches.join("\n")}\n\nClick OK to use the GHL contact details for this claim, or Cancel to go back and edit the form.`
+          );
+          if (confirmed) {
+            // Pass GHL data directly to avoid state timing issues
+            const ghlDataWithId = {
+              contactId: customerGhlId,
+              contactName: ghlContactData.contactName || "",
+              email: ghlContactData.email || "",
+              address: ghlContactData.address || "",
+            };
+            // Update form visually
+            setNewClaimForm({
+              ...newClaimForm,
+              customer_name: ghlDataWithId.contactName || newClaimForm.customer_name,
+              email: ghlDataWithId.email || newClaimForm.email,
+              address: ghlDataWithId.address || newClaimForm.address,
+            });
+            // Recursively call with confirmed data (no setTimeout needed)
+            await handleCreateClaim(ghlDataWithId);
+          }
+          return;
+        }
       }
 
       // Create/find GHL contact for alternate contact if different from customer
@@ -788,14 +1004,20 @@ export default function ClaimsPage() {
       // Generate unique claim number
       const claimNumber = await generateClaimNumber();
 
-      const { error } = await supabase
+      // Use confirmed GHL data if available, otherwise use form data
+      const finalName = confirmedGhlData?.contactName || newClaimForm.customer_name.trim();
+      const finalEmail = confirmedGhlData?.email || newClaimForm.email.trim();
+      const finalAddress = confirmedGhlData?.address || newClaimForm.address.trim();
+      const initialAmount = parseFloat(newClaimForm.initial_amount) || 0;
+
+      const { data: newClaim, error } = await supabase
         .from("claims")
         .insert({
           claim_number: claimNumber,
-          customer_name: newClaimForm.customer_name.trim(),
+          customer_name: finalName,
           phone: newClaimForm.phone.trim(),
-          email: newClaimForm.email.trim(),
-          address: newClaimForm.address.trim(),
+          email: finalEmail,
+          address: finalAddress,
           ghl_contact_id: customerGhlId,
           contact_is_customer: newClaimForm.contact_is_customer,
           contact_name: newClaimForm.contact_is_customer ? "" : newClaimForm.contact_name.trim(),
@@ -803,7 +1025,7 @@ export default function ClaimsPage() {
           contact_ghl_id: contactGhlId,
           initial_claim_details: newClaimForm.initial_claim_details.trim(),
           status: "open",
-          total_amount_spent: 0,
+          total_amount_spent: initialAmount,
         })
         .select()
         .single();
@@ -812,6 +1034,19 @@ export default function ClaimsPage() {
         console.error("Error creating claim:", error);
         alert("Failed to create claim");
         return;
+      }
+
+      // If initial amount was provided, create an update entry and log to sheets
+      if (initialAmount > 0 && newClaim) {
+        await supabase.from("claim_updates").insert({
+          claim_id: newClaim.id,
+          note: "Initial claim amount",
+          amount_spent: initialAmount,
+          created_by: "Employee",
+        });
+
+        // Log to Google Sheets
+        await logToSheets(claimNumber, finalName, initialAmount);
       }
 
       // Upload photos if any
@@ -835,6 +1070,9 @@ export default function ClaimsPage() {
 
       // Reset form and close modal
       setNewClaimForm(emptyClaimForm);
+      setFoundGhlContactId("");
+      setFoundGhlContactData(null);
+      setFindStatus("idle");
       setShowNewClaimModal(false);
       fetchClaims();
     } catch (err) {
@@ -871,6 +1109,7 @@ export default function ClaimsPage() {
               setShowNewClaimModal(true);
               setFindStatus("idle");
               setFoundGhlContactId("");
+              setFoundGhlContactData(null);
               setClaimPhotos([]);
             }}
             className="flex items-center gap-1 bg-white/20 hover:bg-white/30 text-white px-3 py-2 rounded-lg font-medium transition-colors"
@@ -901,11 +1140,16 @@ export default function ClaimsPage() {
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">
-                      {!claim.contact_is_customer && claim.contact_name
-                        ? claim.contact_name
-                        : claim.customer_name}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-gray-900">
+                        {!claim.contact_is_customer && claim.contact_name
+                          ? claim.contact_name
+                          : claim.customer_name}
+                      </h3>
+                      <span className="text-xs text-gray-400 font-mono">
+                        {claim.claim_number || `CLM-${claim.id.slice(0, 4)}`}
+                      </span>
+                    </div>
                     {!claim.contact_is_customer && claim.contact_name && (
                       <p className="text-xs text-gray-400">
                         Customer: {claim.customer_name}
@@ -1134,12 +1378,43 @@ export default function ClaimsPage() {
                 <h3 className="font-semibold text-gray-900 mb-2">
                   Initial Claim Details
                 </h3>
-                <p className="text-gray-700 whitespace-pre-wrap">
-                  {selectedClaim.initial_claim_details}
-                </p>
-                <p className="text-sm text-gray-500 mt-2">
-                  Filed on {formatDate(selectedClaim.created_at)}
-                </p>
+                {editingDetails ? (
+                  <div className="space-y-3">
+                    <textarea
+                      value={editDetailsText}
+                      onChange={(e) => setEditDetailsText(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                      rows={4}
+                    />
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveDetails}
+                        disabled={!editDetailsText.trim() || submitting}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {submitting ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={() => setEditingDetails(false)}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={startEditDetails}
+                    className="cursor-pointer hover:bg-gray-50 rounded-lg p-2 -m-2 transition-colors"
+                  >
+                    <p className="text-gray-700 whitespace-pre-wrap">
+                      {selectedClaim.initial_claim_details}
+                    </p>
+                    <p className="text-sm text-gray-500 mt-2">
+                      Filed on {formatDate(selectedClaim.created_at)}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Total Spent */}
@@ -1360,6 +1635,17 @@ export default function ClaimsPage() {
                   <p className="text-gray-500 text-sm">No updates yet</p>
                 )}
               </div>
+
+              {/* Delete Claim Button */}
+              <div className="pt-4 border-t border-gray-200">
+                <button
+                  onClick={handleDeleteClaim}
+                  disabled={submitting}
+                  className="w-full py-3 px-4 bg-red-50 text-red-600 rounded-xl font-medium hover:bg-red-100 disabled:opacity-50 transition-colors"
+                >
+                  {submitting ? "Deleting..." : "Delete Claim"}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1382,6 +1668,9 @@ export default function ClaimsPage() {
                 onClick={() => {
                   setShowNewClaimModal(false);
                   setNewClaimForm(emptyClaimForm);
+                  setFindStatus("idle");
+                  setFoundGhlContactId("");
+                  setFoundGhlContactData(null);
                 }}
                 className="p-2 hover:bg-white/10 rounded-full transition-colors"
               >
@@ -1550,6 +1839,24 @@ export default function ClaimsPage() {
                   />
                 </div>
 
+                {/* Initial Amount */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Initial Amount Spent (optional)
+                  </label>
+                  <input
+                    type="number"
+                    value={newClaimForm.initial_amount}
+                    onChange={(e) =>
+                      setNewClaimForm({ ...newClaimForm, initial_amount: e.target.value })
+                    }
+                    placeholder="0.00"
+                    step="0.01"
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
                 {/* Photos */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1616,7 +1923,7 @@ export default function ClaimsPage() {
             {/* Modal Footer */}
             <div className="bg-white border-t border-gray-200 p-4 flex-shrink-0 space-y-2">
               <button
-                onClick={handleCreateClaim}
+                onClick={() => handleCreateClaim()}
                 disabled={
                   !newClaimForm.customer_name.trim() ||
                   !newClaimForm.initial_claim_details.trim() ||
@@ -1631,6 +1938,9 @@ export default function ClaimsPage() {
                 onClick={() => {
                   setShowNewClaimModal(false);
                   setNewClaimForm(emptyClaimForm);
+                  setFindStatus("idle");
+                  setFoundGhlContactId("");
+                  setFoundGhlContactData(null);
                   claimPhotos.forEach((p) => URL.revokeObjectURL(p.preview));
                   setClaimPhotos([]);
                 }}

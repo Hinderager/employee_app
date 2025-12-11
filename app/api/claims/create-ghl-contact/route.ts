@@ -6,7 +6,7 @@ const GHL_API_BASE = "https://services.leadconnectorhq.com";
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, phone, email } = await request.json();
+    const { name, phone, email, address } = await request.json();
 
     if (!name) {
       return NextResponse.json(
@@ -69,6 +69,7 @@ export async function POST(request: NextRequest) {
         lastName,
         phone: normalizedPhone,
         email: email || undefined,
+        address1: address || undefined,
         tags: ["Claims Contact"],
         source: "Claims App",
       }),
