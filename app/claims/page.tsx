@@ -207,6 +207,32 @@ export default function ClaimsPage() {
     }).format(amount);
   };
 
+  // Extract photo URLs from claim updates
+  const getClaimPhotos = (claim: Claim): string[] => {
+    const photos: string[] = [];
+    if (claim.claim_updates) {
+      claim.claim_updates.forEach((update) => {
+        // Look for "Photos: url1, url2" pattern in notes
+        const photosMatch = update.note.match(/Photos:\s*(.+)$/);
+        if (photosMatch) {
+          const urls = photosMatch[1].split(",").map((url) => url.trim());
+          photos.push(...urls);
+        }
+      });
+    }
+    return photos;
+  };
+
+  // Convert Google Drive view URL to thumbnail URL
+  const getDriveThumbnailUrl = (viewUrl: string): string => {
+    // Extract file ID from various Google Drive URL formats
+    const match = viewUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) {
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w400`;
+    }
+    return viewUrl;
+  };
+
   // Open claim detail
   const openClaimDetail = (claim: Claim) => {
     setSelectedClaim(claim);
@@ -1432,8 +1458,8 @@ export default function ClaimsPage() {
               )}
 
               {/* Updates */}
-              <div className="bg-white rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
+              <div>
+                <div className="flex items-center justify-between mb-3 px-1">
                   <h3 className="font-semibold text-gray-900">Updates</h3>
                   {editingUpdate ? (
                     <button
@@ -1571,7 +1597,7 @@ export default function ClaimsPage() {
                         <div key={update.id}>
                           {editingUpdate?.id === update.id ? (
                             // Edit form
-                            <div className="bg-blue-50 rounded-lg p-3 border border-blue-200 space-y-3">
+                            <div className="bg-white rounded-xl p-4 border-l-4 border-blue-400 shadow-sm space-y-3">
                               <textarea
                                 value={editNote}
                                 onChange={(e) => setEditNote(e.target.value)}
@@ -1612,10 +1638,10 @@ export default function ClaimsPage() {
                             // Display update (clickable)
                             <div
                               onClick={() => startEditUpdate(update)}
-                              className="border-l-4 border-blue-400 pl-3 py-2 cursor-pointer hover:bg-gray-50 rounded-r-lg transition-colors"
+                              className="bg-white rounded-xl p-4 border-l-4 border-blue-400 cursor-pointer hover:bg-gray-50 transition-colors shadow-sm"
                             >
                               <p className="text-gray-700">{update.note}</p>
-                              <div className="flex items-center justify-between mt-1">
+                              <div className="flex items-center justify-between mt-2">
                                 <span className="text-xs text-gray-500">
                                   {formatDate(update.created_at)} by{" "}
                                   {update.created_by || "Unknown"}
@@ -1635,6 +1661,35 @@ export default function ClaimsPage() {
                   <p className="text-gray-500 text-sm">No updates yet</p>
                 )}
               </div>
+
+              {/* Photos Section */}
+              {getClaimPhotos(selectedClaim).length > 0 && (
+                <div className="bg-white rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-900 mb-3">
+                    Photos ({getClaimPhotos(selectedClaim).length})
+                  </h3>
+                  <div className="grid grid-cols-3 gap-2">
+                    {getClaimPhotos(selectedClaim).map((url, index) => (
+                      <a
+                        key={index}
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block aspect-square rounded-lg overflow-hidden bg-gray-100 hover:opacity-80 transition-opacity"
+                      >
+                        <img
+                          src={getDriveThumbnailUrl(url)}
+                          alt={`Claim photo ${index + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' /%3E%3C/svg%3E";
+                          }}
+                        />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Delete Claim Button */}
               <div className="pt-4 border-t border-gray-200">
