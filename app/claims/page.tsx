@@ -593,12 +593,19 @@ export default function ClaimsPage() {
       const result = await response.json();
       console.log("[uploadPhotos] API response:", result);
       if (result.success) {
+        if (result.errors && result.errors.length > 0) {
+          alert(`Some photos failed to upload:\n${result.errors.join("\n")}`);
+        }
         return result.photoUrls || [];
       }
-      console.error("Photo upload failed:", result.error);
+      // Show detailed error
+      const errorDetails = result.errors ? result.errors.join("\n") : result.error || "Unknown error";
+      alert(`Photo upload failed:\n${errorDetails}`);
+      console.error("Photo upload failed:", result.error, result.errors);
       return [];
     } catch (err) {
       console.error("Error uploading photos:", err);
+      alert(`Photo upload error: ${err}`);
       return [];
     }
   };
