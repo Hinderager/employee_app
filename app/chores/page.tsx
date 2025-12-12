@@ -548,16 +548,6 @@ export default function ChoresPage() {
                 />
               </div>
 
-              {hasChanges && (
-                <button
-                  onClick={handleSaveEdit}
-                  disabled={!editTitle.trim() || saving}
-                  className="w-full py-3 bg-cyan-500 text-white rounded-xl font-medium disabled:opacity-50"
-                >
-                  {saving ? "Saving..." : "Save Changes"}
-                </button>
-              )}
-
               <p className="text-xs text-gray-400 text-center">
                 Added{" "}
                 {new Date(selectedChore.created_at).toLocaleDateString("en-US", {
@@ -569,16 +559,21 @@ export default function ChoresPage() {
 
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={handleComplete}
-                  disabled={completing || deleting || hasChanges}
+                  onClick={async () => {
+                    if (hasChanges) {
+                      await handleSaveEdit();
+                    }
+                    setSelectedChore(null);
+                  }}
+                  disabled={saving || deleting}
                   className="flex-1 py-3 bg-green-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <CheckIcon className="h-5 w-5" />
-                  {completing ? "..." : "Done"}
+                  {saving ? "Saving..." : "Done"}
                 </button>
                 <button
                   onClick={handleDelete}
-                  disabled={completing || deleting || hasChanges}
+                  disabled={saving || deleting}
                   className="py-3 px-4 bg-red-500 text-white rounded-xl font-medium flex items-center justify-center disabled:opacity-50"
                 >
                   <TrashIcon className="h-5 w-5" />
