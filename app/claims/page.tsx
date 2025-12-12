@@ -121,6 +121,10 @@ export default function ClaimsPage() {
   const [editingContact, setEditingContact] = useState(false);
   const [editContactName, setEditContactName] = useState("");
   const [editContactPhone, setEditContactPhone] = useState("");
+  const [editingCustomer, setEditingCustomer] = useState(false);
+  const [editCustomerName, setEditCustomerName] = useState("");
+  const [editCustomerPhone, setEditCustomerPhone] = useState("");
+  const [editCustomerAddress, setEditCustomerAddress] = useState("");
   const [editingDetails, setEditingDetails] = useState(false);
   const [editDetailsText, setEditDetailsText] = useState("");
 
@@ -168,6 +172,7 @@ export default function ClaimsPage() {
     }
   };
 
+
   useEffect(() => {
     fetchClaims();
   }, []);
@@ -181,6 +186,7 @@ export default function ClaimsPage() {
     );
   };
 
+
   // Get status color
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -188,14 +194,13 @@ export default function ClaimsPage() {
         return "bg-red-100 text-red-700";
       case "in_progress":
         return "bg-yellow-100 text-yellow-700";
-      case "resolved":
-        return "bg-green-100 text-green-700";
       case "closed":
         return "bg-gray-100 text-gray-700";
       default:
         return "bg-gray-100 text-gray-700";
     }
   };
+
 
   // Format date
   const formatDate = (dateString: string) => {
@@ -206,6 +211,7 @@ export default function ClaimsPage() {
     });
   };
 
+
   // Format currency
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-US", {
@@ -214,16 +220,19 @@ export default function ClaimsPage() {
     }).format(amount);
   };
 
+
   // Get Supabase storage URL for a claim photo
   const getSupabasePhotoUrl = (storagePath: string): string => {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://jvflufcpcxlsnszlvolj.supabase.co";
     return `${supabaseUrl}/storage/v1/object/public/claim-photos/${storagePath}`;
   };
 
+
   // Get all photos for a claim from Supabase
   const getClaimStoredPhotos = (claim: Claim): StoredClaimPhoto[] => {
     return claim.claim_photos || [];
   };
+
 
   // Photo viewer handlers
   const openPhotoViewer = (index: number) => {
@@ -232,6 +241,7 @@ export default function ClaimsPage() {
     setPhotoPosition({ x: 0, y: 0 });
     setSwipeOffset(0);
   };
+
 
   const closePhotoViewer = () => {
     setViewingPhotoIndex(null);
@@ -243,6 +253,7 @@ export default function ClaimsPage() {
     touchStartY.current = null;
     lastTouchDistance.current = null;
   };
+
 
   const navigatePhoto = (direction: "prev" | "next") => {
     if (!selectedClaim || viewingPhotoIndex === null || isAnimating) return;
@@ -267,12 +278,14 @@ export default function ClaimsPage() {
     }, 300);
   };
 
+
   const getTouchDistance = (touches: React.TouchList) => {
     return Math.hypot(
       touches[0].clientX - touches[1].clientX,
       touches[0].clientY - touches[1].clientY
     );
   };
+
 
   const handlePhotoTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 2) {
@@ -286,6 +299,7 @@ export default function ClaimsPage() {
       isDragging.current = photoScale > 1;
     }
   };
+
 
   const handlePhotoTouchMove = (e: React.TouchEvent) => {
     if (e.touches.length === 2 && lastTouchDistance.current !== null) {
@@ -317,6 +331,7 @@ export default function ClaimsPage() {
     }
   };
 
+
   const handlePhotoTouchEnd = (e: React.TouchEvent) => {
     if (e.touches.length === 0) {
       // Check for swipe navigation (only when not zoomed)
@@ -341,6 +356,7 @@ export default function ClaimsPage() {
     }
   };
 
+
   const handleDoubleTap = () => {
     if (photoScale > 1) {
       setPhotoScale(1);
@@ -349,6 +365,7 @@ export default function ClaimsPage() {
       setPhotoScale(2.5);
     }
   };
+
 
   const downloadPhoto = async (url: string, filename: string) => {
     try {
@@ -369,6 +386,7 @@ export default function ClaimsPage() {
     }
   };
 
+
   // Open claim detail
   const openClaimDetail = (claim: Claim) => {
     console.log("[openClaimDetail] Claim photos:", claim.claim_photos);
@@ -377,6 +395,7 @@ export default function ClaimsPage() {
     setNewNote("");
     setNewAmount("");
   };
+
 
   // Close modal
   const closeModal = () => {
@@ -389,6 +408,7 @@ export default function ClaimsPage() {
     updatePhotos.forEach((p) => URL.revokeObjectURL(p.preview));
     setUpdatePhotos([]);
   };
+
 
   // Log amount to Google Sheets
   const logToSheets = async (claimId: string, customerName: string, amountSpent: number) => {
@@ -422,6 +442,7 @@ export default function ClaimsPage() {
       alert("Warning: Amount saved but failed to connect to Google Sheets API.");
     }
   };
+
 
   // Add new update
   const handleAddUpdate = async () => {
@@ -499,6 +520,7 @@ export default function ClaimsPage() {
     }
   };
 
+
   // Start editing an update
   const startEditUpdate = (update: ClaimUpdate) => {
     setEditingUpdate(update);
@@ -506,6 +528,7 @@ export default function ClaimsPage() {
     setEditAmount(String(update.amount_spent || ""));
     setShowAddUpdate(false);
   };
+
 
   // Save edited update
   const handleSaveEditUpdate = async () => {
@@ -569,12 +592,14 @@ export default function ClaimsPage() {
     }
   };
 
+
   // Cancel editing
   const cancelEditUpdate = () => {
     setEditingUpdate(null);
     setEditNote("");
     setEditAmount("");
   };
+
 
   // Find contact by phone and fill form, or create new contact if not found
   const handleFindContact = async () => {
@@ -659,6 +684,7 @@ export default function ClaimsPage() {
     }
   };
 
+
   // Reset find status when phone changes
   const handlePhoneChange = (phone: string) => {
     setNewClaimForm({ ...newClaimForm, phone });
@@ -668,6 +694,7 @@ export default function ClaimsPage() {
       setFoundGhlContactData(null);
     }
   };
+
 
   // Handle photo selection for new claim
   const handleClaimPhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -688,6 +715,7 @@ export default function ClaimsPage() {
     e.target.value = "";
   };
 
+
   // Handle photo selection for updates
   const handleUpdatePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
@@ -707,6 +735,7 @@ export default function ClaimsPage() {
     e.target.value = "";
   };
 
+
   // Remove photo from claim
   const removeClaimPhoto = (id: string) => {
     setClaimPhotos((prev) => {
@@ -716,6 +745,7 @@ export default function ClaimsPage() {
     });
   };
 
+
   // Remove photo from update
   const removeUpdatePhoto = (id: string) => {
     setUpdatePhotos((prev) => {
@@ -724,6 +754,7 @@ export default function ClaimsPage() {
       return prev.filter((p) => p.id !== id);
     });
   };
+
 
   // Compress image to 30% resolution with WebP/JPEG fallback
   const compressImage = async (file: File): Promise<File> => {
@@ -770,6 +801,7 @@ export default function ClaimsPage() {
           });
         };
 
+
         // Try WebP first
         tryFormat("image/webp", 0.8, ".webp").then((webpFile) => {
           if (webpFile) {
@@ -790,15 +822,18 @@ export default function ClaimsPage() {
         });
       };
 
+
       img.onerror = () => {
         URL.revokeObjectURL(objectUrl);
         console.log(`[compressImage] Failed to load ${file.name}, using original`);
         resolve(file);
       };
 
+
       img.src = objectUrl;
     });
   };
+
 
   // Upload photos to Supabase Storage (one at a time to avoid body size limits)
   const uploadPhotos = async (
@@ -863,6 +898,7 @@ export default function ClaimsPage() {
     return allPhotoUrls;
   };
 
+
   // Delete update
   const handleDeleteUpdate = async () => {
     if (!selectedClaim || !editingUpdate) return;
@@ -913,6 +949,7 @@ export default function ClaimsPage() {
     }
   };
 
+
   // Update claim status
   const updateStatus = async (newStatus: string) => {
     if (!selectedClaim) return;
@@ -935,6 +972,7 @@ export default function ClaimsPage() {
     }
   };
 
+
   // Start editing alternate contact
   const startEditContact = () => {
     if (!selectedClaim) return;
@@ -942,6 +980,7 @@ export default function ClaimsPage() {
     setEditContactPhone(selectedClaim.contact_phone || "");
     setEditingContact(true);
   };
+
 
   // Save edited alternate contact
   const handleSaveContact = async () => {
@@ -976,6 +1015,7 @@ export default function ClaimsPage() {
       setSubmitting(false);
     }
   };
+
 
   // Delete alternate contact
   const handleDeleteContact = async () => {
@@ -1016,12 +1056,60 @@ export default function ClaimsPage() {
     }
   };
 
+
+  // Start editing customer info
+  const startEditCustomer = () => {
+    if (!selectedClaim) return;
+    setEditCustomerName(selectedClaim.customer_name || "");
+    setEditCustomerPhone(selectedClaim.phone || "");
+    setEditCustomerAddress(selectedClaim.address || "");
+    setEditingCustomer(true);
+  };
+
+
+  // Save edited customer info
+  const handleSaveCustomer = async () => {
+    if (!selectedClaim) return;
+
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from("claims")
+        .update({
+          customer_name: editCustomerName.trim(),
+          phone: editCustomerPhone.trim(),
+          address: editCustomerAddress.trim(),
+        })
+        .eq("id", selectedClaim.id);
+
+      if (error) {
+        console.error("Error updating customer:", error);
+        alert("Failed to update customer info");
+        return;
+      }
+
+      setSelectedClaim({
+        ...selectedClaim,
+        customer_name: editCustomerName.trim(),
+        phone: editCustomerPhone.trim(),
+        address: editCustomerAddress.trim(),
+      });
+      setEditingCustomer(false);
+      fetchClaims();
+    } catch (err) {
+      console.error("Error:", err);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Start editing initial claim details
   const startEditDetails = () => {
     if (!selectedClaim) return;
     setEditDetailsText(selectedClaim.initial_claim_details || "");
     setEditingDetails(true);
   };
+
 
   // Save edited initial claim details
   const handleSaveDetails = async () => {
@@ -1052,6 +1140,7 @@ export default function ClaimsPage() {
       setSubmitting(false);
     }
   };
+
 
   // Delete entire claim
   const handleDeleteClaim = async () => {
@@ -1107,10 +1196,12 @@ export default function ClaimsPage() {
     }
   };
 
+
   // Get GHL contact link
   const getGHLLink = (contactId: string) => {
     return `https://app.gohighlevel.com/v2/location/${GHL_LOCATION_ID}/contacts/detail/${contactId}`;
   };
+
 
   // Search for GHL contact by phone - returns full contact details
   const searchGHLContact = async (phone: string) => {
@@ -1129,6 +1220,7 @@ export default function ClaimsPage() {
           email: result.email || "",
           address: result.address || "",
         };
+
       }
       return { found: false, contactId: null, contactName: "", email: "", address: "" };
     } catch (err) {
@@ -1136,6 +1228,7 @@ export default function ClaimsPage() {
       return { found: false, contactId: null, contactName: "", email: "", address: "" };
     }
   };
+
 
   // Create GHL contact (for alternate contacts)
   const createGHLContact = async (name: string, phone: string, email?: string, address?: string) => {
@@ -1156,6 +1249,7 @@ export default function ClaimsPage() {
     }
   };
 
+
   // Generate next claim number
   const generateClaimNumber = async () => {
     const { data } = await supabase
@@ -1170,6 +1264,7 @@ export default function ClaimsPage() {
     }
     return "CLM-0001";
   };
+
 
   // Helper to check if form data matches GHL contact data
   const checkGhlMismatch = (ghlData: { contactName: string; email: string; address: string }) => {
@@ -1192,6 +1287,7 @@ export default function ClaimsPage() {
     }
     return mismatches;
   };
+
 
   // Create new claim
   const handleCreateClaim = async (confirmedGhlData?: { contactId: string; contactName: string; email: string; address: string }) => {
@@ -1236,6 +1332,7 @@ export default function ClaimsPage() {
               email: newClaimForm.email?.trim() || "",
               address: newClaimForm.address?.trim() || "",
             };
+
           } else {
             alert("Failed to create GHL contact. Please try again.");
             setCreatingClaim(false);
@@ -1250,6 +1347,7 @@ export default function ClaimsPage() {
             email: customerGhl.email,
             address: customerGhl.address,
           };
+
         }
       }
 
@@ -1269,6 +1367,7 @@ export default function ClaimsPage() {
               email: ghlContactData.email || "",
               address: ghlContactData.address || "",
             };
+
             // Update form visually
             setNewClaimForm({
               ...newClaimForm,
@@ -1369,6 +1468,7 @@ export default function ClaimsPage() {
       setUploadingPhotos(false);
     }
   };
+
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 safe-bottom">
@@ -1515,33 +1615,108 @@ export default function ClaimsPage() {
             <div className="overflow-y-auto p-4 flex-1 space-y-4">
               {/* Contact Info */}
               <div className="bg-white rounded-xl p-4 space-y-3">
-                <h3 className="font-semibold text-gray-900">Customer Info</h3>
-
-                <div className="flex items-center gap-3">
-                  <PhoneIcon className="h-5 w-5 text-gray-400" />
-                  <a
-                    href={`tel:${selectedClaim.phone}`}
-                    className="text-blue-600 hover:underline"
-                  >
-                    {selectedClaim.phone}
-                  </a>
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-gray-900">Customer Info</h3>
+                  {!editingCustomer && (
+                    <button
+                      onClick={startEditCustomer}
+                      className="text-blue-600 text-sm font-medium"
+                    >
+                      Edit
+                    </button>
+                  )}
                 </div>
 
-                <div className="flex items-start gap-3">
-                  <MapPinIcon className="h-5 w-5 text-gray-400 mt-0.5" />
-                  <span className="text-gray-700">{selectedClaim.address}</span>
-                </div>
+                {editingCustomer ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Name</label>
+                      <input
+                        type="text"
+                        value={editCustomerName}
+                        onChange={(e) => setEditCustomerName(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Phone</label>
+                      <input
+                        type="tel"
+                        value={editCustomerPhone}
+                        onChange={(e) => setEditCustomerPhone(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-gray-500 mb-1">Address</label>
+                      <textarea
+                        value={editCustomerAddress}
+                        onChange={(e) => setEditCustomerAddress(e.target.value)}
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSaveCustomer}
+                        disabled={submitting}
+                        className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
+                      >
+                        {submitting ? "Saving..." : "Save"}
+                      </button>
+                      <button
+                        onClick={() => setEditingCustomer(false)}
+                        className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="text-gray-700 font-medium">
+                      {selectedClaim.customer_name}
+                    </div>
 
-                {/* Customer GHL Button */}
-                {selectedClaim.ghl_contact_id && selectedClaim.ghl_contact_id !== "manual-entry" && (
-                  <a
-                    href={getGHLLink(selectedClaim.ghl_contact_id)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block w-full bg-orange-500 text-white text-center py-3 rounded-xl font-semibold hover:bg-orange-600 transition-colors"
-                  >
-                    Customer in GoHighLevel
-                  </a>
+                    <div className="flex items-center gap-3">
+                      <PhoneIcon className="h-5 w-5 text-gray-400" />
+                      <a
+                        href={`tel:${selectedClaim.phone}`}
+                        className="text-blue-600 hover:underline"
+                      >
+                        {selectedClaim.phone}
+                      </a>
+                    </div>
+
+                    <div className="flex items-start gap-3">
+                      <MapPinIcon className="h-5 w-5 text-gray-400 mt-0.5" />
+                      <span className="text-gray-700">{selectedClaim.address}</span>
+                    </div>
+
+                    {/* Open in Maps Button */}
+                    {selectedClaim.address && (
+                      <a
+                        href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedClaim.address)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full bg-blue-500 text-white text-center py-3 rounded-xl font-semibold hover:bg-blue-600 transition-colors"
+                      >
+                        Open in Maps
+                      </a>
+                    )}
+
+                    {/* Customer GHL Button */}
+                    {selectedClaim.ghl_contact_id && selectedClaim.ghl_contact_id !== "manual-entry" && (
+                      <a
+                        href={getGHLLink(selectedClaim.ghl_contact_id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full bg-orange-500 text-white text-center py-3 rounded-xl font-semibold hover:bg-orange-600 transition-colors"
+                      >
+                        Customer in GoHighLevel
+                      </a>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -1641,7 +1816,7 @@ export default function ClaimsPage() {
               <div className="bg-white rounded-xl p-4">
                 <h3 className="font-semibold text-gray-900 mb-3">Status</h3>
                 <div className="flex flex-wrap gap-2">
-                  {["open", "in_progress", "resolved", "closed"].map(
+                  {["open", "in_progress", "closed"].map(
                     (status) => (
                       <button
                         key={status}
