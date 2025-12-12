@@ -1518,7 +1518,7 @@ export default function ClaimsPage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {claims.map((claim) => (
+            {claims.filter(claim => claim.status !== 'done').map((claim) => (
               <div
                 key={claim.id}
                 onClick={() => openClaimDetail(claim)}
