@@ -559,26 +559,28 @@ export default function ChoresPage() {
 
               <div className="flex gap-3 pt-2">
                 <button
-                  onClick={async () => {
-                    if (hasChanges) {
-                      await handleSaveEdit();
-                    }
-                    setSelectedChore(null);
-                  }}
-                  disabled={saving || deleting}
+                  onClick={handleSaveEdit}
+                  disabled={!hasChanges || saving || deleting}
+                  className="flex-1 py-3 bg-cyan-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  {saving ? "Saving..." : "Save"}
+                </button>
+                <button
+                  onClick={handleComplete}
+                  disabled={saving || deleting || completing}
                   className="flex-1 py-3 bg-green-500 text-white rounded-xl font-medium flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <CheckIcon className="h-5 w-5" />
-                  {saving ? "Saving..." : "Done"}
-                </button>
-                <button
-                  onClick={handleDelete}
-                  disabled={saving || deleting}
-                  className="py-3 px-4 bg-red-500 text-white rounded-xl font-medium flex items-center justify-center disabled:opacity-50"
-                >
-                  <TrashIcon className="h-5 w-5" />
+                  {completing ? "..." : "Done"}
                 </button>
               </div>
+              <button
+                onClick={handleDelete}
+                disabled={saving || deleting}
+                className="w-full py-2 text-red-500 text-sm font-medium"
+              >
+                Delete Chore
+              </button>
             </div>
           </div>
         </div>
