@@ -68,13 +68,14 @@ export async function POST(request: NextRequest) {
     });
 
     // Now update the new row 3 with our data
-    // Column layout: B=Status, C=Date, D=ClaimId, E=CustomerName, F=Amount
+    // Column layout: B=Status, C=Date, D=ClaimId, E=CustomerName, F=Amount, G=50% of Amount
+    const halfAmount = Math.round(amountSpent * 0.5 * 100) / 100; // 50% rounded to 2 decimals
     await sheets.spreadsheets.values.update({
       spreadsheetId: SPREADSHEET_ID,
-      range: `${SHEET_NAME}!B3:F3`,
+      range: `${SHEET_NAME}!B3:G3`,
       valueInputOption: "USER_ENTERED",
       requestBody: {
-        values: [["New", date, claimId, customerName, amountSpent]],
+        values: [["New", date, claimId, customerName, amountSpent, halfAmount]],
       },
     });
 
@@ -115,6 +116,7 @@ export async function POST(request: NextRequest) {
       claimId,
       customerName,
       amountSpent,
+      halfAmount,
       updateId,
     });
 
