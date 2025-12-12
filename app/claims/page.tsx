@@ -1438,6 +1438,24 @@ export default function ClaimsPage() {
         return;
       }
 
+      // Send Slack notification
+      try {
+        await fetch("https://n8n.srv1041426.hstgr.cloud/webhook/new-customer-claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            claimNumber,
+            customerName: finalName,
+            phone: newClaimForm.phone.trim(),
+            email: finalEmail,
+            description: newClaimForm.initial_claim_details.trim(),
+            source: "Employee App",
+          }),
+        });
+      } catch (slackError) {
+        console.error("Slack notification failed:", slackError);
+      }
+
       // If initial amount was provided, create an update entry and log to sheets
       if (initialAmount > 0 && newClaim) {
         await supabase.from("claim_updates").insert({
