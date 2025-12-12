@@ -954,6 +954,15 @@ export default function ClaimsPage() {
   const updateStatus = async (newStatus: string) => {
     if (!selectedClaim) return;
 
+    // Require code to close a claim
+    if (newStatus === 'closed') {
+      const code = prompt('Enter 4-digit code to close this claim:');
+      if (code !== '0457') {
+        alert('Incorrect code');
+        return;
+      }
+    }
+
     try {
       const { error } = await supabase
         .from("claims")
