@@ -13,6 +13,7 @@ import {
   ClipboardDocumentListIcon,
   ExclamationTriangleIcon,
   ExclamationCircleIcon,
+  ClipboardDocumentCheckIcon,
 } from "@heroicons/react/24/outline";
 
 const menuItems = [
@@ -85,6 +86,13 @@ const menuItems = [
     href: "/claims",
     icon: ExclamationCircleIcon,
     color: "bg-rose-500",
+  },
+  {
+    title: "To-Do's",
+    description: "Daily chores",
+    href: "/chores",
+    icon: ClipboardDocumentCheckIcon,
+    color: "bg-cyan-500",
   },
 ];
 
