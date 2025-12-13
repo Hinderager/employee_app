@@ -85,10 +85,6 @@ export default function WebsiteAnalyticsPage() {
   const [lastUpdated, setLastUpdated] = useState<string>();
 
 
-  const handleBackspace = () => {
-    setCode(code.slice(0, -1));
-    setAuthError('');
-  };
 
   // Date range handler
   const handleDateRangeChange = (range: DateRange, startDate?: string, endDate?: string) => {
@@ -239,81 +235,6 @@ export default function WebsiteAnalyticsPage() {
     }
   }, [dateRange, customStartDate, customEndDate]);
 
-  // Code entry screen
-  if (!isUnlocked) {
-    return (
-      <main className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 safe-bottom">
-        <header className="shadow-sm safe-top" style={{ backgroundColor: '#06649b' }}>
-          <div className="px-4 py-4 flex items-center">
-            <button
-              onClick={() => router.push('/admin')}
-              className="p-2 -ml-2 rounded-lg hover:bg-white/10 transition-colors"
-            >
-              <ArrowLeftIcon className="h-6 w-6 text-white" />
-            </button>
-            <h1 className="text-lg font-bold text-white ml-2">Website Analytics</h1>
-          </div>
-        </header>
-
-        <div className="flex flex-col items-center justify-center px-4 pt-16">
-          <div className="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
-            <div className="flex justify-center mb-6">
-              <div className="bg-gray-100 p-4 rounded-full">
-                <LockClosedIcon className="h-12 w-12 text-gray-600" />
-              </div>
-            </div>
-
-            <h2 className="text-xl font-bold text-center text-gray-900 mb-2">
-              Enter Admin Code
-            </h2>
-            <p className="text-sm text-gray-500 text-center mb-6">
-              Enter the 4-digit code to access analytics
-            </p>
-
-            <div className="flex justify-center gap-4 mb-6">
-              {[0, 1, 2, 3].map((i) => (
-                <div
-                  key={i}
-                  className={`w-4 h-4 rounded-full transition-colors ${
-                    code.length > i ? 'bg-blue-600' : 'bg-gray-200'
-                  }`}
-                />
-              ))}
-            </div>
-
-            {authError && (
-              <p className="text-red-500 text-sm text-center mb-4">{authError}</p>
-            )}
-
-            <div className="grid grid-cols-3 gap-3">
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, '⌫'].map((digit, index) => (
-                <button
-                  key={index}
-                  onClick={() => {
-                    if (digit === '⌫') {
-                      handleBackspace();
-                    } else if (digit !== '') {
-                      handleDigitPress(String(digit));
-                    }
-                  }}
-                  disabled={digit === ''}
-                  className={`h-14 rounded-xl text-xl font-semibold transition-colors ${
-                    digit === ''
-                      ? 'invisible'
-                      : digit === '⌫'
-                      ? 'bg-gray-100 text-gray-600 hover:bg-gray-200 active:bg-gray-300'
-                      : 'bg-gray-100 text-gray-900 hover:bg-gray-200 active:bg-gray-300'
-                  }`}
-                >
-                  {digit}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      </main>
-    );
-  }
 
   // Main dashboard
   return (
