@@ -2,7 +2,8 @@ import { GA4Metrics, DailyMetric, PageMetric, TrafficSource } from '../../../adm
 import { calculateDateRange } from './cacheManager';
 
 // Google Analytics Data API client
-// Requires: GA4_SERVICE_ACCOUNT_EMAIL, GA4_PRIVATE_KEY environment variables
+// Uses OAuth2 with refresh token (same credentials as Google Drive)
+// Requires: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN environment variables
 
 interface GA4Response {
   rows?: Array<{
@@ -15,15 +16,17 @@ async function getGA4Auth() {
   // Dynamic import to avoid issues if googleapis not installed
   const { google } = await import('googleapis');
 
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GA4_SERVICE_ACCOUNT_EMAIL,
-      private_key: process.env.GA4_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/analytics.readonly'],
+  // Use OAuth2 with refresh token (same as Google Drive setup)
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  );
+
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
   });
 
-  return auth;
+  return oauth2Client;
 }
 
 export async function getGA4OverviewData(
@@ -32,8 +35,8 @@ export async function getGA4OverviewData(
   startDate?: string,
   endDate?: string
 ): Promise<Partial<GA4Metrics> | null> {
-  if (!propertyId || !process.env.GA4_SERVICE_ACCOUNT_EMAIL) {
-    console.log('[ga4Client] Missing property ID or credentials');
+  if (!propertyId || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
+    console.log('[ga4Client] Missing property ID or OAuth credentials');
     return null;
   }
 
@@ -91,7 +94,7 @@ export async function getGA4DetailedData(
   startDate?: string,
   endDate?: string
 ): Promise<GA4Metrics | null> {
-  if (!propertyId || !process.env.GA4_SERVICE_ACCOUNT_EMAIL) {
+  if (!propertyId || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
     return null;
   }
 

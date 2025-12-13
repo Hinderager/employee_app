@@ -2,20 +2,22 @@ import { KeywordRanking, SearchConsoleMetrics } from '../../../admin/website-ana
 import { calculateDateRange } from './cacheManager';
 
 // Google Search Console API client
-// Uses same service account as GA4
+// Uses OAuth2 with refresh token (same as GA4 and Google Drive)
 
 async function getSearchConsoleAuth() {
   const { google } = await import('googleapis');
 
-  const auth = new google.auth.GoogleAuth({
-    credentials: {
-      client_email: process.env.GA4_SERVICE_ACCOUNT_EMAIL, // Same as GA4
-      private_key: process.env.GA4_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/webmasters.readonly'],
+  // Use OAuth2 with refresh token (same as Google Drive setup)
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_CLIENT_SECRET
+  );
+
+  oauth2Client.setCredentials({
+    refresh_token: process.env.GOOGLE_REFRESH_TOKEN,
   });
 
-  return auth;
+  return oauth2Client;
 }
 
 export async function getSearchConsoleOverview(
@@ -24,8 +26,8 @@ export async function getSearchConsoleOverview(
   startDate?: string,
   endDate?: string
 ): Promise<Partial<SearchConsoleMetrics> | null> {
-  if (!siteUrl || !process.env.GA4_SERVICE_ACCOUNT_EMAIL) {
-    console.log('[searchConsoleClient] Missing site URL or credentials');
+  if (!siteUrl || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
+    console.log('[searchConsoleClient] Missing site URL or OAuth credentials');
     return null;
   }
 
@@ -75,7 +77,7 @@ export async function getSearchConsoleKeywords(
   startDate?: string,
   endDate?: string
 ): Promise<KeywordRanking[]> {
-  if (!siteUrl || !process.env.GA4_SERVICE_ACCOUNT_EMAIL) {
+  if (!siteUrl || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
     return [];
   }
 
@@ -122,7 +124,7 @@ export async function getSearchConsoleDetailedData(
   startDate?: string,
   endDate?: string
 ): Promise<SearchConsoleMetrics | null> {
-  if (!siteUrl || !process.env.GA4_SERVICE_ACCOUNT_EMAIL) {
+  if (!siteUrl || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
     return null;
   }
 
