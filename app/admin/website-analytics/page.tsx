@@ -24,7 +24,6 @@ import KeywordRankingsTable from './components/KeywordRankingsTable';
 import CampaignTable from './components/CampaignTable';
 import { DateRange, OverviewMetrics, SiteMetrics, AnalyticsSite } from './types/analytics';
 
-const ADMIN_CODE = '0457';
 
 interface Site {
   id: string;
@@ -43,9 +42,7 @@ export default function WebsiteAnalyticsPage() {
   const router = useRouter();
 
   // Auth state
-  const [isUnlocked, setIsUnlocked] = useState(false);
-  const [code, setCode] = useState('');
-  const [authError, setAuthError] = useState('');
+  const isUnlocked = true; // No separate code needed - already entered on /admin page
 
   // Dashboard state
   const [sites, setSites] = useState<Site[]>([]);
@@ -87,24 +84,6 @@ export default function WebsiteAnalyticsPage() {
   const [loadingCampaigns, setLoadingCampaigns] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<string>();
 
-  // Admin code handlers
-  const handleDigitPress = (digit: string) => {
-    if (code.length < 4) {
-      const newCode = code + digit;
-      setCode(newCode);
-      setAuthError('');
-
-      if (newCode.length === 4) {
-        if (newCode === ADMIN_CODE) {
-          setIsUnlocked(true);
-          setAuthError('');
-        } else {
-          setAuthError('Incorrect code');
-          setCode('');
-        }
-      }
-    }
-  };
 
   const handleBackspace = () => {
     setCode(code.slice(0, -1));
