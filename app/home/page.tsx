@@ -14,6 +14,7 @@ import {
   ExclamationTriangleIcon,
   ExclamationCircleIcon,
   ClipboardDocumentCheckIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/outline";
 
 const menuItems = [
@@ -93,6 +94,13 @@ const menuItems = [
     href: "/chores",
     icon: ClipboardDocumentCheckIcon,
     color: "bg-cyan-500",
+  },
+  {
+    title: "Admin",
+    description: "Admin settings",
+    href: "/admin",
+    icon: Cog6ToothIcon,
+    color: "bg-indigo-500",
   },
 ];
 
