@@ -1,5221 +1,2747 @@
 "use client";
 
-import { useState, useEffect, useRef, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
-import QuotePreview from "../components/QuotePreview";
-import Script from "next/script";
+import { useState, useEffect, useRef } from "react";
 
-function MoveWalkthroughContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const [jobNumber, setJobNumber] = useState("");
-  const [searchPhone, setSearchPhone] = useState("");
-  const [searchQuoteNum, setSearchQuoteNum] = useState("");
-  const [address, setAddress] = useState("");
-  const [folderUrl, setFolderUrl] = useState("");
-  const [quoteNumber, setQuoteNumber] = useState("");
-  const [isLoadingJob, setIsLoadingJob] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
-  const [isGoogleLoaded, setIsGoogleLoaded] = useState(false);
-  const [tempJobNumber, setTempJobNumber] = useState<string>("");
-  const [isLoadingPickupProperty, setIsLoadingPickupProperty] = useState(false);
-  const [isLoadingDeliveryProperty, setIsLoadingDeliveryProperty] = useState(false);
+// Declare global window properties for Google Maps
+declare global {
+  interface Window {
+    google: any;
+    initMoveWTMap: () => void;
+  }
+}
 
-  // Counter to force re-initialization of Google Places Autocomplete
-  const [autocompleteReinitKey, setAutocompleteReinitKey] = useState(0);
+type PropertyType = 'home' | 'apartment' | 'office' | 'storage' | null;
+type StorageUnit = {
+  id: number;
+  size: string | null;
+  type: 'conditioned' | 'standard' | null;
+  unitNumber: string;
+  fullness: string;
+};
 
-  // Recent forms for quick-link buttons
-  const [recentForms, setRecentForms] = useState<Array<{
+// Office address for deadhead calculations (travel to/from shop)
+const OFFICE_ADDRESS = '5015 N Lolo Pass Way, Meridian, ID 83646';
+
+// Type for deadhead travel data
+type DeadheadData = {
+  toStartMiles: number;
+  toStartMins: number;
+  returnMiles: number;
+  returnMins: number;
+};
+
+export default function MoveWTNew2Page() {
+  // Client-side only rendering to avoid hydration mismatch
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  // Recent estimates for quick-link tiles (from move_estimates table)
+  const [recentEstimates, setRecentEstimates] = useState<Array<{
     id: string;
-    quoteNumber: string;
-    jobNumber: string;
-    phoneNumber: string;
+    quoteId: string;
     displayName: string;
+    displayPhone: string;
     displayDate: string;
+    fromAddress: string;
+    toAddress: string;
+    serviceType: string;
   }>>([]);
-  const [isLoadingRecentForms, setIsLoadingRecentForms] = useState(true);
+  const [isLoadingRecentEstimates, setIsLoadingRecentEstimates] = useState(true);
+  const [isLoadingJob, setIsLoadingJob] = useState(false);
 
-  // Dynamic phone and email arrays
-  const [phones, setPhones] = useState<Array<{ number: string; name: string }>>([{ number: "", name: "" }]);
-  const [emails, setEmails] = useState<Array<{ email: string; name: string }>>([{ email: "", name: "" }]);
-
-  // Track if folder link was copied
-  const [isFolderLinkCopied, setIsFolderLinkCopied] = useState(false);
-
-  // Track if form is saved
-  const [isFormSaved, setIsFormSaved] = useState(true);
-  const [showQuotePreview, setShowQuotePreview] = useState(false);
-  const [quoteSent, setQuoteSent] = useState(false);
-  const [isSendingQuote, setIsSendingQuote] = useState(false);
-  const [sentQuoteUrl, setSentQuoteUrl] = useState<string>("");
-  const [sendHistory, setSendHistory] = useState<Array<{
-    timestamp: string;
-    method: 'sms' | 'email';
-    status: 'success' | 'failed';
-    error?: string;
-  }>>([]);
-  const hasRestoredFromStorage = useRef(false);
-
-  // Track the previous primary phone number to detect customer changes
-  const previousPrimaryPhone = useRef<string>("");
-
-  // Custom styles for invisible slider
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      input[type="range"][name="houseQuality"]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 0;
-        height: 0;
-        opacity: 0;
-      }
-      input[type="range"][name="houseQuality"]::-moz-range-thumb {
-        width: 0;
-        height: 0;
-        opacity: 0;
-        border: none;
-        background: transparent;
-      }
-      input[type="range"][name="houseQuality"]::-webkit-slider-runnable-track {
-        background: transparent;
-        height: 0;
-      }
-      input[type="range"][name="houseQuality"]::-moz-range-track {
-        background: transparent;
-        height: 0;
-      }
-    `;
-    document.head.appendChild(style);
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
-
-  // Fetch recent forms on mount
-  useEffect(() => {
-    const fetchRecentForms = async () => {
-      try {
-        const response = await fetch('/api/move-wt/recent-forms?limit=6');
-        const data = await response.json();
-        if (data.success && data.forms) {
-          setRecentForms(data.forms);
-        }
-      } catch (error) {
-        console.error('Failed to fetch recent forms:', error);
-      } finally {
-        setIsLoadingRecentForms(false);
-      }
-    };
-    fetchRecentForms();
-  }, []);
-
-  // Handle date/time returned from schedule picker
-  useEffect(() => {
-    const pickerType = searchParams.get('picker');
-    const date = searchParams.get('date');
-    const time = searchParams.get('time');
-
-    if (pickerType && date && time) {
-      // Restore from sessionStorage first to get all the form data
-      const savedState = sessionStorage.getItem('moveWtFormData');
-      if (savedState) {
-        try {
-          const parsed = JSON.parse(savedState);
-
-          // Check if this is the new format (has formData property) or old format (is formData directly)
-          const isNewFormat = parsed.formData !== undefined;
-          const restoredFormData = isNewFormat ? parsed.formData : parsed;
-
-          // Merge the new date/time with the restored data
-          if (pickerType === 'moving') {
-            restoredFormData.preferredDate = date;
-            restoredFormData.preferredTime = time;
-          } else if (pickerType === 'walkthrough') {
-            restoredFormData.walkThroughDate = date;
-            restoredFormData.walkThroughTime = time;
-          }
-
-          setFormData(restoredFormData);
-
-          // Restore other state if using new format
-          if (isNewFormat) {
-            if (parsed.phones && Array.isArray(parsed.phones) && parsed.phones.length > 0) {
-              setPhones(parsed.phones);
-            }
-            if (parsed.emails && Array.isArray(parsed.emails) && parsed.emails.length > 0) {
-              setEmails(parsed.emails);
-            }
-            if (parsed.jobNumber) setJobNumber(parsed.jobNumber);
-            if (parsed.searchPhone) setSearchPhone(parsed.searchPhone);
-            if (parsed.searchQuoteNum) setSearchQuoteNum(parsed.searchQuoteNum);
-            if (parsed.quoteNumber) setQuoteNumber(parsed.quoteNumber);
-            if (parsed.address) setAddress(parsed.address);
-            if (parsed.folderUrl) setFolderUrl(parsed.folderUrl);
-            if (parsed.sendHistory && Array.isArray(parsed.sendHistory)) {
-              setSendHistory(parsed.sendHistory);
-            }
-          }
-
-          hasRestoredFromStorage.current = true;
-
-          // Force re-initialization of Google Places Autocomplete after returning from schedule picker
-          setAutocompleteReinitKey(prev => prev + 1);
-        } catch (error) {
-          console.error('[Date Picker] Error restoring/merging data:', error);
-        }
-      } else {
-        // No saved data, just update the date fields
-        if (pickerType === 'moving') {
-          setFormData(prev => ({
-            ...prev,
-            preferredDate: date,
-            preferredTime: time,
-          }));
-        } else if (pickerType === 'walkthrough') {
-          setFormData(prev => ({
-            ...prev,
-            walkThroughDate: date,
-            walkThroughTime: time,
-          }));
-        }
-      }
-
-      // Clear URL params after reading
-      // Clear sessionStorage after 2 seconds (no longer needed after restore)
-      setTimeout(() => {
-        sessionStorage.removeItem('moveWtFormData');
-      }, 2000);
-      router.replace('/move-wt', { scroll: false });
-    }
-  }, [searchParams, router]);
-
-  // Refs for autocomplete inputs
-  const pickupAddressRef = useRef<HTMLInputElement>(null);
-  const deliveryAddressRef = useRef<HTMLInputElement>(null);
-  const additionalStopAddressRef = useRef<HTMLInputElement>(null);
-  const pickupAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const deliveryAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const additionalStopAutocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
-  const previousEffectiveSqFtRef = useRef<number>(0);
-  const [quote, setQuote] = useState({
-    baseRate: 0,
-    items: [] as Array<{
-      description: string;
-      amount: number;
-      discount?: string;
-      details?: string;
-      subItems?: Array<{ description: string; amount: number; details?: string; alert?: string }>;
-    }>,
-    total: 0
-  });
-  const [distanceData, setDistanceData] = useState<{
-    toPickup: { miles: number; minutes: number; charge: number };
-    pickupToDelivery: { miles: number; minutes: number; charge: number };
-    fromDelivery: { miles: number; minutes: number; charge: number };
-    totalCharge: number;
-  } | null>(null);
-  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
-  const [isBudgetInsufficient, setIsBudgetInsufficient] = useState(false);
-
-  const [formData, setFormData] = useState({
-    // Service Type
-    serviceType: "truck",
-    waiveTravel: false,
-    travelBilling: "local",
-    travelCost: "",
-
-    // Customer Information
-    firstName: "",
-    lastName: "",
-    company: "",
-    phone: "",
-    phoneName: "",
-    email: "",
-    emailName: "",
-
-    // Current Home or Business Indicator
-    customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
-    
-    // Labor Only - same address checkbox
-    laborOnlySameAddress: true,
-
-    // Addresses - Pickup
-    pickupAddress: "",
-    pickupUnit: "",
-    pickupCity: "",
-    pickupState: "",
-    pickupZip: "",
-    pickupLocationType: "house",
-    pickupLocationOther: "",
-    pickupBusinessName: "",
-    pickupBusinessSquareFeet: "",
-    pickupOtherSquareFeet: "",
-    pickupHouseSquareFeet: "",
-    pickupZestimate: "",
-    pickupHowFurnished: 80,
-    pickupApartmentSquareFeet: "",
-    pickupApartmentBedBath: "",
-    pickupApartmentHowFurnished: 80,
-    pickupStorageUnitQuantity: 1,
-    pickupStorageUnitSizes: [""],
-    pickupStorageUnitHowFull: [""],
-    pickupStorageUnitConditioned: [""],
-    pickupTruckPodLength: "",
-    pickupTruckPodWidth: "",
-    pickupTruckPodHowFull: 100,
-    pickupManualOverride: false,
-    pickupManualOverrideHours: "",
-
-    // Addresses - Delivery
-    deliveryAddress: "",
-    deliveryUnit: "",
-    deliveryCity: "",
-    deliveryState: "",
-    deliveryZip: "",
-    deliveryLocationType: "house",
-    deliveryLocationOther: "",
-    deliveryBusinessName: "",
-    deliveryHouseSquareFeet: "",
-    deliveryZestimate: "",
-    deliveryHowFurnished: 80,
-    deliveryApartmentSquareFeet: "",
-    deliveryApartmentBedBath: "",
-    deliveryApartmentHowFurnished: 80,
-    deliveryStorageUnitQuantity: 1,
-    deliveryStorageUnitSizes: [""],
-    deliveryStorageUnitConditioned: [""],
-    deliveryPODQuantity: 1,
-    deliveryPODSize: "",
-    deliveryTruckLength: "",
-    deliveryAddressUnknown: false,
-
-    // Addresses - Additional Stop
-    hasAdditionalStop: false,
-    additionalStopAddress: "",
-    additionalStopUnit: "",
-    additionalStopCity: "",
-    additionalStopState: "",
-    additionalStopZip: "",
-    additionalStopLocationType: "house",
-    additionalStopLocationOther: "",
-    additionalStopBusinessName: "",
-    additionalStopHouseSquareFeet: "",
-    additionalStopZestimate: "",
-    additionalStopHowFurnished: 80,
-    additionalStopApartmentBedBath: "",
-    additionalStopStorageUnitQuantity: 1,
-    additionalStopStorageUnitSizes: [""],
-    additionalStopStorageUnitConditioned: [""],
-    additionalStopNotes: "",
-
-    // Property Access - Pickup
-    pickupStairs: 1,
-    pickupNarrowDoorways: false,
-    pickupElevator: false,
-    pickupParkingDistance: "close",
-    pickupAccessNotes: "",
-
-    // Property Access - Delivery
-    deliveryStairs: 1,
-    deliveryNarrowDoorways: false,
-    deliveryElevator: false,
-    deliveryParkingDistance: "close",
-    deliveryAccessNotes: "",
-
-    // Heavy/Special Items
-    gunSafes: false,
-    gunSafesQty: 1,
-    gunSafesDetails: "",
-    pianos: false,
-    pianosQty: 1,
-    pianosDetails: "",
-    poolTables: false,
-    poolTablesQty: 1,
-    poolTablesDetails: "",
-    otherHeavyItems: false,
-    otherHeavyItemsDetails: "",
-    largeTVs: false,
-    largeTVsQty: 1,
-    largeTVsDetails: "",
-    purpleGreenMattress: false,
-    purpleGreenMattressDetails: "",
-    treadmills: false,
-    treadmillsDetails: "",
-    largeAppliances: false,
-    applianceFridge: false,
-    applianceFridgeQty: 1,
-    applianceWasher: false,
-    applianceWasherQty: 1,
-    applianceDryer: false,
-    applianceDryerQty: 1,
-    applianceOven: false,
-    applianceOvenQty: 1,
-    applianceDishwasher: false,
-    applianceDishwasherQty: 1,
-    applianceOtherDetails: "",
-    plants: false,
-    plantsDetails: "",
-    bunkBeds: false,
-    bunkBedsQty: 1,
-    bunkBedsDetails: "",
-    trampoline: false,
-    trampolineQty: 1,
-    trampolineDetails: "",
-    tableSaw: false,
-    tableSawQty: 1,
-    tableSawDetails: "",
-    gymEquipment: false,
-    gymEquipmentQty: 1,
-    gymEquipmentDetails: "",
-    sauna: false,
-    saunaQty: 1,
-    saunaDetails: "",
-    playsets: false,
-    playsetsQty: 1,
-    playsetsDetails: "",
-    specialDisassemblyOther: false,
-    specialDisassemblyOtherDetails: "",
-
-    // Pets
-    catsPresent: false,
-
-    // Packing
-    packingStatus: "moderate",
-    needsPacking: false,
-    packingKitchen: false,
-    packingGarage: false,
-    packingAttic: false,
-    packingWardrobeBoxes: false,
-    packingFragileItems: false,
-    packingBedrooms: false,
-    packingNotes: "",
-    junkRemovalNeeded: false,
-    junkRemovalAmount: "",
-    junkRemovalDetails: "",
-
-    // Insurance
-    needsInsurance: false,
-    estimatedValue: "",
-
-    // Timing
-    walkThroughDate: "",
-    walkThroughTime: "",
-    walkThroughDuration: "1",
-    preferredDate: "",
-    preferredTime: "",
-    moveDuration: "3",
-    moveDateUnknown: false,
-    timeFlexible: false,
-    readyToSchedule: false,
-    timingNotes: "",
-    tags: [] as string[],
-
-    // Estimates
-    estimatedCrewSize: "2-3",
-    crewSizeNotes: "",
-
-    // Special Notes
-    specialRequests: "",
-    fixedBudgetRequested: false,
-    desiredBudget: "",
-
-    // House Quality Rating
-    houseQuality: 3, // 1-5 scale, default to middle
-
-    // Tools Needed
-    hd4Wheel: false,
-    airSled: false,
-    applianceDolly: false,
-    socketWrenches: false,
-    safeDolly: false,
-    toolCustom1: "",
-    toolCustom2: "",
-    toolCustom3: "",
+  // Quote state - matches website quote format
+  type QuoteSubItem = {
+    description: string;
+    amount: number;
+    details?: string;
+    alert?: string;
+  };
+  type QuoteItem = {
+    description: string;
+    amount: number;
+    subItems?: QuoteSubItem[];
+    discount?: string;
+    details?: string;
+  };
+  type Quote = {
+    items: QuoteItem[];
+    total: number;
+    movingLabor: number;       // Completed Move labor (subject to minimum)
+    movingMaterials: number;   // Materials & Supplies (variable, can be 0)
+    otherServices: number;     // Boxing & Packing + Junk Removal (variable)
+    fixedTotal: number;        // Travel, Stairs, Heavy Items (fixed)
+    minimumCharge: number;     // Minimum move charge
+  };
+  const [quote, setQuote] = useState<Quote>({
+    items: [],
+    total: 0,
+    movingLabor: 0,
+    movingMaterials: 0,
+    otherServices: 0,
+    fixedTotal: 0,
+    minimumCharge: 0
   });
 
-  // Ref to track latest formData for sessionStorage save (avoids stale closure)
-  const formDataRef = useRef(formData);
-  useEffect(() => {
-    formDataRef.current = formData;
-  }, [formData]);
+  // Save state
+  const [currentEstimateId, setCurrentEstimateId] = useState<string | null>(null);
+  const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  // Restore form data from sessionStorage on mount (only once, and only if not coming from picker)
-  useEffect(() => {
-    // Only restore once
-    if (hasRestoredFromStorage.current) {
-      return;
-    }
+  // Search state
+  const [searchValue, setSearchValue] = useState('');
+  const [searchType, setSearchType] = useState<'phone' | 'name' | 'quoteId' | 'workizJob'>('phone');
+  const [searchResults, setSearchResults] = useState<Array<{
+    id: string;
+    full_name: string;
+    phone: string;
+    quote_id: string;
+    workiz_job_number: string;
+    from_address: string;
+  }>>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
-    // Check if we have URL params from date picker
-    const pickerType = searchParams.get('picker');
-    const date = searchParams.get('date');
-    const time = searchParams.get('time');
-    const hasPickerParams = pickerType && date && time;
+  // Customer Details
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
 
-    if (hasPickerParams) {
-      return; // Don't restore yet, wait for picker to set the date first
-    }
+  // Service Type
+  const [serviceType, setServiceType] = useState<'truck' | 'labor'>('truck');
 
-    // Skip sessionStorage restore on regular page load
-    // Only restore from sessionStorage when returning from date picker (handled in picker useEffect above)
-    hasRestoredFromStorage.current = true;
-  }, [searchParams]);
+  // Labor-Only Specific State
+  const [laborServiceType, setLaborServiceType] = useState<string | null>('between-rooms');
+  const [laborItemAmount, setLaborItemAmount] = useState<string>('2');
+  const [loadingItemAmount, setLoadingItemAmount] = useState<string>('7');
+  const [officeItemAmount, setOfficeItemAmount] = useState<string>('7');
+  const [truckPodLengths, setTruckPodLengths] = useState<string[]>(['']);
+  const [unloadingTrucks, setUnloadingTrucks] = useState<{ id: number; length: string | null; fullness: string }[]>([{ id: 1, length: null, fullness: '8' }]);
+  const [unloadingStorageType, setUnloadingStorageType] = useState<string | null>(null);
 
-  // Save form state to sessionStorage - called only when navigating to date picker
-  const saveFormDataToStorage = () => {
-    const fullFormState = {
-      formData: formDataRef.current,
-      phones,
-      emails,
-      jobNumber,
-      searchPhone,
-      searchQuoteNum,
-      quoteNumber,
-      address,
-      folderUrl,
-      sendHistory,
-    };
-    sessionStorage.setItem('moveWtFormData', JSON.stringify(fullFormState));
+  // Move Date/Time
+  const [moveDate, setMoveDate] = useState('');
+  const [timeSlot, setTimeSlot] = useState('');
+  const [moveDuration, setMoveDuration] = useState('3');
+  const [moveDateUnknown, setMoveDateUnknown] = useState(false);
+  const timeSelectRef = useRef<HTMLSelectElement>(null);
+
+  // Map refs
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const directionsRendererRef = useRef<any>(null);
+
+  // Address input refs for Google Places autocomplete
+  const fromInputRef = useRef<HTMLInputElement>(null);
+  const toInputRef = useRef<HTMLInputElement>(null);
+  const stopInputRef = useRef<HTMLInputElement>(null);
+  const fromAutocompleteRef = useRef<any>(null);
+  const toAutocompleteRef = useRef<any>(null);
+  const stopAutocompleteRef = useRef<any>(null);
+
+  // Google Maps state
+  const [googleMapsReady, setGoogleMapsReady] = useState(false);
+  const [routeLegs, setRouteLegs] = useState<Array<{
+    start: string;
+    end: string;
+    distance: string;
+    duration: string;
+  }>>([]);
+  const [totalDistance, setTotalDistance] = useState('');
+  const [totalDuration, setTotalDuration] = useState('');
+  const [deadhead, setDeadhead] = useState<DeadheadData | null>(null);
+
+  // Walk-through Date/Time
+  const [wtDate, setWtDate] = useState('');
+  const [wtTime, setWtTime] = useState('');
+  const [wtDuration, setWtDuration] = useState('1');
+
+  // Job Tags and Notes - Move is always preselected
+  const [tags, setTags] = useState<string[]>(['Move']);
+  const [timingNotes, setTimingNotes] = useState('');
+
+  // Calendar state - shows 3 days from Workiz
+  type CalendarJob = {
+    id: string;
+    serialId: string;
+    customerName: string;
+    startTime: string;
+    endTime: string;
+    startMinutes: number; // Minutes from midnight (8am = 480)
+    endMinutes: number;   // Minutes from midnight
+    jobType: string;
+    status: string;
+    tags: string[];
+  };
+  type CalendarDay = {
+    date: string;
+    dateLabel: string;
+    dayName: string;
+    jobs: CalendarJob[];
+    isSelected: boolean;
+  };
+  type CalendarTech = {
+    initials: string;
+    name: string;
+    isScheduled: boolean;
+    hasTimeOff: boolean;
+  };
+  type CalendarDayTechs = {
+    date: string;
+    techs: CalendarTech[];
+  };
+  const [calendarDays, setCalendarDays] = useState<CalendarDay[]>([]);
+  const [calendarTechs, setCalendarTechs] = useState<CalendarDayTechs[]>([]);
+  const [isLoadingCalendar, setIsLoadingCalendar] = useState(false);
+
+  // Other Services state
+  const [packingAmount, setPackingAmount] = useState<string>('0');
+  const [packingRooms, setPackingRooms] = useState<string[]>([]);
+  const [junkRemovalAmount, setJunkRemovalAmount] = useState<string>('0');
+
+  // FROM Location state
+  const [fromIsCurrentHome, setFromIsCurrentHome] = useState(true);
+  const [fromAddress, setFromAddress] = useState('');
+  const [fromUnit, setFromUnit] = useState('');
+  const [fromPropertyType, setFromPropertyType] = useState<PropertyType>('home');
+  const [fromBedrooms, setFromBedrooms] = useState<string | null>(null);
+  const [fromSquareFootage, setFromSquareFootage] = useState<string | null>(null);
+  const [fromZestimate, setFromZestimate] = useState<string | null>(null);
+  const [fromGarage, setFromGarage] = useState<string | null>(null);
+  const [fromStories, setFromStories] = useState<string | null>(null);
+  const [fromFloorLevel, setFromFloorLevel] = useState('1');
+  const [fromElevator, setFromElevator] = useState<'yes' | 'no' | null>(null);
+  const [fromStorageUnits, setFromStorageUnits] = useState<StorageUnit[]>([{ id: 1, size: null, type: null, unitNumber: '', fullness: '5' }]);
+  const [fromDetails, setFromDetails] = useState('');
+  const [isLoadingFromProperty, setIsLoadingFromProperty] = useState(false);
+
+  // Belongings & Heavy Items
+  const [belongingsAmount, setBelongingsAmount] = useState('8');
+  const [heavyItems, setHeavyItems] = useState<string[]>([]);
+  const [gunSafeOver300, setGunSafeOver300] = useState<'yes' | 'no' | null>(null);
+  const [gunSafeGroundLevel, setGunSafeGroundLevel] = useState<'yes' | 'no' | null>(null);
+  const [pianoType, setPianoType] = useState<'upright' | 'grand' | null>(null);
+  const [pianoGroundLevel, setPianoGroundLevel] = useState<'yes' | 'no' | null>(null);
+  const [poolTableDisassembly, setPoolTableDisassembly] = useState<'yes' | 'no' | null>(null);
+  const [poolTableGroundLevel, setPoolTableGroundLevel] = useState<'yes' | 'no' | null>(null);
+  const [mattressGroundLevel, setMattressGroundLevel] = useState<'yes' | 'no' | null>(null);
+  const [tvCount, setTvCount] = useState<string | null>(null);
+  const [exerciseEquipmentTypes, setExerciseEquipmentTypes] = useState<string[]>([]);
+  const [toolTypes, setToolTypes] = useState<string[]>([]);
+  const [toolOtherText, setToolOtherText] = useState('');
+
+  // TO Location state
+  const [toIsCurrentHome, setToIsCurrentHome] = useState(false);
+  const [toAddress, setToAddress] = useState('');
+  const [toUnit, setToUnit] = useState('');
+  const [toPropertyType, setToPropertyType] = useState<PropertyType>('home');
+  const [toSquareFootage, setToSquareFootage] = useState<string | null>(null);
+  const [toZestimate, setToZestimate] = useState<string | null>(null);
+  const [toStories, setToStories] = useState<string | null>(null);
+  const [toFloorLevel, setToFloorLevel] = useState('1');
+  const [toElevator, setToElevator] = useState<'yes' | 'no' | null>(null);
+  const [toStorageUnits, setToStorageUnits] = useState<StorageUnit[]>([{ id: 1, size: null, type: null, unitNumber: '', fullness: '5' }]);
+  const [toDetails, setToDetails] = useState('');
+  const [isLoadingToProperty, setIsLoadingToProperty] = useState(false);
+
+  // STOP Location state
+  const [hasStop, setHasStop] = useState(false);
+  const [stopAddress, setStopAddress] = useState('');
+  const [stopUnit, setStopUnit] = useState('');
+  const [stopPropertyType, setStopPropertyType] = useState<PropertyType>('home');
+  const [stopAction, setStopAction] = useState<'dropoff' | 'pickup' | null>(null);
+  const [stopBedrooms, setStopBedrooms] = useState<string | null>(null);
+  const [stopSquareFootage, setStopSquareFootage] = useState<string | null>(null);
+  const [stopGarage, setStopGarage] = useState<string | null>(null);
+  const [stopStories, setStopStories] = useState<string | null>(null);
+  const [stopFloorLevel, setStopFloorLevel] = useState('1');
+  const [stopElevator, setStopElevator] = useState<'yes' | 'no' | null>(null);
+  const [stopStorageUnits, setStopStorageUnits] = useState<StorageUnit[]>([{ id: 1, size: null, type: null, unitNumber: '', fullness: '5' }]);
+  const [stopDetails, setStopDetails] = useState('');
+  const [stopBelongingsAmount, setStopBelongingsAmount] = useState('2');
+  const [stopHeavyItems, setStopHeavyItems] = useState<string[]>([]);
+
+  // Options
+  const propertyTypes = [
+    { id: 'home', label: 'Home/Townhouse' },
+    { id: 'apartment', label: 'Apartment' },
+    { id: 'office', label: 'Office' },
+    { id: 'storage', label: 'Storage' },
+  ];
+  const bedroomOptions = ['1', '2', '3', '4', '5+'];
+  const squareFootageOptions = ['0-1000', '1000-1500', '1500-2000', '2000-3000', '3000+'];
+  const garageOptions = ['none', '1 car', '2 car', '3+ car'];
+  const storiesOptions = ['1', '2', '3'];
+  const unitSizeOptions = ['5x5', '5x10', '5x15', '10x10', '10x15', '10x20', '10x25', '10x30'];
+  const heavyItemOptions = ['TVs over 45"', 'Piano', 'Gun Safe', 'Exercise Equipment', 'Purple/Green Mattress', 'Shop/Garage', 'Pool Table'];
+
+  // Field visibility helper
+  const getFieldVisibility = (propertyType: PropertyType) => ({
+    showBedrooms: propertyType === 'home' || propertyType === 'apartment',
+    showSquareFootage: propertyType === 'home' || propertyType === 'apartment' || propertyType === 'office',
+    showGarage: propertyType === 'home',
+    showStories: propertyType === 'home',
+    showUnitSize: propertyType === 'storage',
+    showFloorLevel: propertyType === 'apartment' || propertyType === 'office' || propertyType === 'storage',
+    showElevator: propertyType === 'apartment' || propertyType === 'office',
+  });
+
+  const fromFields = getFieldVisibility(fromPropertyType);
+  const toFields = getFieldVisibility(toPropertyType);
+  const stopFields = getFieldVisibility(stopPropertyType);
+
+  // Handle property type changes (reset dependent fields)
+  const handleFromPropertyTypeChange = (type: PropertyType) => {
+    setFromPropertyType(type);
+    setFromBedrooms(null);
+    setFromSquareFootage(null);
+    setFromGarage(null);
+    setFromStories(null);
+    setFromStorageUnits([{ id: 1, size: null, type: null, unitNumber: '', fullness: '5' }]);
+    setFromFloorLevel('1');
+    setFromElevator(null);
+    setBelongingsAmount('8');
+    setHeavyItems([]);
+    // Reset heavy item sub-selections
+    setGunSafeOver300(null);
+    setGunSafeGroundLevel(null);
+    setPianoType(null);
+    setPianoGroundLevel(null);
+    setPoolTableDisassembly(null);
+    setPoolTableGroundLevel(null);
+    setMattressGroundLevel(null);
+    setTvCount(null);
+    setExerciseEquipmentTypes([]);
+    setToolTypes([]);
+    setToolOtherText('');
   };
 
-  // Format number with commas
-  const formatNumberWithCommas = (value: string): string => {
+  const handleToPropertyTypeChange = (type: PropertyType) => {
+    setToPropertyType(type);
+    setToStories(null);
+    setToStorageUnits([{ id: 1, size: null, type: null, unitNumber: '', fullness: '5' }]);
+    setToFloorLevel('1');
+    setToElevator(null);
+  };
+
+  const handleStopPropertyTypeChange = (type: PropertyType) => {
+    setStopPropertyType(type);
+    setStopAction(null);
+    setStopBedrooms(null);
+    setStopSquareFootage(null);
+    setStopGarage(null);
+    setStopStories(null);
+    setStopStorageUnits([{ id: 1, size: null, type: null, unitNumber: '', fullness: '5' }]);
+    setStopFloorLevel('1');
+    setStopElevator(null);
+  };
+
+  // Handle "current home" mutual exclusivity
+  const handleFromCurrentHomeChange = (checked: boolean) => {
+    if (checked) {
+      setFromIsCurrentHome(true);
+      setToIsCurrentHome(false);
+    } else {
+      setFromIsCurrentHome(false);
+      setToIsCurrentHome(true);
+    }
+  };
+
+  const handleToCurrentHomeChange = (checked: boolean) => {
+    if (checked) {
+      setToIsCurrentHome(true);
+      setFromIsCurrentHome(false);
+    } else {
+      setToIsCurrentHome(false);
+      setFromIsCurrentHome(true);
+    }
+  };
+
+  // Format number with commas for display
+  const formatNumberWithCommas = (value: string | null): string => {
     if (!value) return '';
-    // Remove any existing commas
-    const numericValue = value.replace(/,/g, '');
-    // Return original if not a valid number
-    if (!/^\d+$/.test(numericValue)) return value;
-    // Add commas
-    return numericValue.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const num = value.replace(/,/g, '');
+    if (!num || isNaN(Number(num))) return value;
+    return Number(num).toLocaleString();
   };
 
-  // Get text for how much is getting moved slider
-  const getHowFurnishedText = (percentage: number): string => {
-    switch (percentage) {
-      case 0: return 'Barely anything';
-      case 20: return 'A couple rooms';
-      case 40: return 'Half the house';
-      case 60: return 'Most of the house';
-      case 80: return 'Whole house';
-      case 100: return "It's Loaded!";
-      default: return `${percentage}% of the house`;
-    }
-  };
-
-  // Get text for storage unit slider (percentage-based)
-  const getStorageUnitSliderText = (percentage: number): string => {
-    switch (percentage) {
-      case 0: return 'Barely anything';
-      case 20: return '20%';
-      case 40: return '40%';
-      case 60: return '60%';
-      case 80: return '80%';
-      case 100: return '100%';
-      default: return `${percentage}%`;
-    }
-  };
-
-  // Get text for additional stop slider (added or dropped off)
-  const getAdditionalStopText = (percentage: number): string => {
-    switch (percentage) {
-      case 0: return 'Barely anything';
-      case 20: return 'Couple rooms';
-      case 40: return 'Half the house';
-      case 60: return 'Nearly everything';
-      case 80: return 'Nearly everything';
-      case 100: return 'Nearly everything';
-      default: return `${percentage}%`;
-    }
-  };
-
-  // Format minutes into "Xhr Ymin" format
-  const formatDuration = (minutes: number): string => {
-    if (minutes < 60) {
-      return `${minutes} min`;
-    }
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    if (mins === 0) {
-      return `${hours}hr`;
-    }
-    return `${hours}hr ${mins}min`;
-  };
-
-  // Phone number normalization - strips all non-numeric characters
-  const normalizePhoneNumber = (phone: string): string => {
-    return phone.replace(/\D/g, '');
-  };
-
-  // Phone number formatting - formats to (XXX) XXX-XXXX
-  const formatPhoneNumber = (phone: string): string => {
-    const normalized = normalizePhoneNumber(phone);
-
-    // Handle different lengths
-    if (normalized.length === 0) return '';
-    if (normalized.length <= 3) return normalized;
-    if (normalized.length <= 6) return `(${normalized.slice(0, 3)}) ${normalized.slice(3)}`;
-    if (normalized.length <= 10) {
-      return `(${normalized.slice(0, 3)}) ${normalized.slice(3, 6)}-${normalized.slice(6)}`;
-    }
-    // Limit to 10 digits
-    return `(${normalized.slice(0, 3)}) ${normalized.slice(3, 6)}-${normalized.slice(6, 10)}`;
-  };
-
-  // Auto-save functionality
-  const isInitialMount = useRef(true);
-  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // Extract save logic into a reusable function
-  const saveFormData = async (showSuccessMessage: boolean = false) => {
-    // Require at least phone number and pickup address
-    const phoneNumber = phones[0]?.number || formData?.phone;
-    const pickupAddress = formData?.pickupAddress;
-
-    if (!phoneNumber || phoneNumber.trim() === '') {
-      return; // Need phone number to save
+  // Fetch property data from Zillow for FROM address
+  const fetchFromPropertyData = async () => {
+    if (!fromAddress) {
+      alert('Please enter an address first');
+      return;
     }
 
+    setIsLoadingFromProperty(true);
     try {
-      // Generate temporary job number if real one doesn't exist
-      let effectiveJobNumber = jobNumber;
-      let effectiveAddress = address;
-
-      if (!effectiveJobNumber || effectiveJobNumber.trim() === '') {
-        // Use existing temp job number if we have one, otherwise create new one
-        if (tempJobNumber) {
-          effectiveJobNumber = tempJobNumber;
-          effectiveAddress = pickupAddress || 'Work in Progress';
-        } else {
-          // Create temp job number from phone only (don't include address so it doesn't change)
-          const normalizedPhone = normalizePhoneNumber(phoneNumber);
-          effectiveJobNumber = `TEMP-${normalizedPhone}`;
-          effectiveAddress = pickupAddress || 'Work in Progress';
-          setTempJobNumber(effectiveJobNumber); // Store it so it doesn't change
-        }
-      }
-
-      // Normalize phone numbers before saving and include arrays
-      const normalizedFormData = {
-        ...formData,
-        phone: normalizePhoneNumber(phoneNumber),
-        phones: phones.map(p => ({ ...p, number: normalizePhoneNumber(p.number) })),
-        emails: emails
-      };
-
-      const response = await fetch('/api/move-wt/save-form', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jobNumber: effectiveJobNumber,
-          address: effectiveAddress,
-          formData: {
-            ...normalizedFormData,
-            quoteItems: quote?.items || [],
-            total: quote?.total || 0,
-            baseRate: quote?.baseRate || 0,
-            sendHistory: sendHistory
-          },
-          folderUrl: folderUrl,
-          isTemporary: !jobNumber || jobNumber.trim() === '',
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to save form');
-      }
-
-      // Capture quote number from response
-      if (result.quoteNumber) {
-        setQuoteNumber(result.quoteNumber);
-        setSearchQuoteNum(result.quoteNumber);
-        console.log("Quote number set:", result.quoteNumber);
-      } else {
-        console.warn("No quote number in save response:", result);
-      }
-
-      console.log("Form auto-saved:", new Date().toLocaleTimeString());
-
-      // Mark form as saved
-      setIsFormSaved(true);
-
-      if (showSuccessMessage) {
-        alert("Walk-through completed! Data saved successfully.");
-      }
-    } catch (error) {
-      console.error('Auto-save error:', error);
-      // Only show error alerts for manual saves, not auto-saves
-      if (showSuccessMessage) {
-        alert(error instanceof Error ? error.message : 'Failed to save form. Please try again.');
-      }
-    }
-  };
-
-  // Auto-save effect - triggers whenever formData changes
-  useEffect(() => {
-    // Skip auto-save on initial mount
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-
-    // Skip if no phone number is entered (check first phone in phones array)
-    const phoneNumber = phones[0]?.number || formData?.phone;
-    if (!phoneNumber || phoneNumber.trim() === '') {
-      return;
-    }
-
-    // Mark form as unsaved when changes are detected
-    setIsFormSaved(false);
-
-    // Clear existing timeout
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-    }
-
-    // Debounce: wait 15 seconds after last change before saving
-    // This prevents race conditions with bidirectional GHL sync
-    autoSaveTimeoutRef.current = setTimeout(() => {
-      saveFormData(false);
-    }, 15000);
-
-    // Cleanup timeout on unmount
-    return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-    };
-  }, [formData, jobNumber, address, folderUrl, phones, emails, quote]);
-
-  // Auto-calculate crew size based on square footage and how furnished
-  useEffect(() => {
-    let squareFeet = 0;
-    let furnishedPercent = 0;
-
-    // Get the appropriate square footage and percentage based on location type
-    if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'loading-truck-pod') {
-      squareFeet = parseFloat(formData.pickupHouseSquareFeet) || 0;
-      furnishedPercent = formData.pickupHowFurnished || 80;
-    } else if (formData.pickupLocationType === 'apartment') {
-      squareFeet = parseFloat(formData.pickupApartmentSquareFeet) || 0;
-      furnishedPercent = formData.pickupHowFurnished || 80;
-    } else if (formData.pickupLocationType === 'unloading-truck-pod') {
-      const length = parseFloat(formData.pickupTruckPodLength) || 0;
-      const width = parseFloat(formData.pickupTruckPodWidth) || 0;
-      squareFeet = length * width;
-      furnishedPercent = formData.pickupTruckPodHowFull || 100;
-    }
-
-    // Calculate effective square footage (sqft × percentage/100)
-    const effectiveSqFt = squareFeet * (furnishedPercent / 100);
-
-    // Only update crew size if effective square footage actually changed
-    if (effectiveSqFt !== previousEffectiveSqFtRef.current && squareFeet > 0) {
-      // Determine crew size based on effective square footage
-      let recommendedCrewSize = "2-3"; // default
-
-      if (effectiveSqFt < 500) {
-        recommendedCrewSize = "2 max";
-      } else if (effectiveSqFt >= 500 && effectiveSqFt < 1500) {
-        recommendedCrewSize = "2-3";
-      } else if (effectiveSqFt >= 1500 && effectiveSqFt < 2500) {
-        recommendedCrewSize = "3-4";
-      } else if (effectiveSqFt >= 2500 && effectiveSqFt < 3000) {
-        recommendedCrewSize = "4-6";
-      } else if (effectiveSqFt >= 3000) {
-        recommendedCrewSize = "6+";
-      }
-
-      setFormData(prev => ({ ...prev, estimatedCrewSize: recommendedCrewSize }));
-      previousEffectiveSqFtRef.current = effectiveSqFt;
-    }
-  }, [
-    formData.pickupLocationType,
-    formData.pickupHouseSquareFeet,
-    formData.pickupApartmentSquareFeet,
-    formData.pickupHowFurnished,
-    formData.pickupTruckPodLength,
-    formData.pickupTruckPodWidth,
-    formData.pickupTruckPodHowFull
-  ]);
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-    const checked = (e.target as HTMLInputElement).checked;
-
-    // List of fields that should have comma formatting
-    const numberFields = [
-      'pickupHouseSquareFeet', 'pickupZestimate',
-      'deliveryHouseSquareFeet', 'deliveryZestimate',
-      'additionalStopHouseSquareFeet', 'additionalStopZestimate'
-    ];
-
-    // For number fields, strip commas before storing
-    let processedValue = value;
-    if (numberFields.includes(name)) {
-      processedValue = value.replace(/,/g, '');
-    }
-
-    // Reset location types when service type changes to truck
-    if (name === 'serviceType' && value === 'truck') {
-      const invalidLocationTypes = ['truck', 'pod'];
-      setFormData(prev => ({
-        ...prev,
-        serviceType: value,
-        pickupLocationType: invalidLocationTypes.includes(prev.pickupLocationType) ? 'house' : prev.pickupLocationType,
-        deliveryLocationType: invalidLocationTypes.includes(prev.deliveryLocationType) ? 'house' : prev.deliveryLocationType,
-        additionalStopLocationType: invalidLocationTypes.includes(prev.additionalStopLocationType) ? 'house' : prev.additionalStopLocationType
-      }));
-      return;
-    }
-
-    // Handle service type change to labor-only
-    if (name === 'serviceType' && value === 'labor-only') {
-      setFormData(prev => ({
-        ...prev,
-        serviceType: value,
-        customerHomeAddressType: 'pickup',
-        // Clear delivery address fields
-        deliveryAddress: "",
-        deliveryUnit: "",
-        deliveryCity: "",
-        deliveryState: "",
-        deliveryZip: "",
-        deliveryLocationType: "house",
-        deliveryLocationOther: "",
-        deliveryHouseSquareFeet: "",
-        deliveryZestimate: "",
-        deliveryHowFurnished: 80,
-        deliveryApartmentSquareFeet: "",
-        deliveryApartmentBedBath: "",
-        deliveryApartmentHowFurnished: 80,
-        deliveryStorageUnitQuantity: 1,
-        deliveryStorageUnitSizes: [""],
-    deliveryStorageUnitConditioned: [""],
-        deliveryPODQuantity: 1,
-        deliveryPODSize: "",
-        deliveryTruckLength: "",
-        deliveryAddressUnknown: false,
-        deliveryStairs: 1,
-        deliveryNarrowDoorways: false,
-        deliveryElevator: false,
-        deliveryParkingDistance: "close",
-        deliveryAccessNotes: "",
-        // Deselect and clear additional stop
-        hasAdditionalStop: false,
-        additionalStopAddress: "",
-        additionalStopUnit: "",
-        additionalStopCity: "",
-        additionalStopState: "",
-        additionalStopZip: "",
-        additionalStopLocationType: "house",
-        additionalStopLocationOther: "",
-        additionalStopHouseSquareFeet: "",
-        additionalStopZestimate: "",
-        additionalStopHowFurnished: 80,
-        additionalStopApartmentBedBath: "",
-        additionalStopStorageUnitQuantity: 1,
-        additionalStopStorageUnitSizes: [""],
-    additionalStopStorageUnitConditioned: [""],
-        additionalStopNotes: ""
-      }));
-      return;
-    }
-
-    // Clear all additional stop fields when clicking the additional stop checkbox
-    if (name === 'hasAdditionalStop' && type === 'checkbox') {
-      setFormData(prev => ({
-        ...prev,
-        hasAdditionalStop: checked,
-        ...(checked ? {} : {
-          additionalStopAddress: "",
-          additionalStopUnit: "",
-          additionalStopCity: "",
-          additionalStopState: "",
-          additionalStopZip: "",
-          additionalStopLocationType: "house",
-          additionalStopLocationOther: "",
-          additionalStopHouseSquareFeet: "",
-          additionalStopZestimate: "",
-          additionalStopHowFurnished: 80,
-          additionalStopApartmentBedBath: "",
-          additionalStopStorageUnitQuantity: 1,
-          additionalStopStorageUnitSizes: [""],
-          additionalStopStorageUnitConditioned: [""],
-          additionalStopNotes: ""
-        })
-      }));
-      return;
-    }
-    // Clear all appliance fields when Large Appliances is unchecked
-    if (name === 'largeAppliances' && type === 'checkbox' && !checked) {
-      setFormData(prev => ({
-        ...prev,
-        largeAppliances: false,
-        applianceFridge: false,
-        applianceFridgeQty: 1,
-        applianceWasher: false,
-        applianceWasherQty: 1,
-        applianceDryer: false,
-        applianceDryerQty: 1,
-        applianceOven: false,
-        applianceOvenQty: 1,
-        applianceDishwasher: false,
-        applianceDishwasherQty: 1,
-        applianceOtherDetails: ""
-      }));
-      return;
-    }
-    // Clear all packing fields when Packing is unchecked
-    if (name === 'needsPacking' && type === 'checkbox' && !checked) {
-      setFormData(prev => ({
-        ...prev,
-        needsPacking: false,
-        packingStatus: "moderate",
-        packingKitchen: false,
-        packingGarage: false,
-        packingAttic: false,
-        packingWardrobeBoxes: false,
-        packingFragileItems: false,
-        packingBedrooms: false,
-        packingNotes: ""
-      }));
-      return;
-    }
-    // Clear junk removal fields when Junk Removal is unchecked
-    if (name === 'junkRemovalNeeded' && type === 'checkbox' && !checked) {
-      setFormData(prev => ({
-        ...prev,
-        junkRemovalNeeded: false,
-        junkRemovalAmount: "",
-        junkRemovalDetails: ""
-      }));
-      return;
-    }
-    // Clear qty/details when individual heavy items or appliances are unchecked
-    if (type === 'checkbox' && !checked) {
-      const itemClearMap: Record<string, Record<string, any>> = {
-        // Heavy/Special Items
-        gunSafes: { gunSafesQty: 1, gunSafesDetails: "" },
-        pianos: { pianosQty: 1, pianosDetails: "" },
-        poolTables: { poolTablesQty: 1, poolTablesDetails: "" },
-        largeTVs: { largeTVsQty: 1, largeTVsDetails: "" },
-        treadmills: { treadmillsDetails: "" },
-        otherHeavyItems: { otherHeavyItemsDetails: "" },
-        plants: { plantsDetails: "" },
-        purpleGreenMattress: { purpleGreenMattressDetails: "" },
-        // Special Disassembly
-        trampoline: { trampolineQty: 1, trampolineDetails: "" },
-        bunkBeds: { bunkBedsQty: 1, bunkBedsDetails: "" },
-        gymEquipment: { gymEquipmentQty: 1, gymEquipmentDetails: "" },
-        sauna: { saunaQty: 1, saunaDetails: "" },
-        playsets: { playsetsQty: 1, playsetsDetails: "" },
-        tableSaw: { tableSawQty: 1, tableSawDetails: "" },
-        specialDisassemblyOther: { specialDisassemblyOtherDetails: "" },
-        // Appliances
-        applianceFridge: { applianceFridgeQty: 1 },
-        applianceWasher: { applianceWasherQty: 1 },
-        applianceDryer: { applianceDryerQty: 1 },
-        applianceOven: { applianceOvenQty: 1 },
-        applianceDishwasher: { applianceDishwasherQty: 1 },
-        // Insurance & Budget
-        needsInsurance: { estimatedValue: "" },
-        fixedBudgetRequested: { desiredBudget: "" },
-        // Manual Override
-        pickupManualOverride: { pickupManualOverrideHours: "" }
-      };
-      if (itemClearMap[name]) {
-        setFormData(prev => ({
-          ...prev,
-          [name]: false,
-          ...itemClearMap[name]
-        }));
-        return;
-      } else {
-        // Handle unchecking other checkboxes (like waiveTravel, pickupManualOverride, etc.)
-        setFormData(prev => ({
-          ...prev,
-          [name]: false
-        }));
-        return;
-      }
-    }
-    // Auto-check Safe Dolly if Piano or Gun Safe is checked
-    else if ((name === 'pianos' || name === 'gunSafes') && type === 'checkbox' && checked) {
-      setFormData(prev => ({
-        ...prev,
-        [name]: checked,
-        safeDolly: true
-      }));
-    }
-    // Auto-check Socket Wrenches if any Special Disassembly item is checked
-    else if ((name === 'trampoline' || name === 'bunkBeds' || name === 'gymEquipment' || name === 'sauna') && type === 'checkbox' && checked) {
-      setFormData(prev => ({
-        ...prev,
-        [name]: checked,
-        socketWrenches: true
-      }));
-    }
-    // Auto-check Air Sled if home quality is set to 5 AND any Large Appliances are selected
-    else if (name === 'houseQuality' && processedValue === '5') {
-      setFormData(prev => {
-        const hasLargeAppliances = prev.applianceFridge || prev.applianceWasher || prev.applianceDryer;
-        return {
-          ...prev,
-          [name]: Number(processedValue),
-          airSled: hasLargeAppliances ? true : prev.airSled
-        };
-      });
-    }
-    // Auto-check Appliance Dolly if Fridge is checked; also check Air Sled if house quality is 5
-    else if (name === 'applianceFridge' && type === 'checkbox' && checked) {
-      setFormData(prev => ({
-        ...prev,
-        [name]: checked,
-        applianceDolly: true,
-        airSled: prev.houseQuality === 5 ? true : prev.airSled
-      }));
-    }
-    // Auto-check Air Sled if Clothes Washer or Dryer is checked and house quality is 5
-    else if ((name === 'applianceWasher' || name === 'applianceDryer') && type === 'checkbox' && checked) {
-      setFormData(prev => ({
-        ...prev,
-        [name]: checked,
-        airSled: prev.houseQuality === 5 ? true : prev.airSled
-      }));
-    }
-    else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: type === 'checkbox' ? checked : processedValue
-      }));
-    }
-  };
-
-  // Handle phone number input with auto-formatting
-
-  // Handle tag checkbox changes
-  const handleTagChange = (tag: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.includes(tag)
-        ? prev.tags.filter(t => t !== tag)
-        : [...prev.tags, tag]
-    }));
-  };
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    const formatted = formatPhoneNumber(value);
-    setFormData(prev => ({
-      ...prev,
-      [name]: formatted
-    }));
-  };
-
-  // Handle search phone input with auto-formatting
-  const handleSearchPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatPhoneNumber(e.target.value);
-    setSearchPhone(formatted);
-  };
-
-  // Helper function to check if form has meaningful data worth saving
-  const hasFormDataWorthSaving = (): boolean => {
-    const primaryPhone = phones[0]?.number || formData?.phone || '';
-    const normalizedPhone = normalizePhoneNumber(primaryPhone);
-    // Consider form worth saving if there's a phone number with at least 10 digits
-    return normalizedPhone.length >= 10;
-  };
-
-  // Helper function to save current form before switching customers
-  const saveCurrentFormBeforeSwitching = async () => {
-    if (!hasFormDataWorthSaving()) return;
-
-    const phoneNumber = phones[0]?.number || formData?.phone || '';
-    const normalizedPhone = normalizePhoneNumber(phoneNumber);
-    const pickupAddress = formData?.pickupAddress || '';
-
-    // Use existing temp job number or create one
-    let effectiveJobNumber = jobNumber || tempJobNumber;
-    if (!effectiveJobNumber || effectiveJobNumber.trim() === '') {
-      effectiveJobNumber = `TEMP-${normalizedPhone}`;
-    }
-
-    const normalizedFormData = {
-      ...formData,
-      phone: normalizedPhone,
-      phones: phones.map(p => ({ ...p, number: normalizePhoneNumber(p.number) })),
-      emails: emails
-    };
-
-    try {
-      await fetch('/api/move-wt/save-form', {
+      const response = await fetch('/api/move-wt/get-property-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jobNumber: effectiveJobNumber,
-          address: pickupAddress || 'Work in Progress',
-          formData: normalizedFormData,
-          folderUrl: folderUrl,
-          isTemporary: !jobNumber || jobNumber.trim() === '',
-        }),
-      });
-      console.log("Form auto-saved before customer switch:", new Date().toLocaleTimeString());
-    } catch (error) {
-      console.error('Error saving form before switch:', error);
-    }
-  };
-
-  // Handlers for dynamic phone entries
-  const handlePhoneNumberChange = async (index: number, value: string) => {
-    const formatted = formatPhoneNumber(value);
-    const newNormalizedPhone = normalizePhoneNumber(formatted);
-
-    // If this is the primary phone (index 0) and it's a significant change
-    if (index === 0) {
-      const currentPrimaryPhone = normalizePhoneNumber(phones[0]?.number || '');
-
-      // Check if we're changing from one complete phone to a different complete phone
-      if (currentPrimaryPhone.length >= 10 &&
-          newNormalizedPhone.length >= 10 &&
-          currentPrimaryPhone !== newNormalizedPhone) {
-        // Save current form before switching to new customer
-        await saveCurrentFormBeforeSwitching();
-
-        // Reset temp job number and quote number for new customer
-        setTempJobNumber('');
-        setQuoteNumber('');
-        setSearchQuoteNum('');
-
-        // Update the previous phone ref
-        previousPrimaryPhone.current = newNormalizedPhone;
-
-        console.log(`Switched from customer ${currentPrimaryPhone} to ${newNormalizedPhone}`);
-      } else if (newNormalizedPhone.length >= 10) {
-        // Update the previous phone ref when a complete phone is entered
-        previousPrimaryPhone.current = newNormalizedPhone;
-      }
-    }
-
-    setPhones(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], number: formatted };
-      return updated;
-    });
-  };
-
-  const handlePhoneNameChange = (index: number, value: string) => {
-    setPhones(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], name: value };
-      return updated;
-    });
-  };
-
-  const handleAddPhone = () => {
-    setPhones(prev => [...prev, { number: "", name: "" }]);
-  };
-
-  const handleRemovePhone = (index: number) => {
-    if (phones.length > 1) {
-      setPhones(prev => prev.filter((_, i) => i !== index));
-    }
-  };
-
-  // Handlers for dynamic email entries
-  const handleEmailChange = (index: number, value: string) => {
-    setEmails(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], email: value };
-      return updated;
-    });
-  };
-
-  const handleEmailNameChange = (index: number, value: string) => {
-    setEmails(prev => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], name: value };
-      return updated;
-    });
-  };
-
-  const handleAddEmail = () => {
-    setEmails(prev => [...prev, { email: "", name: "" }]);
-  };
-
-  const handleRemoveEmail = (index: number) => {
-    if (emails.length > 1) {
-      setEmails(prev => prev.filter((_, i) => i !== index));
-    }
-  };
-
-  const handleLoadJob = async () => {
-    if (!jobNumber.trim() && !searchPhone.trim() && !searchQuoteNum.trim()) {
-      alert('Please enter a job number, phone number, or quote number');
-      return;
-    }
-
-    setIsLoadingJob(true);
-
-    // IMPORTANT: Clear ALL form data first to prevent old data from persisting
-    // Reset form to initial state before loading new job
-    setFormData({
-      // Service Type
-      serviceType: "truck",
-      waiveTravel: false,
-      travelBilling: "local",
-      travelCost: "",
-
-      // Customer Information
-      firstName: "",
-      lastName: "",
-      company: "",
-      phone: "",
-      phoneName: "",
-      email: "",
-      emailName: "",
-
-      // Current Home or Business Indicator
-      customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
-
-      // Labor Only - same address checkbox
-      laborOnlySameAddress: true,
-
-      // Addresses - Pickup
-      pickupAddress: "",
-      pickupUnit: "",
-      pickupCity: "",
-      pickupState: "",
-      pickupZip: "",
-      pickupLocationType: "house",
-      pickupLocationOther: "",
-      pickupBusinessName: "",
-      pickupBusinessSquareFeet: "",
-      pickupOtherSquareFeet: "",
-      pickupHouseSquareFeet: "",
-      pickupZestimate: "",
-      pickupHowFurnished: 80,
-      pickupApartmentSquareFeet: "",
-      pickupApartmentBedBath: "",
-      pickupApartmentHowFurnished: 80,
-      pickupStorageUnitQuantity: 1,
-      pickupStorageUnitSizes: [""],
-      pickupStorageUnitHowFull: [""],
-      pickupStorageUnitConditioned: [""],
-      pickupTruckPodLength: "",
-      pickupTruckPodWidth: "",
-      pickupTruckPodHowFull: 100,
-      pickupManualOverride: false,
-      pickupManualOverrideHours: "",
-
-      // Addresses - Delivery
-      deliveryAddress: "",
-      deliveryUnit: "",
-      deliveryCity: "",
-      deliveryState: "",
-      deliveryZip: "",
-      deliveryLocationType: "house",
-      deliveryLocationOther: "",
-      deliveryBusinessName: "",
-      deliveryHouseSquareFeet: "",
-      deliveryZestimate: "",
-      deliveryHowFurnished: 80,
-      deliveryApartmentSquareFeet: "",
-      deliveryApartmentBedBath: "",
-      deliveryApartmentHowFurnished: 80,
-      deliveryStorageUnitQuantity: 1,
-      deliveryStorageUnitSizes: [""],
-      deliveryStorageUnitConditioned: [""],
-      deliveryPODQuantity: 1,
-      deliveryPODSize: "",
-      deliveryTruckLength: "",
-      deliveryAddressUnknown: false,
-
-      // Addresses - Additional Stop
-      hasAdditionalStop: false,
-      additionalStopAddress: "",
-      additionalStopUnit: "",
-      additionalStopCity: "",
-      additionalStopState: "",
-      additionalStopZip: "",
-      additionalStopLocationType: "house",
-      additionalStopLocationOther: "",
-      additionalStopBusinessName: "",
-      additionalStopHouseSquareFeet: "",
-      additionalStopZestimate: "",
-      additionalStopHowFurnished: 80,
-      additionalStopApartmentBedBath: "",
-      additionalStopStorageUnitQuantity: 1,
-      additionalStopStorageUnitSizes: [""],
-      additionalStopStorageUnitConditioned: [""],
-      additionalStopNotes: "",
-
-      // Property Access - Pickup
-      pickupStairs: 1,
-      pickupNarrowDoorways: false,
-      pickupElevator: false,
-      pickupParkingDistance: "close",
-      pickupAccessNotes: "",
-
-      // Property Access - Delivery
-      deliveryStairs: 1,
-      deliveryNarrowDoorways: false,
-      deliveryElevator: false,
-      deliveryParkingDistance: "close",
-      deliveryAccessNotes: "",
-
-      // Heavy/Special Items
-      gunSafes: false,
-      gunSafesQty: 1,
-      gunSafesDetails: "",
-      pianos: false,
-      pianosQty: 1,
-      pianosDetails: "",
-      poolTables: false,
-      poolTablesQty: 1,
-      poolTablesDetails: "",
-      otherHeavyItems: false,
-      otherHeavyItemsDetails: "",
-      largeTVs: false,
-      largeTVsQty: 1,
-      largeTVsDetails: "",
-      purpleGreenMattress: false,
-      purpleGreenMattressDetails: "",
-      treadmills: false,
-      treadmillsDetails: "",
-      largeAppliances: false,
-      applianceFridge: false,
-      applianceFridgeQty: 1,
-      applianceWasher: false,
-      applianceWasherQty: 1,
-      applianceDryer: false,
-      applianceDryerQty: 1,
-      applianceOven: false,
-      applianceOvenQty: 1,
-      applianceDishwasher: false,
-      applianceDishwasherQty: 1,
-      applianceOtherDetails: "",
-      plants: false,
-      plantsDetails: "",
-      bunkBeds: false,
-      bunkBedsQty: 1,
-      bunkBedsDetails: "",
-      trampoline: false,
-      trampolineQty: 1,
-      trampolineDetails: "",
-      tableSaw: false,
-      tableSawQty: 1,
-      tableSawDetails: "",
-      gymEquipment: false,
-      gymEquipmentQty: 1,
-      gymEquipmentDetails: "",
-      sauna: false,
-      saunaQty: 1,
-      saunaDetails: "",
-      playsets: false,
-      playsetsQty: 1,
-      playsetsDetails: "",
-      specialDisassemblyOther: false,
-      specialDisassemblyOtherDetails: "",
-
-      // Pets
-      catsPresent: false,
-
-      // Packing
-      packingStatus: "moderate",
-      needsPacking: false,
-      packingKitchen: false,
-      packingGarage: false,
-      packingAttic: false,
-      packingWardrobeBoxes: false,
-      packingFragileItems: false,
-      packingBedrooms: false,
-      packingNotes: "",
-      junkRemovalNeeded: false,
-      junkRemovalAmount: "",
-      junkRemovalDetails: "",
-
-      // Insurance
-      needsInsurance: false,
-      tags: [],
-      estimatedValue: "",
-
-      // Timing
-      walkThroughDate: "",
-      walkThroughTime: "",
-      walkThroughDuration: "1",
-      preferredDate: "",
-      preferredTime: "",
-      moveDuration: "3",
-      moveDateUnknown: false,
-      timeFlexible: false,
-      readyToSchedule: false,
-      timingNotes: "",
-
-      // Estimates
-      estimatedCrewSize: "2-3",
-      crewSizeNotes: "",
-
-      // Special Notes
-      specialRequests: "",
-      fixedBudgetRequested: false,
-      desiredBudget: "",
-
-      // House Quality Rating
-      houseQuality: 3,
-
-      // Tools Needed
-      hd4Wheel: false,
-      airSled: false,
-      applianceDolly: false,
-      socketWrenches: false,
-      safeDolly: false,
-      toolCustom1: "",
-      toolCustom2: "",
-      toolCustom3: "",
-    });
-
-    // Reset phones and emails arrays to empty state
-    setPhones([{ number: "", name: "" }]);
-    setEmails([{ email: "", name: "" }]);
-    setSendHistory([]);
-
-    try {
-      const requestBody: any = {};
-      if (jobNumber.trim()) {
-        requestBody.jobNumber = jobNumber.trim();
-      }
-      if (searchPhone.trim()) {
-        // Normalize phone number before sending (strip formatting)
-        requestBody.phoneNumber = normalizePhoneNumber(searchPhone);
-      }
-      if (searchQuoteNum.trim()) {
-        requestBody.quoteNumber = searchQuoteNum.trim();
-      }
-
-      const response = await fetch('/api/move-wt/load-job', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({ address: fromAddress }),
       });
 
       const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to load job');
-      }
+      if (result.success && result.data) {
+        // Validate square feet (must be between 500 and 8000)
+        const squareFeet = result.data.squareFeet;
+        const validSquareFeet = (squareFeet && squareFeet >= 500 && squareFeet <= 8000)
+          ? squareFeet.toString()
+          : null;
 
-      // Check if phone search returned multiple forms
-      if (result.multiple && result.forms) {
-        // Show selection dialog for multiple forms
-        let message = `Found ${result.forms.length} saved form(s) for this contact:\n\n`;
-        result.forms.forEach((form: any, index: number) => {
-          const date = form.updatedAt ? new Date(form.updatedAt).toLocaleDateString() : 'No date';
-          message += `${index + 1}. ${date} - ${form.address}\n`;
-        });
-        message += `\nEnter number to load that form, or type "new" to start a new form with just contact info:`;
+        // Validate estimated value (must be between $50,000 and $5,000,000)
+        const estimatedValue = result.data.estimatedValue;
+        const validEstimatedValue = (estimatedValue && estimatedValue >= 50000 && estimatedValue <= 5000000)
+          ? estimatedValue.toString()
+          : null;
 
-        const selection = prompt(message);
-
-        if (!selection) {
-          // User cancelled
-          setIsLoadingJob(false);
-          return;
-        }
-
-        if (selection.toLowerCase() === 'new') {
-          // Load just customer info, no form data
-          if (result.customerInfo) {
-            setFormData(prev => ({
-              ...prev,
-              firstName: result.customerInfo.firstName || prev.firstName,
-              lastName: result.customerInfo.lastName || prev.lastName,
-              phone: result.customerInfo.phone || prev.phone,
-              email: result.customerInfo.email || prev.email,
-              pickupAddress: result.customerInfo.pickupAddress || prev.pickupAddress,
-              pickupUnit: result.customerInfo.pickupUnit || prev.pickupUnit,
-              pickupCity: result.customerInfo.pickupCity || prev.pickupCity,
-              pickupState: result.customerInfo.pickupState || prev.pickupState,
-              pickupZip: result.customerInfo.pickupZip || prev.pickupZip,
-            }));
-          }
-          setIsLoadingJob(false);
-          return;
-        }
-
-        const selectedIndex = parseInt(selection) - 1;
-        if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= result.forms.length) {
-          alert('Invalid selection');
-          setIsLoadingJob(false);
-          return;
-        }
-
-        const selectedForm = result.forms[selectedIndex];
-
-        // Load the selected form - use selectedForm properties, not result
-        setAddress(selectedForm.address || '');
-        setJobNumber(selectedForm.jobNumber || '');
-        setFolderUrl(selectedForm.folderUrl || '');
-        setIsFolderLinkCopied(false);
-        setIsFormSaved(true);
-
-        // Capture quote number from selected form
-        if (selectedForm.quoteNumber) {
-          setQuoteNumber(selectedForm.quoteNumber);
-          setSearchQuoteNum(selectedForm.quoteNumber);
-        }
-
-        // Load customer info if available (from result, as it's shared across forms)
-        if (result.customerInfo) {
-          setFormData(prev => ({
-            ...prev,
-            firstName: result.customerInfo.firstName || prev.firstName,
-            lastName: result.customerInfo.lastName || prev.lastName,
-            phone: result.customerInfo.phone || prev.phone,
-            email: result.customerInfo.email || prev.email,
-            pickupAddress: result.customerInfo.pickupAddress || prev.pickupAddress,
-            pickupUnit: result.customerInfo.pickupUnit || prev.pickupUnit,
-            pickupCity: result.customerInfo.pickupCity || prev.pickupCity,
-            pickupState: result.customerInfo.pickupState || prev.pickupState,
-            pickupZip: result.customerInfo.pickupZip || prev.pickupZip,
-          }));
-        }
-
-        // Load form data from selected form
-        if (selectedForm.formData) {
-          const { phones: savedPhones, emails: savedEmails, ...restFormData } = selectedForm.formData;
-
-          setFormData(prev => ({
-            ...prev,
-            ...restFormData,
-          }));
-
-          if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
-            setPhones(savedPhones);
-          }
-          if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
-            setEmails(savedEmails);
-          }
-        }
-
-        setIsLoadingJob(false);
-        return;
-      }
-
-      // Regular job number load (original logic)
-      setAddress(result.address);
-      setFolderUrl(result.folderUrl || '');
-      setIsFolderLinkCopied(false);
-      setIsFormSaved(true);
-
-      // Set job number from result (important when loading by quote number)
-      if (result.job_number) {
-        setJobNumber(result.job_number);
-      }
-
-      // Capture quote number if present
-      if (result.quoteNumber) {
-        setQuoteNumber(result.quoteNumber);
-        setSearchQuoteNum(result.quoteNumber);
-      }
-
-      // Populate customer information
-      if (result.customerInfo) {
-        setFormData(prev => ({
-          ...prev,
-          firstName: result.customerInfo.firstName || prev.firstName,
-          lastName: result.customerInfo.lastName || prev.lastName,
-          phone: result.customerInfo.phone || prev.phone,
-          email: result.customerInfo.email || prev.email,
-          pickupAddress: result.customerInfo.pickupAddress || prev.pickupAddress,
-          pickupUnit: result.customerInfo.pickupUnit || prev.pickupUnit,
-          pickupCity: result.customerInfo.pickupCity || prev.pickupCity,
-          pickupState: result.customerInfo.pickupState || prev.pickupState,
-          pickupZip: result.customerInfo.pickupZip || prev.pickupZip,
-        }));
-      }
-
-      // Populate existing form data if available
-      if (result.existingFormData) {
-        console.log('[handleLoadJob] existingFormData received:', result.existingFormData);
-        console.log('[handleLoadJob] existingFormData keys:', Object.keys(result.existingFormData));
-
-        const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
-
-        console.log('[handleLoadJob] restFormData keys:', Object.keys(restFormData));
-        console.log('[handleLoadJob] Sample values - pickupLocationType:', restFormData.pickupLocationType,
-                    'gunSafes:', restFormData.gunSafes, 'serviceType:', restFormData.serviceType);
-        console.log('[handleLoadJob] Phone fields - phone:', restFormData.phone, 'email:', restFormData.email);
-        console.log('[handleLoadJob] Phones array:', savedPhones);
-        console.log('[handleLoadJob] Emails array:', savedEmails);
-
-        setFormData(prev => ({
-          ...prev,
-          ...restFormData,
-        }));
-
-        // Restore phones and emails arrays if they exist
-        if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
-          console.log('[handleLoadJob] Restoring phones array:', savedPhones);
-          setPhones(savedPhones);
-        } else {
-          console.log('[handleLoadJob] No valid phones array to restore, savedPhones=', savedPhones);
-          // If there's a phone in formData but no phones array, create one
-          if (restFormData.phone) {
-            console.log('[handleLoadJob] Creating phones array from formData.phone:', restFormData.phone);
-            setPhones([{ number: restFormData.phone, name: restFormData.phoneName || '' }]);
-          }
-        }
-        if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
-          console.log('[handleLoadJob] Restoring emails array:', savedEmails);
-          setEmails(savedEmails);
-        } else {
-          console.log('[handleLoadJob] No valid emails array to restore, savedEmails=', savedEmails);
-          // If there's an email in formData but no emails array, create one
-          if (restFormData.email) {
-            console.log('[handleLoadJob] Creating emails array from formData.email:', restFormData.email);
-            setEmails([{ email: restFormData.email, name: restFormData.emailName || '' }]);
-          }
-        }
+        if (validSquareFeet) setFromSquareFootage(validSquareFeet);
+        if (validEstimatedValue) setFromZestimate(validEstimatedValue);
       } else {
-        console.log('[handleLoadJob] No existingFormData in result');
+        alert(result.message || 'Could not fetch property data');
       }
     } catch (error) {
-      console.error('Load job error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to load job. Please try again.');
+      console.error('[Fetch From Property] Error:', error);
+      alert('Failed to fetch property data');
     } finally {
-      setIsLoadingJob(false);
-      // Force re-initialization of Google Places Autocomplete after form data loads
-      setAutocompleteReinitKey(prev => prev + 1);
+      setIsLoadingFromProperty(false);
     }
   };
 
-  // Handler to load a recent form by phone number
-  const handleLoadRecentForm = async (phoneNumber: string) => {
-    if (!phoneNumber) return;
-
-    setIsLoadingJob(true);
-    setSearchPhone(phoneNumber);
-    setJobNumber('');
-
-    // IMPORTANT: Clear ALL form data first to prevent old data from persisting
-    // Reset form to initial state
-    setFormData({
-      // Service Type
-      serviceType: "truck",
-      waiveTravel: false,
-      travelBilling: "local",
-      travelCost: "",
-
-      // Customer Information
-      firstName: "",
-      lastName: "",
-      company: "",
-      phone: "",
-      phoneName: "",
-      email: "",
-      emailName: "",
-
-      // Current Home or Business Indicator
-      customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
-
-      // Labor Only - same address checkbox
-      laborOnlySameAddress: true,
-
-      // Addresses - Pickup
-      pickupAddress: "",
-      pickupUnit: "",
-      pickupCity: "",
-      pickupState: "",
-      pickupZip: "",
-      pickupLocationType: "house",
-      pickupLocationOther: "",
-      pickupBusinessName: "",
-      pickupBusinessSquareFeet: "",
-      pickupOtherSquareFeet: "",
-      pickupHouseSquareFeet: "",
-      pickupZestimate: "",
-      pickupHowFurnished: 80,
-      pickupApartmentSquareFeet: "",
-      pickupApartmentBedBath: "",
-      pickupApartmentHowFurnished: 80,
-      pickupStorageUnitQuantity: 1,
-      pickupStorageUnitSizes: [""],
-      pickupStorageUnitHowFull: [""],
-      pickupStorageUnitConditioned: [""],
-      pickupTruckPodLength: "",
-      pickupTruckPodWidth: "",
-      pickupTruckPodHowFull: 100,
-      pickupManualOverride: false,
-      pickupManualOverrideHours: "",
-
-      // Addresses - Delivery
-      deliveryAddress: "",
-      deliveryUnit: "",
-      deliveryCity: "",
-      deliveryState: "",
-      deliveryZip: "",
-      deliveryLocationType: "house",
-      deliveryLocationOther: "",
-      deliveryBusinessName: "",
-      deliveryHouseSquareFeet: "",
-      deliveryZestimate: "",
-      deliveryHowFurnished: 80,
-      deliveryApartmentSquareFeet: "",
-      deliveryApartmentBedBath: "",
-      deliveryApartmentHowFurnished: 80,
-      deliveryStorageUnitQuantity: 1,
-      deliveryStorageUnitSizes: [""],
-      deliveryStorageUnitConditioned: [""],
-      deliveryPODQuantity: 1,
-      deliveryPODSize: "",
-      deliveryTruckLength: "",
-      deliveryAddressUnknown: false,
-
-      // Addresses - Additional Stop
-      hasAdditionalStop: false,
-      additionalStopAddress: "",
-      additionalStopUnit: "",
-      additionalStopCity: "",
-      additionalStopState: "",
-      additionalStopZip: "",
-      additionalStopLocationType: "house",
-      additionalStopLocationOther: "",
-      additionalStopBusinessName: "",
-      additionalStopHouseSquareFeet: "",
-      additionalStopZestimate: "",
-      additionalStopHowFurnished: 80,
-      additionalStopApartmentBedBath: "",
-      additionalStopStorageUnitQuantity: 1,
-      additionalStopStorageUnitSizes: [""],
-      additionalStopStorageUnitConditioned: [""],
-      additionalStopNotes: "",
-
-      // Property Access - Pickup
-      pickupStairs: 1,
-      pickupNarrowDoorways: false,
-      pickupElevator: false,
-      pickupParkingDistance: "close",
-      pickupAccessNotes: "",
-
-      // Property Access - Delivery
-      deliveryStairs: 1,
-      deliveryNarrowDoorways: false,
-      deliveryElevator: false,
-      deliveryParkingDistance: "close",
-      deliveryAccessNotes: "",
-
-      // Heavy/Special Items
-      gunSafes: false,
-      gunSafesQty: 1,
-      gunSafesDetails: "",
-      pianos: false,
-      pianosQty: 1,
-      pianosDetails: "",
-      poolTables: false,
-      poolTablesQty: 1,
-      poolTablesDetails: "",
-      otherHeavyItems: false,
-      otherHeavyItemsDetails: "",
-      largeTVs: false,
-      largeTVsQty: 1,
-      largeTVsDetails: "",
-      purpleGreenMattress: false,
-      purpleGreenMattressDetails: "",
-      treadmills: false,
-      treadmillsDetails: "",
-      largeAppliances: false,
-      applianceFridge: false,
-      applianceFridgeQty: 1,
-      applianceWasher: false,
-      applianceWasherQty: 1,
-      applianceDryer: false,
-      applianceDryerQty: 1,
-      applianceOven: false,
-      applianceOvenQty: 1,
-      applianceDishwasher: false,
-      applianceDishwasherQty: 1,
-      applianceOtherDetails: "",
-      plants: false,
-      plantsDetails: "",
-      bunkBeds: false,
-      bunkBedsQty: 1,
-      bunkBedsDetails: "",
-      trampoline: false,
-      trampolineQty: 1,
-      trampolineDetails: "",
-      tableSaw: false,
-      tableSawQty: 1,
-      tableSawDetails: "",
-      gymEquipment: false,
-      gymEquipmentQty: 1,
-      gymEquipmentDetails: "",
-      sauna: false,
-      saunaQty: 1,
-      saunaDetails: "",
-      playsets: false,
-      playsetsQty: 1,
-      playsetsDetails: "",
-      specialDisassemblyOther: false,
-      specialDisassemblyOtherDetails: "",
-
-      // Pets
-      catsPresent: false,
-
-      // Packing
-      packingStatus: "moderate",
-      needsPacking: false,
-      packingKitchen: false,
-      packingGarage: false,
-      packingAttic: false,
-      packingWardrobeBoxes: false,
-      packingFragileItems: false,
-      packingBedrooms: false,
-      packingNotes: "",
-      junkRemovalNeeded: false,
-      junkRemovalAmount: "",
-      junkRemovalDetails: "",
-
-      // Insurance
-      needsInsurance: false,
-      tags: formData.tags || [],
-      estimatedValue: "",
-
-      // Timing
-      walkThroughDate: "",
-    walkThroughTime: "",
-    walkThroughDuration: "1",
-      preferredDate: "",
-    preferredTime: "",
-    moveDuration: "3",
-      moveDateUnknown: false,
-      timeFlexible: false,
-      readyToSchedule: false,
-      timingNotes: "",
-
-      // Estimates
-      estimatedCrewSize: "2-3",
-      crewSizeNotes: "",
-
-      // Special Notes
-      specialRequests: "",
-      fixedBudgetRequested: false,
-      desiredBudget: "",
-
-      // House Quality Rating
-      houseQuality: 3, // 1-5 scale, default to middle
-
-      // Tools Needed
-      hd4Wheel: false,
-      airSled: false,
-      applianceDolly: false,
-      socketWrenches: false,
-      safeDolly: false,
-      toolCustom1: "",
-      toolCustom2: "",
-      toolCustom3: "",
-    });
-
-    // Reset phones and emails arrays to empty state
-    setPhones([{ number: "", name: "" }]);
-    setEmails([{ email: "", name: "" }]);
-    setSendHistory([]);
-
-    try {
-      const response = await fetch('/api/move-wt/load-job', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phoneNumber: normalizePhoneNumber(phoneNumber) }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to load job');
-      }
-
-      // If multiple forms, load the first one (most recent)
-      if (result.multiple && result.forms) {
-
-        setAddress(result.address);
-        setJobNumber(result.job_number);
-        setFolderUrl(result.folderUrl || '');
-        setIsFolderLinkCopied(false);
-        setIsFormSaved(true);
-
-        if (result.quoteNumber) {
-          setQuoteNumber(result.quoteNumber);
-          setSearchQuoteNum(result.quoteNumber);
-        }
-
-        // Now load the new data into the cleared form
-        if (result.customerInfo) {
-          setFormData(prev => ({
-            ...prev,
-            firstName: result.customerInfo.firstName || "",
-            lastName: result.customerInfo.lastName || "",
-            phone: result.customerInfo.phone || "",
-            email: result.customerInfo.email || "",
-            pickupAddress: result.customerInfo.pickupAddress || "",
-            pickupUnit: result.customerInfo.pickupUnit || "",
-            pickupCity: result.customerInfo.pickupCity || "",
-            pickupState: result.customerInfo.pickupState || "",
-            pickupZip: result.customerInfo.pickupZip || "",
-          }));
-        }
-
-        if (result.existingFormData) {
-          const { phones: savedPhones, emails: savedEmails, sendHistory: savedSendHistory, ...restFormData } = result.existingFormData;
-          // Replace all form data (not merge) - ensure tags defaults to empty array
-          setFormData({ ...restFormData, tags: restFormData.tags || [] });
-
-          // Load phones and emails arrays
-          if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
-            setPhones(savedPhones);
-          }
-          if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
-            setEmails(savedEmails);
-          }
-          // Load send history
-          if (savedSendHistory && Array.isArray(savedSendHistory)) {
-            setSendHistory(savedSendHistory);
-          }
-        }
-      } else if (result.success) {
-        // Handle single form result (most common case from Recent Leads tiles)
-        setAddress(result.address || '');
-        setJobNumber(result.job_number || '');
-        setFolderUrl(result.folderUrl || '');
-        setIsFolderLinkCopied(false);
-        setIsFormSaved(true);
-
-        if (result.quoteNumber) {
-          setQuoteNumber(result.quoteNumber);
-          setSearchQuoteNum(result.quoteNumber);
-        }
-
-        if (result.customerInfo) {
-          setFormData(prev => ({
-            ...prev,
-            firstName: result.customerInfo.firstName || "",
-            lastName: result.customerInfo.lastName || "",
-            phone: result.customerInfo.phone || "",
-            email: result.customerInfo.email || "",
-            pickupAddress: result.customerInfo.pickupAddress || "",
-            pickupUnit: result.customerInfo.pickupUnit || "",
-            pickupCity: result.customerInfo.pickupCity || "",
-            pickupState: result.customerInfo.pickupState || "",
-            pickupZip: result.customerInfo.pickupZip || "",
-          }));
-        }
-
-        if (result.existingFormData) {
-          const { phones: savedPhones, emails: savedEmails, sendHistory: savedSendHistory, ...restFormData } = result.existingFormData;
-          // Ensure tags defaults to empty array for older saved forms
-          setFormData({ ...restFormData, tags: restFormData.tags || [] });
-
-          if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
-            setPhones(savedPhones);
-          }
-          if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
-            setEmails(savedEmails);
-          }
-          // Load send history
-          if (savedSendHistory && Array.isArray(savedSendHistory)) {
-            setSendHistory(savedSendHistory);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Load recent form error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to load form. Please try again.');
-    } finally {
-      setIsLoadingJob(false);
-      // Force re-initialization of Google Places Autocomplete after form data loads
-      setAutocompleteReinitKey(prev => prev + 1);
-    }
-  };
-
-  const handleMakePictureFolder = async () => {
-    if (!formData.pickupAddress.trim()) {
-      alert('Please enter a street address first');
+  // Fetch property data from Zillow for TO address
+  const fetchToPropertyData = async () => {
+    if (!toAddress) {
+      alert('Please enter an address first');
       return;
     }
 
-    setIsLoadingJob(true);
-
+    setIsLoadingToProperty(true);
     try {
-      // Build full address from pickup fields
-      const addressParts = [];
-      if (formData.pickupAddress) addressParts.push(formData.pickupAddress);
-      if (formData.pickupCity) addressParts.push(formData.pickupCity);
-      if (formData.pickupState) addressParts.push(formData.pickupState);
-      if (formData.pickupZip) addressParts.push(formData.pickupZip);
-
-      const fullAddress = addressParts.join(', ').trim();
-
-      if (!fullAddress) {
-        alert('Please enter a complete address');
-        return;
-      }
-
-      const response = await fetch('/api/move-wt/create-folder', {
+      const response = await fetch('/api/move-wt/get-property-data', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          address: fullAddress,
-          jobNumber: jobNumber.trim() || null,
-        }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: toAddress }),
       });
 
       const result = await response.json();
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create folder');
-      }
+      if (result.success && result.data) {
+        // Validate square feet (must be between 500 and 8000)
+        const squareFeet = result.data.squareFeet;
+        const validSquareFeet = (squareFeet && squareFeet >= 500 && squareFeet <= 8000)
+          ? squareFeet.toString()
+          : null;
 
-      setFolderUrl(result.folderUrl || '');
-      setIsFolderLinkCopied(false);
-      setAddress(fullAddress);
-      alert(`Picture folder created successfully!\n${result.folderUrl}`);
-    } catch (error) {
-      console.error('Create folder error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to create folder. Please try again.');
-    } finally {
-      setIsLoadingJob(false);
-    }
-  };
+        // Validate estimated value (must be between $50,000 and $5,000,000)
+        const estimatedValue = result.data.estimatedValue;
+        const validEstimatedValue = (estimatedValue && estimatedValue >= 50000 && estimatedValue <= 5000000)
+          ? estimatedValue.toString()
+          : null;
 
-  const handleFindCustomer = async () => {
-    if (!formData.firstName.trim() || !formData.lastName.trim()) {
-      alert('Please enter first name and last name to search for a customer');
-      return;
-    }
-
-    setIsLoadingJob(true);
-
-    try {
-      const response = await fetch('/api/move-wt/find-customer', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          firstName: formData.firstName.trim(),
-          lastName: formData.lastName.trim(),
-        }),
-      });
-
-      const result = await response.json();
-
-      if (response.ok && result.success && result.jobs) {
-        // If multiple jobs found, show selection popup
-        if (result.multiple && result.jobs.length > 1) {
-          // Build selection message
-          let message = `Found ${result.jobs.length} jobs for ${formData.firstName} ${formData.lastName}:\n\n`;
-          result.jobs.forEach((job: any, index: number) => {
-            message += `${index + 1}. Job #${job.jobNumber} - ${job.address}\n`;
-          });
-          message += '\nEnter the number of the job you want to load (1-' + result.jobs.length + '):';
-
-          const selection = prompt(message);
-
-          if (selection === null) {
-            // User cancelled
-            setIsLoadingJob(false);
-            return;
-          }
-
-          const selectedIndex = parseInt(selection) - 1;
-
-          if (isNaN(selectedIndex) || selectedIndex < 0 || selectedIndex >= result.jobs.length) {
-            alert('Invalid selection. Please try again.');
-            setIsLoadingJob(false);
-            return;
-          }
-
-          // Load the selected job
-          const selectedJob = result.jobs[selectedIndex];
-          setJobNumber(selectedJob.jobNumber);
-
-          // Trigger handleLoadJob by calling it directly
-          await handleLoadJobInternal(selectedJob.jobNumber);
-        } else {
-          // Only one job found, load it automatically
-          const job = result.jobs[0];
-          setJobNumber(job.jobNumber);
-          await handleLoadJobInternal(job.jobNumber);
-        }
+        if (validSquareFeet) setToSquareFootage(validSquareFeet);
+        if (validEstimatedValue) setToZestimate(validEstimatedValue);
       } else {
-        alert(result.error || 'No jobs found for this customer.');
-        setIsLoadingJob(false);
+        alert(result.message || 'Could not fetch property data');
       }
     } catch (error) {
-      console.error('Find customer error:', error);
-      alert(error instanceof Error ? error.message : 'Failed to find customer. Please try again.');
-      setIsLoadingJob(false);
-    }
-  };
-
-  // Internal function to load job by job number (extracted from handleLoadJob)
-  const handleLoadJobInternal = async (jobNumberToLoad: string) => {
-    // IMPORTANT: Clear ALL form data first to prevent old data from persisting
-    // Reset form to initial state before loading new job
-    setFormData({
-      // Service Type
-      serviceType: "truck",
-      waiveTravel: false,
-      travelBilling: "local",
-      travelCost: "",
-
-      // Customer Information
-      firstName: "",
-      lastName: "",
-      company: "",
-      phone: "",
-      phoneName: "",
-      email: "",
-      emailName: "",
-
-      // Current Home or Business Indicator
-      customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
-
-      // Labor Only - same address checkbox
-      laborOnlySameAddress: true,
-
-      // Addresses - Pickup
-      pickupAddress: "",
-      pickupUnit: "",
-      pickupCity: "",
-      pickupState: "",
-      pickupZip: "",
-      pickupLocationType: "house",
-      pickupLocationOther: "",
-      pickupBusinessName: "",
-      pickupBusinessSquareFeet: "",
-      pickupOtherSquareFeet: "",
-      pickupHouseSquareFeet: "",
-      pickupZestimate: "",
-      pickupHowFurnished: 80,
-      pickupApartmentSquareFeet: "",
-      pickupApartmentBedBath: "",
-      pickupApartmentHowFurnished: 80,
-      pickupStorageUnitQuantity: 1,
-      pickupStorageUnitSizes: [""],
-      pickupStorageUnitHowFull: [""],
-      pickupStorageUnitConditioned: [""],
-      pickupTruckPodLength: "",
-      pickupTruckPodWidth: "",
-      pickupTruckPodHowFull: 100,
-      pickupManualOverride: false,
-      pickupManualOverrideHours: "",
-
-      // Addresses - Delivery
-      deliveryAddress: "",
-      deliveryUnit: "",
-      deliveryCity: "",
-      deliveryState: "",
-      deliveryZip: "",
-      deliveryLocationType: "house",
-      deliveryLocationOther: "",
-      deliveryBusinessName: "",
-      deliveryHouseSquareFeet: "",
-      deliveryZestimate: "",
-      deliveryHowFurnished: 80,
-      deliveryApartmentSquareFeet: "",
-      deliveryApartmentBedBath: "",
-      deliveryApartmentHowFurnished: 80,
-      deliveryStorageUnitQuantity: 1,
-      deliveryStorageUnitSizes: [""],
-      deliveryStorageUnitConditioned: [""],
-      deliveryPODQuantity: 1,
-      deliveryPODSize: "",
-      deliveryTruckLength: "",
-      deliveryAddressUnknown: false,
-
-      // Addresses - Additional Stop
-      hasAdditionalStop: false,
-      additionalStopAddress: "",
-      additionalStopUnit: "",
-      additionalStopCity: "",
-      additionalStopState: "",
-      additionalStopZip: "",
-      additionalStopLocationType: "house",
-      additionalStopLocationOther: "",
-      additionalStopBusinessName: "",
-      additionalStopHouseSquareFeet: "",
-      additionalStopZestimate: "",
-      additionalStopHowFurnished: 80,
-      additionalStopApartmentBedBath: "",
-      additionalStopStorageUnitQuantity: 1,
-      additionalStopStorageUnitSizes: [""],
-      additionalStopStorageUnitConditioned: [""],
-      additionalStopNotes: "",
-
-      // Property Access - Pickup
-      pickupStairs: 1,
-      pickupNarrowDoorways: false,
-      pickupElevator: false,
-      pickupParkingDistance: "close",
-      pickupAccessNotes: "",
-
-      // Property Access - Delivery
-      deliveryStairs: 1,
-      deliveryNarrowDoorways: false,
-      deliveryElevator: false,
-      deliveryParkingDistance: "close",
-      deliveryAccessNotes: "",
-
-      // Heavy/Special Items
-      gunSafes: false,
-      gunSafesQty: 1,
-      gunSafesDetails: "",
-      pianos: false,
-      pianosQty: 1,
-      pianosDetails: "",
-      poolTables: false,
-      poolTablesQty: 1,
-      poolTablesDetails: "",
-      otherHeavyItems: false,
-      otherHeavyItemsDetails: "",
-      largeTVs: false,
-      largeTVsQty: 1,
-      largeTVsDetails: "",
-      purpleGreenMattress: false,
-      purpleGreenMattressDetails: "",
-      treadmills: false,
-      treadmillsDetails: "",
-      largeAppliances: false,
-      applianceFridge: false,
-      applianceFridgeQty: 1,
-      applianceWasher: false,
-      applianceWasherQty: 1,
-      applianceDryer: false,
-      applianceDryerQty: 1,
-      applianceOven: false,
-      applianceOvenQty: 1,
-      applianceDishwasher: false,
-      applianceDishwasherQty: 1,
-      applianceOtherDetails: "",
-      plants: false,
-      plantsDetails: "",
-      bunkBeds: false,
-      bunkBedsQty: 1,
-      bunkBedsDetails: "",
-      trampoline: false,
-      trampolineQty: 1,
-      trampolineDetails: "",
-      tableSaw: false,
-      tableSawQty: 1,
-      tableSawDetails: "",
-      gymEquipment: false,
-      gymEquipmentQty: 1,
-      gymEquipmentDetails: "",
-      sauna: false,
-      saunaQty: 1,
-      saunaDetails: "",
-      playsets: false,
-      playsetsQty: 1,
-      playsetsDetails: "",
-      specialDisassemblyOther: false,
-      specialDisassemblyOtherDetails: "",
-
-      // Pets
-      catsPresent: false,
-
-      // Packing
-      packingStatus: "moderate",
-      needsPacking: false,
-      packingKitchen: false,
-      packingGarage: false,
-      packingAttic: false,
-      packingWardrobeBoxes: false,
-      packingFragileItems: false,
-      packingBedrooms: false,
-      packingNotes: "",
-      junkRemovalNeeded: false,
-      junkRemovalAmount: "",
-      junkRemovalDetails: "",
-
-      // Insurance
-      needsInsurance: false,
-      tags: [],
-      estimatedValue: "",
-
-      // Timing
-      walkThroughDate: "",
-      walkThroughTime: "",
-      walkThroughDuration: "1",
-      preferredDate: "",
-      preferredTime: "",
-      moveDuration: "3",
-      moveDateUnknown: false,
-      timeFlexible: false,
-      readyToSchedule: false,
-      timingNotes: "",
-
-      // Estimates
-      estimatedCrewSize: "2-3",
-      crewSizeNotes: "",
-
-      // Special Notes
-      specialRequests: "",
-      fixedBudgetRequested: false,
-      desiredBudget: "",
-
-      // House Quality Rating
-      houseQuality: 3,
-
-      // Tools Needed
-      hd4Wheel: false,
-      airSled: false,
-      applianceDolly: false,
-      socketWrenches: false,
-      safeDolly: false,
-      toolCustom1: "",
-      toolCustom2: "",
-      toolCustom3: "",
-    });
-
-    // Reset phones and emails arrays to empty state
-    setPhones([{ number: "", name: "" }]);
-    setEmails([{ email: "", name: "" }]);
-    setSendHistory([]);
-
-    try {
-      const response = await fetch('/api/move-wt/load-job', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          jobNumber: jobNumberToLoad,
-        }),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to load job');
-      }
-
-      setAddress(result.address);
-      setFolderUrl(result.folderUrl || '');
-      setIsFolderLinkCopied(false);
-      setIsFormSaved(true);
-
-      // Capture quote number if present
-      if (result.quoteNumber) {
-        setQuoteNumber(result.quoteNumber);
-        setSearchQuoteNum(result.quoteNumber);
-      }
-
-      // Populate customer information
-      if (result.customerInfo) {
-        setFormData(prev => ({
-          ...prev,
-          firstName: result.customerInfo.firstName || prev.firstName,
-          lastName: result.customerInfo.lastName || prev.lastName,
-          phone: result.customerInfo.phone || '',
-          phoneName: '',
-          email: result.customerInfo.email || '',
-          emailName: '',
-          company: result.customerInfo.company || '',
-          pickupAddress: result.customerInfo.pickupAddress || '',
-          pickupUnit: result.customerInfo.pickupUnit || '',
-          pickupCity: result.customerInfo.pickupCity || '',
-          pickupState: result.customerInfo.pickupState || '',
-          pickupZip: result.customerInfo.pickupZip || '',
-        }));
-      }
-
-      // Load existing form data if it exists
-      if (result.existingFormData) {
-        const { phones: savedPhones, emails: savedEmails, ...restFormData } = result.existingFormData;
-
-        setFormData(prev => ({
-          ...prev,
-          ...restFormData,
-        }));
-
-        // Restore phones and emails arrays if they exist
-        if (savedPhones && Array.isArray(savedPhones) && savedPhones.length > 0) {
-          setPhones(savedPhones);
-        }
-        if (savedEmails && Array.isArray(savedEmails) && savedEmails.length > 0) {
-          setEmails(savedEmails);
-        }
-      }
-
-      alert(`Job #${jobNumberToLoad} loaded successfully!`);
-    } catch (error) {
-      console.error('Load job error:', error);
-      throw error;
+      console.error('[Fetch To Property] Error:', error);
+      alert('Failed to fetch property data');
     } finally {
-      setIsLoadingJob(false);
-      // Force re-initialization of Google Places Autocomplete after form data loads
-      setAutocompleteReinitKey(prev => prev + 1);
+      setIsLoadingToProperty(false);
     }
   };
 
-  const handleCopyFolderLink = async () => {
-    if (!folderUrl) return;
-    try {
-      await navigator.clipboard.writeText(folderUrl);
-      setIsFolderLinkCopied(true);
-    } catch (error) {
-      console.error('Failed to copy:', error);
-    }
-  };
-
-  const handleClear = async () => {
-    // Save current form before clearing (if there's data worth saving)
-    await saveCurrentFormBeforeSwitching();
-
-    // Reset temp job number and quote number for new customer
-    setTempJobNumber('');
-    setQuoteNumber('');
-
-    setJobNumber("");
-    setSearchPhone("");
-    setSearchQuoteNum("");
-    setAddress("");
-    setFolderUrl("");
-    setPhones([{ number: "", name: "" }]);
-    setEmails([{ email: "", name: "" }]);
-    setSendHistory([]);
-    setIsFolderLinkCopied(false);
-    setIsFormSaved(true);
-    // Reset form to initial state
-    setFormData({
-      // Service Type
-      serviceType: "truck",
-      waiveTravel: false,
-      travelBilling: "local",
-      travelCost: "",
-
-      // Customer Information
-      firstName: "",
-      lastName: "",
-      company: "",
-      phone: "",
-      phoneName: "",
-      email: "",
-      emailName: "",
-      customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
-
-      // Labor Only - same address checkbox
-      laborOnlySameAddress: true,
-
-      // Addresses - Pickup
-      pickupAddress: "",
-      pickupUnit: "",
-      pickupCity: "",
-      pickupState: "",
-      pickupZip: "",
-      pickupLocationType: "house",
-      pickupLocationOther: "",
-      pickupBusinessName: "",
-      pickupBusinessSquareFeet: "",
-      pickupOtherSquareFeet: "",
-      pickupHouseSquareFeet: "",
-      pickupZestimate: "",
-      pickupHowFurnished: 80,
-      pickupApartmentSquareFeet: "",
-      pickupApartmentBedBath: "",
-      pickupApartmentHowFurnished: 80,
-      pickupStorageUnitQuantity: 1,
-      pickupStorageUnitSizes: [""],
-      pickupStorageUnitHowFull: [""],
-      pickupStorageUnitConditioned: [""],
-      pickupTruckPodLength: "",
-      pickupTruckPodWidth: "",
-      pickupTruckPodHowFull: 100,
-      pickupManualOverride: false,
-      pickupManualOverrideHours: "",
-
-      // Addresses - Delivery
-      deliveryAddress: "",
-      deliveryUnit: "",
-      deliveryCity: "",
-      deliveryState: "",
-      deliveryZip: "",
-      deliveryLocationType: "house",
-      deliveryLocationOther: "",
-      deliveryBusinessName: "",
-      deliveryHouseSquareFeet: "",
-      deliveryZestimate: "",
-      deliveryHowFurnished: 80,
-      deliveryApartmentSquareFeet: "",
-      deliveryApartmentBedBath: "",
-      deliveryApartmentHowFurnished: 80,
-      deliveryStorageUnitQuantity: 1,
-      deliveryStorageUnitSizes: [""],
-    deliveryStorageUnitConditioned: [""],
-      deliveryPODQuantity: 1,
-      deliveryPODSize: "",
-      deliveryTruckLength: "",
-      deliveryAddressUnknown: false,
-
-      // Addresses - Additional Stop
-      hasAdditionalStop: false,
-      additionalStopAddress: "",
-      additionalStopUnit: "",
-      additionalStopCity: "",
-      additionalStopState: "",
-      additionalStopZip: "",
-      additionalStopLocationType: "house",
-      additionalStopLocationOther: "",
-      additionalStopBusinessName: "",
-      additionalStopHouseSquareFeet: "",
-      additionalStopZestimate: "",
-      additionalStopHowFurnished: 80,
-      additionalStopApartmentBedBath: "",
-      additionalStopStorageUnitQuantity: 1,
-      additionalStopStorageUnitSizes: [""],
-    additionalStopStorageUnitConditioned: [""],
-      additionalStopNotes: "",
-
-      // Property Access - Pickup
-      pickupStairs: 1,
-      pickupNarrowDoorways: false,
-      pickupElevator: false,
-      pickupParkingDistance: "close",
-      pickupAccessNotes: "",
-
-      // Property Access - Delivery
-      deliveryStairs: 1,
-      deliveryNarrowDoorways: false,
-      deliveryElevator: false,
-      deliveryParkingDistance: "close",
-      deliveryAccessNotes: "",
-
-      // Heavy/Special Items
-      gunSafes: false,
-      gunSafesQty: 1,
-      gunSafesDetails: "",
-      pianos: false,
-      pianosQty: 1,
-      pianosDetails: "",
-      poolTables: false,
-      poolTablesQty: 1,
-      poolTablesDetails: "",
-      otherHeavyItems: false,
-      otherHeavyItemsDetails: "",
-      largeTVs: false,
-      largeTVsQty: 1,
-      largeTVsDetails: "",
-      purpleGreenMattress: false,
-      purpleGreenMattressDetails: "",
-      treadmills: false,
-      treadmillsDetails: "",
-      largeAppliances: false,
-      applianceFridge: false,
-      applianceFridgeQty: 1,
-      applianceWasher: false,
-      applianceWasherQty: 1,
-      applianceDryer: false,
-      applianceDryerQty: 1,
-      applianceOven: false,
-      applianceOvenQty: 1,
-      applianceDishwasher: false,
-      applianceDishwasherQty: 1,
-      applianceOtherDetails: "",
-      plants: false,
-      plantsDetails: "",
-      bunkBeds: false,
-      bunkBedsQty: 1,
-      bunkBedsDetails: "",
-      trampoline: false,
-      trampolineQty: 1,
-      trampolineDetails: "",
-      tableSaw: false,
-      tableSawQty: 1,
-      tableSawDetails: "",
-      gymEquipment: false,
-      gymEquipmentQty: 1,
-      gymEquipmentDetails: "",
-      sauna: false,
-      saunaQty: 1,
-      saunaDetails: "",
-      playsets: false,
-      playsetsQty: 1,
-      playsetsDetails: "",
-      specialDisassemblyOther: false,
-      specialDisassemblyOtherDetails: "",
-
-      // Pets
-      catsPresent: false,
-
-      // Packing
-      packingStatus: "moderate",
-      needsPacking: false,
-      packingKitchen: false,
-      packingGarage: false,
-      packingAttic: false,
-      packingWardrobeBoxes: false,
-      packingFragileItems: false,
-    packingBedrooms: false,
-    packingNotes: "",
-      junkRemovalNeeded: false,
-      junkRemovalAmount: "",
-      junkRemovalDetails: "",
-
-      // Insurance
-      needsInsurance: false,
-      estimatedValue: "",
-      tags: [],
-
-      // Timing
-      walkThroughDate: "",
-    walkThroughTime: "",
-    walkThroughDuration: "1",
-      preferredDate: "",
-    preferredTime: "",
-    moveDuration: "3",
-      moveDateUnknown: false,
-      timeFlexible: false,
-      readyToSchedule: false,
-      timingNotes: "",
-
-      // Estimates
-      estimatedCrewSize: "2-3",
-      crewSizeNotes: "",
-
-      // Special Notes
-      specialRequests: "",
-      fixedBudgetRequested: false,
-      desiredBudget: "",
-
-      // House Quality Rating
-      houseQuality: 3, // 1-5 scale, default to middle
-
-      // Tools Needed
-      hd4Wheel: false,
-      airSled: false,
-      applianceDolly: false,
-      socketWrenches: false,
-      safeDolly: false,
-      toolCustom1: "",
-      toolCustom2: "",
-      toolCustom3: "",
-    });
-    // Force re-initialization of Google Places Autocomplete after clearing
-    setAutocompleteReinitKey(prev => prev + 1);
-  };
-
-  // Initialize Google Places Autocomplete
-  const initializeAutocomplete = () => {
-    if (!isGoogleLoaded || typeof google === 'undefined') return;
-
-    // Idaho bounds (with small buffer for border areas)
-    // SW corner: ~41.9°N, ~117.2°W | NE corner: ~49.0°N, ~111.0°W
-    const idahoBounds = new google.maps.LatLngBounds(
-      new google.maps.LatLng(41.9, -117.5),  // Southwest corner
-      new google.maps.LatLng(49.0, -110.5)   // Northeast corner
-    );
-
-    const options = {
-      bounds: idahoBounds,
-      strictBounds: true,  // Only show results within Idaho bounds
-      componentRestrictions: { country: 'us' },
-      fields: ['address_components', 'formatted_address'],
-      types: ['address']
-    };
-
-    // Helper function to parse address components
-    const parseAddressComponents = (place: google.maps.places.PlaceResult, fieldPrefix: 'pickup' | 'delivery' | 'additionalStop', inputRef: React.RefObject<HTMLInputElement>) => {
-      if (!place.address_components) return;
-
-      const addressData: any = {};
-
-      place.address_components.forEach((component) => {
-        const types = component.types;
-
-        if (types.includes('street_number')) {
-          addressData.streetNumber = component.long_name;
-        }
-        if (types.includes('route')) {
-          addressData.route = component.long_name;
-        }
-        if (types.includes('locality')) {
-          addressData.city = component.long_name;
-        }
-        if (types.includes('administrative_area_level_1')) {
-          addressData.state = component.short_name;
-        }
-        if (types.includes('postal_code')) {
-          addressData.zip = component.long_name;
-        }
-      });
-
-      // Build street address (only street number and route, NOT city/state/zip)
-      const streetAddress = [addressData.streetNumber, addressData.route].filter(Boolean).join(' ');
-
-      // Update form data with parsed components
-      // React will update the input value through the controlled component
-      setFormData(prev => ({
-        ...prev,
-        [`${fieldPrefix}Address`]: streetAddress || '',
-        [`${fieldPrefix}City`]: addressData.city || '',
-        [`${fieldPrefix}State`]: addressData.state || '',
-        [`${fieldPrefix}Zip`]: addressData.zip || ''
-      }));
-    };
-
-    // Cleanup function to remove existing autocomplete instances
-    const cleanup = () => {
-      if (pickupAutocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(pickupAutocompleteRef.current);
-        pickupAutocompleteRef.current = null;
-      }
-      if (deliveryAutocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(deliveryAutocompleteRef.current);
-        deliveryAutocompleteRef.current = null;
-      }
-      if (additionalStopAutocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(additionalStopAutocompleteRef.current);
-        additionalStopAutocompleteRef.current = null;
-      }
-    };
-
-    // Clean up before creating new instances
-    cleanup();
-
-    // Start Address Autocomplete
-    if (pickupAddressRef.current && !pickupAutocompleteRef.current) {
-      pickupAutocompleteRef.current = new google.maps.places.Autocomplete(pickupAddressRef.current, options);
-      pickupAutocompleteRef.current.addListener('place_changed', () => {
-        const place = pickupAutocompleteRef.current?.getPlace();
-        if (place) parseAddressComponents(place, 'pickup', pickupAddressRef);
-      });
-    }
-
-    // Delivery Address Autocomplete
-    if (deliveryAddressRef.current && !deliveryAutocompleteRef.current) {
-      deliveryAutocompleteRef.current = new google.maps.places.Autocomplete(deliveryAddressRef.current, options);
-      deliveryAutocompleteRef.current.addListener('place_changed', () => {
-        const place = deliveryAutocompleteRef.current?.getPlace();
-        if (place) parseAddressComponents(place, 'delivery', deliveryAddressRef);
-      });
-    }
-
-    // Additional Stop Address Autocomplete
-    if (additionalStopAddressRef.current && !additionalStopAutocompleteRef.current) {
-      additionalStopAutocompleteRef.current = new google.maps.places.Autocomplete(additionalStopAddressRef.current, options);
-      additionalStopAutocompleteRef.current.addListener('place_changed', () => {
-        const place = additionalStopAutocompleteRef.current?.getPlace();
-        if (place) parseAddressComponents(place, 'additionalStop', additionalStopAddressRef);
-      });
-    }
-  };
-
-  // Initialize autocomplete when Google is loaded or when additional stop is toggled or when delivery address visibility changes
-  // Also re-initialize when autocompleteReinitKey changes (used when loading forms or clearing data)
-  useEffect(() => {
-    if (isGoogleLoaded) {
-      // Small delay to ensure DOM is ready after state changes
-      const timeoutId = setTimeout(() => {
-        initializeAutocomplete();
-      }, 100);
-      return () => clearTimeout(timeoutId);
-    }
-
-    // Cleanup on unmount
-    return () => {
-      if (pickupAutocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(pickupAutocompleteRef.current);
-      }
-      if (deliveryAutocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(deliveryAutocompleteRef.current);
-      }
-      if (additionalStopAutocompleteRef.current) {
-        google.maps.event.clearInstanceListeners(additionalStopAutocompleteRef.current);
-      }
-    };
-  }, [isGoogleLoaded, formData.hasAdditionalStop, formData.deliveryAddressUnknown, autocompleteReinitKey]);
-
-  // Calculate Distance
-  const calculateDistance = async () => {
-    // Determine price per mile based on service type
-    const pricePerMile = formData.serviceType === 'labor-only' ? 1 : 2;
-
-    // Build full addresses
-    const pickupFullAddress = [
-      formData.pickupAddress,
-      formData.pickupUnit,
-      formData.pickupCity,
-      formData.pickupState,
-      formData.pickupZip
-    ].filter(Boolean).join(', ');
-
-    const deliveryFullAddress = [
-      formData.deliveryAddress,
-      formData.deliveryUnit,
-      formData.deliveryCity,
-      formData.deliveryState,
-      formData.deliveryZip
-    ].filter(Boolean).join(', ');
-
-    // Build additional stop address if present
-    const additionalStopFullAddress = formData.hasAdditionalStop ? [
-      formData.additionalStopAddress,
-      formData.additionalStopUnit,
-      formData.additionalStopCity,
-      formData.additionalStopState,
-      formData.additionalStopZip
-    ].filter(Boolean).join(', ') : null;
-
-    // For labor-only, we only need pickup address. For truck service, we need both.
-    if (!formData.pickupCity || !formData.pickupState) {
-      setDistanceData(null);
-      return;
-    }
-
-    // For truck service, also require delivery address
-    if (formData.serviceType !== 'labor-only' && (!formData.deliveryCity || !formData.deliveryState)) {
-      setDistanceData(null);
-      return;
-    }
-
-    // If additional stop is enabled, check if it has city and state
-    if (formData.hasAdditionalStop && (!formData.additionalStopCity || !formData.additionalStopState)) {
-      setDistanceData(null);
-      return;
-    }
-
-    setIsCalculatingDistance(true);
-
-    try {
-      // For labor-only, use pickup address as delivery address (no actual move, just round trip)
-      const effectiveDeliveryAddress = formData.serviceType === 'labor-only'
-        ? pickupFullAddress
-        : deliveryFullAddress;
-
-      const requestBody: any = {
-        pickupAddress: pickupFullAddress,
-        deliveryAddress: effectiveDeliveryAddress
-      };
-
-      if (additionalStopFullAddress && formData.serviceType !== 'labor-only') {
-        requestBody.additionalStopAddress = additionalStopFullAddress;
-      }
-
-      const response = await fetch('/api/move-wt/calculate-distance', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      const result = await response.json();
-
-      if (!response.ok) {
-        console.error('Distance calculation error:', result.error);
-        setDistanceData(null);
-        return;
-      }
-
-      console.log('[Move WT] Distance calculation result:', result);
-
-      // Parse crew size (handle ranges like "4-6")
-      let crewSize = 2; // default
-      if (formData.estimatedCrewSize) {
-        const crewStr = formData.estimatedCrewSize.toString().trim();
-        if (crewStr.includes('-')) {
-          // Range like "4-6", use smaller number
-          crewSize = parseInt(crewStr.split('-')[0]);
-        } else {
-          crewSize = parseInt(crewStr) || 2;
-        }
-      }
-
-      // Calculate travel charge for each leg (first 30 miles free)
-      const FREE_MILES = 30;
-
-      // Deduct free miles sequentially: Travel to Start -> Move Travel -> Return Travel
-      let toPickupBillableMiles = result.toPickup.miles;
-      let pickupToDeliveryBillableMiles = result.pickupToDelivery.miles;
-      let fromDeliveryBillableMiles = result.fromDelivery.miles;
-      let remainingFreeMiles = FREE_MILES;
-
-      // 1. Deduct from Travel to Start first
-      if (toPickupBillableMiles >= remainingFreeMiles) {
-        toPickupBillableMiles -= remainingFreeMiles;
-        remainingFreeMiles = 0;
-      } else {
-        remainingFreeMiles -= toPickupBillableMiles;
-        toPickupBillableMiles = 0;
-      }
-
-      // 2. Deduct from Move Travel if there are remaining free miles
-      if (remainingFreeMiles > 0) {
-        if (pickupToDeliveryBillableMiles >= remainingFreeMiles) {
-          pickupToDeliveryBillableMiles -= remainingFreeMiles;
-          remainingFreeMiles = 0;
-        } else {
-          remainingFreeMiles -= pickupToDeliveryBillableMiles;
-          pickupToDeliveryBillableMiles = 0;
-        }
-      }
-
-      // 3. Deduct from Return Travel if there are still remaining free miles
-      if (remainingFreeMiles > 0) {
-        if (fromDeliveryBillableMiles >= remainingFreeMiles) {
-          fromDeliveryBillableMiles -= remainingFreeMiles;
-          remainingFreeMiles = 0;
-        } else {
-          remainingFreeMiles -= fromDeliveryBillableMiles;
-          fromDeliveryBillableMiles = 0;
-        }
-      }
-
-      // To Pickup charges (billable miles + time)
-      const toPickupDistanceCharge = toPickupBillableMiles * pricePerMile;
-      const toPickupTimeCharge = (result.toPickup.minutes / 60) * 85 * crewSize;
-      const toPickupTotalCharge = toPickupDistanceCharge + toPickupTimeCharge;
-
-      // Pickup to Delivery (Move Travel) charges (billable miles + time)
-      const pickupToDeliveryDistanceCharge = pickupToDeliveryBillableMiles * pricePerMile;
-      const pickupToDeliveryTimeCharge = (result.pickupToDelivery.minutes / 60) * 85 * crewSize;
-      const pickupToDeliveryTotalCharge = pickupToDeliveryDistanceCharge + pickupToDeliveryTimeCharge;
-
-      // From Delivery charges (billable miles + time)
-      const fromDeliveryDistanceCharge = fromDeliveryBillableMiles * pricePerMile;
-      const fromDeliveryTimeCharge = (result.fromDelivery.minutes / 60) * 85 * crewSize;
-      const fromDeliveryTotalCharge = fromDeliveryDistanceCharge + fromDeliveryTimeCharge;
-
-      const totalCharge = toPickupTotalCharge + pickupToDeliveryTotalCharge + fromDeliveryTotalCharge;
-
-      setDistanceData({
-        toPickup: {
-          miles: result.toPickup.miles,
-          minutes: result.toPickup.minutes,
-          charge: Math.round(toPickupTotalCharge)
-        },
-        pickupToDelivery: {
-          miles: result.pickupToDelivery.miles,
-          minutes: result.pickupToDelivery.minutes,
-          charge: Math.round(pickupToDeliveryTotalCharge)
-        },
-        fromDelivery: {
-          miles: result.fromDelivery.miles,
-          minutes: result.fromDelivery.minutes,
-          charge: Math.round(fromDeliveryTotalCharge)
-        },
-        totalCharge: Math.round(totalCharge)
-      });
-
-    } catch (error) {
-      console.error('Distance calculation error:', error);
-      setDistanceData(null);
-    } finally {
-      setIsCalculatingDistance(false);
-    }
-  };
-
-  // Trigger distance calculation when addresses change
-  useEffect(() => {
-    calculateDistance();
-  }, [
-    formData.pickupAddress,
-    formData.pickupCity,
-    formData.pickupState,
-    formData.pickupZip,
-    formData.deliveryAddress,
-    formData.deliveryCity,
-    formData.deliveryState,
-    formData.deliveryZip,
-    formData.hasAdditionalStop,
-    formData.additionalStopAddress,
-    formData.additionalStopCity,
-    formData.additionalStopState,
-    formData.additionalStopZip,
-    formData.estimatedCrewSize,
-    formData.serviceType
-  ]);
-
-  // Quote Calculation
+  // Calculate quote based on form data - using Top Shelf Website formulas
   const calculateQuote = () => {
-    const items: Array<{
-      description: string;
-      amount: number;
-      subItems?: Array<{ description: string; amount: number; details?: string; alert?: string }>;
-      discount?: string;
-      details?: string;
-    }> = [];
-    let baseRate = 0;
+    const items: QuoteItem[] = [];
 
-    // Moving Labor - calculate based on square footage and how much is getting moved
-    // Get pickup location square footage
-    let pickupSquareFeet = 0;
-    if ((formData.pickupLocationType === 'house' || formData.pickupLocationType === 'loading-truck-pod') && formData.pickupHouseSquareFeet) {
-      pickupSquareFeet = parseInt(formData.pickupHouseSquareFeet.replace(/,/g, ''));
-    } else if (formData.pickupLocationType === 'apartment' && formData.pickupApartmentSquareFeet) {
-      pickupSquareFeet = parseInt(formData.pickupApartmentSquareFeet.replace(/,/g, ''));
-    } else if (formData.pickupLocationType === 'business' && formData.pickupBusinessSquareFeet) {
-      pickupSquareFeet = parseInt(formData.pickupBusinessSquareFeet.replace(/,/g, ''));
-    }
+    // Constants from Top Shelf Website
+    const HOURLY_RATE_PER_MOVER = 85;
+    const DEADHEAD_HOURLY_RATE = 170; // Fixed rate for travel to/from shop
+    const TRUCK_MINIMUM = 510; // 6 labor hours
+    const LABOR_ONLY_MINIMUM = 170; // 2 labor hours
+    const FREE_MILES = 15;
+    const PRICE_PER_MILE = 2;
 
-    // Get "how much is getting moved" slider value (unified for house, apartment, business, and loading-truck-pod)
-    let sliderValue = 0;
-    if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'apartment' || formData.pickupLocationType === 'business' || formData.pickupLocationType === 'loading-truck-pod') {
-      sliderValue = formData.pickupHowFurnished || 80;
-    }
+    // Helper: Parse square footage range to average
+    const parseSquareFootage = (sqft: string | null): number => {
+      if (!sqft) return 0;
+      const ranges: Record<string, number> = {
+        '0-1000': 750, '1000-1500': 1250, '1500-2000': 1750,
+        '2000-3000': 2500, '3000+': 3500,
+      };
+      // If it's a direct number, use it
+      const directNum = parseInt((sqft || '0').replace(/,/g, ''));
+      return ranges[sqft] || directNum || 0;
+    };
 
-    const MINIMUM_LABOR = formData.serviceType === 'truck' ? 100 : 170;
-    let movingLabor = MINIMUM_LABOR;
+    // Helper: Parse belongings amount (slider 0-10 → percentage)
+    const parseBelongingsPercent = (amount: string): number => {
+      const val = parseInt(amount);
+      if (val === 0) return 0.01;
+      return val * 0.1; // 1→10%, 2→20%, ... 10→100%
+    };
 
-    // Manual Override for Labor Hours
-    if (formData.pickupManualOverride && formData.pickupManualOverrideHours) {
-      const hours = parseFloat(formData.pickupManualOverrideHours);
-
-      // Get crew size for labor calculations
-      let crewSize = 2; // default
-      if (formData.estimatedCrewSize) {
-        const crewStr = formData.estimatedCrewSize.toString().trim();
-        if (crewStr.includes('-')) {
-          crewSize = parseInt(crewStr.split('-')[0]);
-        } else {
-          crewSize = parseInt(crewStr) || 2;
-        }
+    // Helper: Calculate storage unit labor
+    const calcStorageLabor = (units: StorageUnit[]): number => {
+      let labor = 0;
+      for (const unit of units) {
+        const sizeMap: Record<string, number> = {
+          '5x5': 25, '5x10': 50, '5x15': 75, '10x10': 100,
+          '10x15': 150, '10x20': 200, '10x25': 250, '10x30': 300,
+        };
+        const sqft = sizeMap[unit.size || ''] || 0;
+        const fullnessVal = parseInt(unit.fullness || '5');
+        const fullnessPercent = fullnessVal === 0 ? 0.01 : fullnessVal * 0.1;
+        const conditionedMult = unit.type === 'conditioned' ? 1.3 : 1.0;
+        labor += 2.6 * sqft * fullnessPercent * conditionedMult;
       }
+      return labor;
+    };
 
-      const hourlyRatePerPerson = 85;
-      movingLabor = hours * crewSize * hourlyRatePerPerson;
-
-      // Enforce minimum labor even with manual override
-      if (movingLabor < MINIMUM_LABOR) {
-        movingLabor = MINIMUM_LABOR;
+    // Helper: Calculate unloading truck labor
+    const calcTruckLabor = (trucks: typeof unloadingTrucks): number => {
+      let labor = 0;
+      for (const truck of trucks) {
+        const lengthMap: Record<string, number> = {
+          '8ft': 64, '10ft': 80, '12ft': 96, '15ft': 120,
+          '16ft': 128, '20ft': 160, '26ft': 208,
+        };
+        const sqft = lengthMap[truck.length || ''] || 0;
+        const fullnessVal = parseInt(truck.fullness || '8');
+        const fullnessPercent = fullnessVal === 0 ? 0.01 : fullnessVal * 0.1;
+        labor += 2.6 * sqft * fullnessPercent;
       }
-    } else if (formData.pickupLocationType === 'storage-unit') {
-      // Storage unit labor calculation
-      console.log('[Storage Labor] pickupLocationType:', formData.pickupLocationType);
-      // Calculate labor for each storage unit
-      let totalStorageLabor = 0;
-      console.log('[Storage Labor] Quantity:', formData.pickupStorageUnitQuantity);
-      console.log('[Storage Labor] Sizes:', formData.pickupStorageUnitSizes);
-      console.log('[Storage Labor] HowFull:', formData.pickupStorageUnitHowFull);
-      console.log('[Storage Labor] Conditioned:', formData.pickupStorageUnitConditioned);
+      return labor;
+    };
 
-      for (let i = 0; i < formData.pickupStorageUnitQuantity; i++) {
-        const sizeValue = formData.pickupStorageUnitSizes[i] || '';
-        const howFull = formData.pickupStorageUnitHowFull[i] || '';
-        const conditioned = formData.pickupStorageUnitConditioned[i] || '';
+    // Helper: Get number of movers based on load/unload cost
+    const getNumMovers = (cost: number): number => {
+      if (cost < 600) return 2;
+      if (cost < 1400) return 3;
+      if (cost < 2800) return 4;
+      return 5;
+    };
 
-        // Map size to average square footage
-        let avgSF = 0;
-        if (sizeValue === '<100sf') avgSF = 75;
-        else if (sizeValue === '100-200sf') avgSF = 150;
-        else if (sizeValue === '200-300sf') avgSF = 250;
-        else if (sizeValue === '300-400sf') avgSF = 350;
-        else if (sizeValue === '400+sf') avgSF = 500;
+    // Helper: Check stairs fee
+    const hasStairs = (propType: string | null, stories: string | null, floor: string, elevator: 'yes' | 'no' | null): boolean => {
+      const storyCount = parseInt(stories || '1');
+      const floorNum = parseInt(floor) || 1;
+      if (propType === 'home' && storyCount > 1) return true;
+      if ((propType === 'apartment' || propType === 'office') && floorNum >= 2 && elevator !== 'yes') return true;
+      return false;
+    };
 
-        // Map "how full" to percentage
-        let howFullPercent = 0;
-        if (howFull === 'light') howFullPercent = 0.25;
-        else if (howFull === 'medium') howFullPercent = 0.60;
-        else if (howFull === 'packed') howFullPercent = 1.0;
+    // Helper: Format duration for display
+    const formatDuration = (minutes: number): string => {
+      const hours = Math.floor(minutes / 60);
+      const mins = Math.round(minutes % 60);
+      if (hours > 0) return `${hours}hr ${mins}min`;
+      return `${mins}min`;
+    };
 
-        // Conditioned factor (130% if conditioned)
-        const conditionedFactor = conditioned === 'yes' ? 1.3 : 1.0;
+    const isLaborOnly = serviceType === 'labor';
+    const minimum = isLaborOnly ? LABOR_ONLY_MINIMUM : TRUCK_MINIMUM;
 
-        // Formula: SF × howFull% × conditioned factor × 2.6
-        const unitLabor = avgSF * howFullPercent * conditionedFactor * 2.6;
-        console.log(`[Storage Labor] Unit ${i}: avgSF=${avgSF}, howFullPercent=${howFullPercent}, conditionedFactor=${conditionedFactor}, unitLabor=${unitLabor}`);
-        totalStorageLabor += unitLabor;
-      }
+    // ===== 1. CALCULATE LOAD/UNLOAD COST =====
+    let loadUnloadCost = 0;
 
-      console.log('[Storage Labor] totalStorageLabor:', totalStorageLabor, 'MINIMUM_LABOR:', MINIMUM_LABOR);
-      movingLabor = totalStorageLabor > MINIMUM_LABOR ? totalStorageLabor : MINIMUM_LABOR;
-      console.log('[Storage Labor] Final movingLabor:', movingLabor);
-    } else if (formData.pickupLocationType === 'unloading-truck-pod') {
-      // Unloading truck/POD labor calculation: L × W × % × 4 / (26 × 8) × 85
-      const length = parseFloat(formData.pickupTruckPodLength) || 0;
-      const width = parseFloat(formData.pickupTruckPodWidth) || 0;
-      const howFullPercent = (formData.pickupTruckPodHowFull || 100) / 100;
-      const truckPodLabor = (length * width * howFullPercent * 4) / (26 * 8) * 85;
-      console.log('[Truck/POD Labor] L:', length, 'W:', width, '%:', howFullPercent, 'Labor:', truckPodLabor);
-      movingLabor = truckPodLabor > MINIMUM_LABOR ? truckPodLabor : MINIMUM_LABOR;
-    } else if (pickupSquareFeet === 0 || sliderValue < 20) {
-      // If no square feet or slider value is very low (barely anything), just use minimum labor
-      movingLabor = MINIMUM_LABOR;
+    if (isLaborOnly && laborServiceType === 'unloading') {
+      loadUnloadCost = calcTruckLabor(unloadingTrucks);
+    } else if (fromPropertyType === 'storage' && fromStorageUnits.length > 0) {
+      loadUnloadCost = calcStorageLabor(fromStorageUnits);
     } else {
-      // Convert slider value to calculation percentage
-      // Slider at 80% ("Whole house") = 100% for calculation
-      // Slider at 100% ("It's Loaded!") = 120% for calculation
-      let calculationPercentage = 0;
-      if (sliderValue <= 80) {
-        calculationPercentage = sliderValue * 1.25;
-      } else {
-        calculationPercentage = 100 + (sliderValue - 80);
-      }
-
-      // Formula: square_footage × calculation_percentage × 0.8
-      movingLabor = pickupSquareFeet * (calculationPercentage / 100) * 0.8;
-
-      // Apply parking distance factor
-      // short = 0%, medium = 5%, long = 10%
-      let parkingFactor = 1.0;
-
-      // Pickup parking distance
-      if (formData.pickupParkingDistance === 'medium') {
-        parkingFactor += 0.05;
-      } else if (formData.pickupParkingDistance === 'far' || formData.pickupParkingDistance === 'long') {
-        parkingFactor += 0.10;
-      }
-
-      // Delivery parking distance
-      if (formData.deliveryParkingDistance === 'medium') {
-        parkingFactor += 0.05;
-      } else if (formData.deliveryParkingDistance === 'far' || formData.deliveryParkingDistance === 'long') {
-        parkingFactor += 0.10;
-      }
-
-      movingLabor = movingLabor * parkingFactor;
-
-      // Enforce base minimum labor ($100 for truck, $170 otherwise)
-      if (movingLabor < MINIMUM_LABOR) {
-        movingLabor = MINIMUM_LABOR;
-      }
+      const sqft = parseSquareFootage(fromSquareFootage);
+      const belongingsPercent = parseBelongingsPercent(belongingsAmount);
+      loadUnloadCost = 0.80 * sqft * belongingsPercent;
     }
 
-    if (movingLabor > 0) {
-      const materialsCharge = movingLabor * 0.05; // 5% of labor
-      const totalMovingCharge = movingLabor + materialsCharge;
+    // Add Stop labor if pickup
+    if (hasStop && stopAction === 'pickup' && stopPropertyType === 'storage' && stopStorageUnits.length > 0) {
+      loadUnloadCost += calcStorageLabor(stopStorageUnits);
+    } else if (hasStop && stopAction === 'pickup') {
+      const stopSqft = parseSquareFootage(stopSquareFootage);
+      const stopBelongingsPercent = parseBelongingsPercent(stopBelongingsAmount);
+      loadUnloadCost += 0.80 * stopSqft * stopBelongingsPercent;
+    }
 
-      items.push({
-        description: 'Moving',
-        amount: Math.round(totalMovingCharge),
-        subItems: [
-          {
-            description: 'Loading/Unloading Labor',
-            amount: Math.round(movingLabor)
-          },
-          {
-            description: 'Materials and Supplies',
-            amount: Math.round(materialsCharge)
-          }
-        ]
+    // ===== 2. NUMBER OF MOVERS =====
+    const numMovers = isLaborOnly ? 2 : getNumMovers(loadUnloadCost);
+
+    // ===== 3. LABOR DRIVE TIME (between customer stops) =====
+    let laborDriveMins = 0;
+    let moveTravelMiles = 0;
+    if (!isLaborOnly && totalDuration) {
+      const hourMatch = totalDuration.match(/(\d+)\s*h/i);
+      const minMatch = totalDuration.match(/(\d+)\s*min/i);
+      if (hourMatch) laborDriveMins += parseInt(hourMatch[1]) * 60;
+      if (minMatch) laborDriveMins += parseInt(minMatch[1]);
+    }
+    if (!isLaborOnly && totalDistance) {
+      moveTravelMiles = parseFloat(totalDistance.replace(/[^\d.]/g, '')) || 0;
+    }
+    const laborDriveCost = (laborDriveMins / 60) * HOURLY_RATE_PER_MOVER * numMovers;
+
+    // ===== 4. BASE MOVING LABOR =====
+    let baseMovingLabor = Math.max(loadUnloadCost + laborDriveCost, minimum);
+    const materialsCharge = Math.round(baseMovingLabor * 0.05);
+
+    // Build Moving sub-items (matching website)
+    const movingSubItems: QuoteSubItem[] = [];
+    movingSubItems.push({
+      description: 'Completed Move',
+      amount: Math.round(baseMovingLabor)
+    });
+    movingSubItems.push({
+      description: 'Materials and Supplies',
+      amount: materialsCharge,
+      details: '*Only charged if used'
+    });
+
+    items.push({
+      description: 'Moving',
+      amount: Math.round(baseMovingLabor + materialsCharge),
+      subItems: movingSubItems
+    });
+
+    // ===== 5. TRAVEL =====
+    // Use actual deadhead data if available, otherwise estimate
+    let travelToStartMiles: number;
+    let travelToStartMins: number;
+    let returnTravelMiles: number;
+    let returnTravelMins: number;
+
+    if (deadhead) {
+      // Use actual Google Maps calculated distances
+      travelToStartMiles = deadhead.toStartMiles;
+      travelToStartMins = deadhead.toStartMins;
+      returnTravelMiles = deadhead.returnMiles;
+      returnTravelMins = deadhead.returnMins;
+    } else {
+      // Fallback estimate: assume 10 miles / 15 min each way
+      travelToStartMiles = 10;
+      travelToStartMins = 15;
+      returnTravelMiles = 10;
+      returnTravelMins = 15;
+    }
+
+    // Apply FREE_MILES discount
+    let remainingFreeMiles = FREE_MILES;
+    const travelToStartBillableMiles = Math.max(0, travelToStartMiles - remainingFreeMiles);
+    remainingFreeMiles = Math.max(0, remainingFreeMiles - travelToStartMiles);
+    const moveTravelBillableMiles = Math.max(0, moveTravelMiles - remainingFreeMiles);
+    remainingFreeMiles = Math.max(0, remainingFreeMiles - moveTravelMiles);
+    const returnTravelBillableMiles = Math.max(0, returnTravelMiles - remainingFreeMiles);
+
+    // Calculate travel charges
+    const travelToStartCharge = (travelToStartBillableMiles * PRICE_PER_MILE) + ((travelToStartMins / 60) * DEADHEAD_HOURLY_RATE);
+    const moveTravelCharge = moveTravelBillableMiles * PRICE_PER_MILE;
+    const returnTravelCharge = (returnTravelBillableMiles * PRICE_PER_MILE) + ((returnTravelMins / 60) * DEADHEAD_HOURLY_RATE);
+
+    const rawTravelCharge = travelToStartCharge + moveTravelCharge + returnTravelCharge;
+    const isMinimumTravel = rawTravelCharge < 100;
+    const totalTravelCharge = Math.max(100, rawTravelCharge);
+
+    // Build travel sub-items
+    const travelSubItems: QuoteSubItem[] = [];
+    if (!isMinimumTravel) {
+      travelSubItems.push({
+        description: 'Travel to Start',
+        amount: Math.round(travelToStartCharge),
+        details: `(${travelToStartMiles.toFixed(1)} mi, ${formatDuration(travelToStartMins)})`
+      });
+      if (!isLaborOnly && moveTravelMiles > 0) {
+        travelSubItems.push({
+          description: 'Move Travel',
+          amount: Math.round(moveTravelCharge),
+          details: `(${moveTravelMiles.toFixed(1)} mi, ${formatDuration(laborDriveMins)})`
+        });
+      }
+      travelSubItems.push({
+        description: 'Return Travel',
+        amount: Math.round(returnTravelCharge),
+        details: `(${returnTravelMiles.toFixed(1)} mi, ${formatDuration(returnTravelMins)})`
       });
     }
 
-    // Travel billing - use calculated distance data
-    if (distanceData) {
-      const FREE_MILES = 15; // Total free miles to distribute across all legs
-      let remainingFreeMiles = FREE_MILES;
+    items.push({
+      description: 'Travel',
+      amount: Math.round(totalTravelCharge),
+      subItems: travelSubItems.length > 0 ? travelSubItems : undefined,
+      details: !isMinimumTravel ? 'First 15 miles included' : undefined
+    });
 
-      // Get crew size for labor calculations
-      let crewSize = 2; // default
-      if (formData.estimatedCrewSize) {
-        const crewStr = formData.estimatedCrewSize.toString().trim();
-        if (crewStr.includes('-')) {
-          crewSize = parseInt(crewStr.split('-')[0]);
-        } else {
-          crewSize = parseInt(crewStr) || 2;
-        }
-      }
+    // ===== 6. STAIRS FEES =====
+    if (hasStairs(fromPropertyType, fromStories, fromFloorLevel, fromElevator)) {
+      items.push({ description: 'Pickup Location Stairs', amount: 25 });
+    }
+    if (hasStop && hasStairs(stopPropertyType, stopStories, stopFloorLevel, stopElevator)) {
+      items.push({ description: 'Stop Location Stairs', amount: 25 });
+    }
+    if (!isLaborOnly && hasStairs(toPropertyType, toStories, toFloorLevel, toElevator)) {
+      items.push({ description: 'Delivery Location Stairs', amount: 25 });
+    }
 
-      // Determine price per mile based on service type
-      const pricePerMile = formData.serviceType === 'labor-only' ? 1 : 2;
+    // ===== 7. HEAVY ITEMS =====
+    const heavySubItems: QuoteSubItem[] = [];
+    let heavyTotal = 0;
 
-      // For labor-only, use average of to/from distances for both legs
-      let adjustedToPickup = distanceData.toPickup;
-      let adjustedFromDelivery = distanceData.fromDelivery;
-
-      if (formData.serviceType === 'labor-only') {
-        const avgMiles = (distanceData.toPickup.miles + distanceData.fromDelivery.miles) / 2;
-        const avgMinutes = (distanceData.toPickup.minutes + distanceData.fromDelivery.minutes) / 2;
-        adjustedToPickup = { miles: avgMiles, minutes: avgMinutes, charge: 0 };
-        adjustedFromDelivery = { miles: avgMiles, minutes: avgMinutes, charge: 0 };
-      }
-
-      // Apply free miles sequentially: Travel to Start -> Move Travel -> Return Travel
-
-      // 1. Travel to Start (distance + time)
-      let toStartBillableMiles = adjustedToPickup.miles;
-      if (toStartBillableMiles >= remainingFreeMiles) {
-        toStartBillableMiles -= remainingFreeMiles;
-        remainingFreeMiles = 0;
-      } else {
-        remainingFreeMiles -= toStartBillableMiles;
-        toStartBillableMiles = 0;
-      }
-      const toStartDistanceCharge = toStartBillableMiles * pricePerMile;
-      const toStartTimeCharge = (adjustedToPickup.minutes / 60) * 170; // Always 2-person crew for travel time
-      const toStartCharge = toStartDistanceCharge + toStartTimeCharge;
-
-      // 2. Move Travel (distance + time)
-      let moveTravelBillableMiles = 0;
-      let moveTravelCharge = 0;
-      if (distanceData.pickupToDelivery) {
-        moveTravelBillableMiles = distanceData.pickupToDelivery.miles;
-
-        if (remainingFreeMiles > 0) {
-          if (moveTravelBillableMiles >= remainingFreeMiles) {
-            moveTravelBillableMiles -= remainingFreeMiles;
-            remainingFreeMiles = 0;
-          } else {
-            remainingFreeMiles -= moveTravelBillableMiles;
-            moveTravelBillableMiles = 0;
-          }
-        }
-
-        const moveTravelDistanceCharge = moveTravelBillableMiles * pricePerMile;
-        const moveTravelTimeCharge = (distanceData.pickupToDelivery.minutes / 60) * 170; // Always 2-person crew for travel time
-        moveTravelCharge = moveTravelDistanceCharge + moveTravelTimeCharge;
-      }
-
-      // 3. Return Travel (distance + time)
-      let returnTravelBillableMiles = adjustedFromDelivery.miles;
-      if (remainingFreeMiles > 0) {
-        if (returnTravelBillableMiles >= remainingFreeMiles) {
-          returnTravelBillableMiles -= remainingFreeMiles;
-          remainingFreeMiles = 0;
-        } else {
-          remainingFreeMiles -= returnTravelBillableMiles;
-          returnTravelBillableMiles = 0;
-        }
-      }
-      const returnTravelDistanceCharge = returnTravelBillableMiles * pricePerMile;
-      const returnTravelTimeCharge = (adjustedFromDelivery.minutes / 60) * 170; // Always 2-person crew for travel time
-      const returnTravelCharge = returnTravelDistanceCharge + returnTravelTimeCharge;
-
-      // If waive travel is checked, only include Move Travel (skip Travel to Start and Return Travel)
-      if (formData.waiveTravel) {
-        // Only add Move Travel if it exists and has miles
-        if (distanceData.pickupToDelivery && distanceData.pickupToDelivery.miles > 0) {
-          items.push({
-            description: 'Move Travel',
-            details: `(${distanceData.pickupToDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.pickupToDelivery.minutes)})`,
-            amount: Math.round(moveTravelCharge)
+    heavyItems.forEach(item => {
+      switch (item) {
+        case 'gun-safe':
+          heavyTotal += 100;
+          heavySubItems.push({
+            description: '* Gun Safe (over 300lbs)',
+            amount: 100,
+            alert: 'Must be on ground level with no more than 2 steps'
           });
-        }
-      } else {
-        const totalTravelCharge = toStartCharge + moveTravelCharge + returnTravelCharge;
-
-        if (totalTravelCharge < 100) {
-          // Flat travel charge if less than $100
-          items.push({
-            description: 'Travel',
-            amount: 100
+          break;
+        case 'piano':
+          heavyTotal += 100;
+          heavySubItems.push({
+            description: '* Piano',
+            amount: 100,
+            alert: 'Must be on ground level with no more than 2 steps'
           });
-        } else {
-          // Show breakdown if $100 or more
-          const subItems = [
-            {
-              description: 'Travel to Start',
-              details: `(${adjustedToPickup.miles.toFixed(1)} mi, ${formatDuration(adjustedToPickup.minutes)})`,
-              amount: Math.round(toStartCharge)
-            }
-          ];
-
-          // Add Move Travel if present
-          if (distanceData.pickupToDelivery && distanceData.pickupToDelivery.miles > 0) {
-            subItems.push({
-              description: 'Move Travel',
-              details: `(${distanceData.pickupToDelivery.miles.toFixed(1)} mi, ${formatDuration(distanceData.pickupToDelivery.minutes)})`,
-              amount: Math.round(moveTravelCharge)
-            });
-          }
-
-          subItems.push({
-            description: 'Return Travel',
-            details: `(${adjustedFromDelivery.miles.toFixed(1)} mi, ${formatDuration(adjustedFromDelivery.minutes)})`,
-            amount: Math.round(returnTravelCharge)
+          break;
+        case 'pool-table':
+          heavyTotal += 100;
+          heavySubItems.push({
+            description: '* Pool Table',
+            amount: 100,
+            alert: 'Must be on ground level with no more than 2 steps'
           });
-
-          items.push({
-            description: 'Travel (first 15 miles included)',
-            amount: Math.round(totalTravelCharge),
-            subItems: subItems
+          break;
+        case 'hot-tub':
+          heavyTotal += 100;
+          heavySubItems.push({
+            description: '* Hot Tub',
+            amount: 100,
+            alert: 'Must be on ground level with no more than 2 steps'
           });
-        }
+          break;
+        case 'tvs':
+          const count = parseInt(tvCount || '1');
+          heavyTotal += 60 * count;
+          heavySubItems.push({
+            description: `TV${count > 1 ? `s (${count})` : ''} over 45"`,
+            amount: 60 * count
+          });
+          break;
       }
-    }
+    });
 
-    // Pickup location factors
-    if (formData.pickupStairs > 1 && !formData.pickupElevator) {
-      const stairFee = (formData.pickupStairs - 1) * 25;
-      items.push({ description: `Pickup Location Stairs (${formData.pickupStairs} levels)`, amount: stairFee });
-    }
-
-    // Delivery location factors
-    if (formData.deliveryStairs > 1 && !formData.deliveryElevator) {
-      const stairFee = (formData.deliveryStairs - 1) * 25;
-      items.push({ description: `Delivery Location Stairs (${formData.deliveryStairs} levels)`, amount: stairFee });
-    }
-
-    // Heavy/Special Items
-    const heavyItems: Array<{ description: string; amount: number; alert?: string }> = [];
-
-    if (formData.pianos) {
-      const pianoCount = formData.pianosQty || 1;
-      const pianoCharge = 100 * pianoCount;
-      heavyItems.push({
-        description: `Piano${pianoCount > 1 ? ` (${pianoCount})` : ''}`,
-        amount: pianoCharge,
-        alert: 'Must be on ground level with no more than 2 steps'
-      });
-    }
-
-    if (formData.poolTables) {
-      const poolTableCount = formData.poolTablesQty || 1;
-      const poolTableCharge = 100 * poolTableCount;
-      heavyItems.push({
-        description: `Pool Table${poolTableCount > 1 ? ` (${poolTableCount})` : ''}`,
-        amount: poolTableCharge,
-        alert: 'Must be on ground level with no more than 2 steps'
-      });
-    }
-
-    if (formData.gunSafes) {
-      const gunSafeCount = formData.gunSafesQty || 1;
-      const gunSafeCharge = 100 * gunSafeCount;
-      heavyItems.push({
-        description: `Gun Safe${gunSafeCount > 1 ? ` (${gunSafeCount})` : ''}`,
-        amount: gunSafeCharge,
-        alert: 'Must be on ground level with no more than 2 steps'
-      });
-    }
-
-    if (formData.largeTVs) {
-      const tvCount = formData.largeTVsQty || 1;
-      const tvCharge = 60 * tvCount;
-      heavyItems.push({ description: `TV${tvCount > 1 ? `s (${tvCount})` : ''}`, amount: tvCharge });
-    }
-
-    if (heavyItems.length > 0) {
-      const totalHeavyItems = heavyItems.reduce((sum, item) => sum + item.amount, 0);
+    if (heavyTotal > 0) {
       items.push({
         description: 'Heavy/Special Items',
-        amount: totalHeavyItems,
-        subItems: heavyItems
+        amount: heavyTotal,
+        subItems: heavySubItems
       });
     }
 
-    // Junk Removal
-    if (formData.junkRemovalNeeded && formData.junkRemovalAmount) {
-      let junkRemovalCharge = 0;
-      const amount = formData.junkRemovalAmount;
+    // ===== 8. BOXING & PACKING =====
+    const packingLevel = parseInt(packingAmount);
+    let packingCost = 0;
+    if (packingLevel > 0) {
+      const packingPercent = packingLevel * 0.1;
+      const maxPackingCost = loadUnloadCost * 0.5;
+      packingCost = Math.round(maxPackingCost * packingPercent);
+      if (packingCost > 0) {
+        const packingLabels = ['', 'A few items', 'A little bit', 'Some items', 'Less than half',
+          'About half', 'More than half', 'Most items', 'Almost everything', 'Nearly all', 'Everything'];
 
-      if (amount === 'up to 1/4') {
-        junkRemovalCharge = 100;
-      } else if (amount === '1/4-1/2') {
-        junkRemovalCharge = 200;
-      } else if (amount === '1/2-3/4') {
-        junkRemovalCharge = 300;
-      } else if (amount === '3/4-full' || amount === 'full+') {
-        junkRemovalCharge = 400;
-      }
-
-      // Apply 20% discount for booking with move
-      const discountedCharge = junkRemovalCharge * 0.8;
-
-      if (junkRemovalCharge > 0) {
-        // Format junk removal amount for display
-        let displayAmount = amount;
-        if (amount === 'up to 1/4') {
-          displayAmount = 'Up to 1/4 Truckload';
-        } else if (amount === '1/4-1/2') {
-          displayAmount = '1/4-1/2 Truckload';
-        } else if (amount === '1/2-3/4') {
-          displayAmount = '1/2-3/4 Truckload';
-        } else if (amount === '3/4-full') {
-          displayAmount = '3/4-Full Truckload';
-        } else if (amount === 'full+') {
-          displayAmount = 'Full+ Truckload';
-        }
+        const packingSubItems: QuoteSubItem[] = [{
+          description: packingLabels[packingLevel] || `${packingLevel * 10}% of items`,
+          amount: packingCost,
+          details: packingRooms.length > 0 ? packingRooms.join(', ') : undefined
+        }];
 
         items.push({
-          description: 'Junk Removal',
-          amount: discountedCharge,
-          discount: '*20% off w/move',
-          subItems: [
-            {
-              description: displayAmount,
-              amount: discountedCharge
-            }
-          ]
+          description: 'Boxing & Packing',
+          amount: packingCost,
+          subItems: packingSubItems
         });
       }
     }
 
-        // Enforce combined minimum for truck service ($510 for Moving Labor + Move Travel Time)
-    if (formData.serviceType === 'truck' && distanceData?.pickupToDelivery) {
-      const COMBINED_MINIMUM = 510;
-      // Calculate move travel TIME charge only (not mileage)
-      const moveTravelTimeOnlyCharge = (distanceData.pickupToDelivery.minutes / 60) * 170;
+    // ===== 9. JUNK REMOVAL =====
+    const junkLevel = parseInt(junkRemovalAmount);
+    let junkCost = 0;
+    if (junkLevel > 0) {
+      const junkPrices = [0, 100, 175, 250, 325, 380, 435, 470, 500];
+      junkCost = junkPrices[junkLevel] || 0;
+      const junkLabels = ['None', '1/8 load', '1/4 load', '3/8 load', '1/2 load', '5/8 load', '3/4 load', '7/8 load', 'Full load'];
 
-      // Find Moving item
-      const movingItem = items.find(item => item.description === 'Moving');
-
-      if (movingItem) {
-        const movingLaborSubItem = movingItem.subItems?.find(sub => sub.description === 'Loading/Unloading Labor');
-        const currentLaborAmount = movingLaborSubItem?.amount || 0;
-
-        // Combined = labor + move travel time
-        const currentCombined = currentLaborAmount + moveTravelTimeOnlyCharge;
-
-        if (currentCombined < COMBINED_MINIMUM) {
-          // Need to increase moving labor to meet combined minimum
-          const shortfall = COMBINED_MINIMUM - currentCombined;
-
-          if (movingLaborSubItem) {
-            // Increase labor by shortfall
-            const newLabor = movingLaborSubItem.amount + shortfall;
-            movingLaborSubItem.amount = Math.round(newLabor);
-
-            // Recalculate materials (5% of new labor)
-            const materialsSubItem = movingItem.subItems?.find(sub => sub.description === 'Materials and Supplies');
-            if (materialsSubItem) {
-              materialsSubItem.amount = Math.round(newLabor * 0.05);
-            }
-
-            // Update moving total
-            movingItem.amount = Math.round(newLabor) + (materialsSubItem?.amount || Math.round(newLabor * 0.05));
-          }
-        }
-      }
+      items.push({
+        description: 'Junk Removal',
+        amount: junkCost,
+        subItems: [{
+          description: junkLabels[junkLevel],
+          amount: junkCost
+        }]
+      });
     }
 
-    // Packing and Boxing
-    if (formData.needsPacking) {
-      const packingStatus = formData.packingStatus;
-      let packingLaborCharge = 0;
-      let packingLevel = '';
-
-      if (packingStatus === 'a few') {
-        // Flat $50 for "a few"
-        packingLaborCharge = 50;
-        packingLevel = 'A Few';
-      } else {
-        // For moderate, quite a bit, and lots - use formula
-        // Get packing factor based on selection
-        let packingFactor = 0;
-
-        if (packingStatus === 'moderate') {
-          packingFactor = 0.25;
-          packingLevel = 'Moderate';
-        } else if (packingStatus === 'quite a bit') {
-          packingFactor = 0.60;
-          packingLevel = 'Quite a Bit';
-        } else if (packingStatus === 'lots') {
-          packingFactor = 1.0;
-          packingLevel = 'Everything!';
-        }
-
-        if (packingFactor > 0) {
-          // Get start address square feet
-          let startSquareFeet = 0;
-          if ((formData.pickupLocationType === 'house' || formData.pickupLocationType === 'loading-truck-pod') && formData.pickupHouseSquareFeet) {
-            startSquareFeet = parseInt(formData.pickupHouseSquareFeet.replace(/,/g, ''));
-          } else if (formData.pickupLocationType === 'apartment' && formData.pickupApartmentSquareFeet) {
-            startSquareFeet = parseInt(formData.pickupApartmentSquareFeet.replace(/,/g, ''));
-          } else if (formData.pickupLocationType === 'business' && formData.pickupBusinessSquareFeet) {
-            startSquareFeet = parseInt(formData.pickupBusinessSquareFeet.replace(/,/g, ''));
-          }
-
-          if (startSquareFeet > 0) {
-            // Get "how much is getting moved" slider value and convert to percentage (unified for house, apartment, business, and loading-truck-pod)
-            let sliderValue = 0;
-            if (formData.pickupLocationType === 'house' || formData.pickupLocationType === 'apartment' || formData.pickupLocationType === 'business' || formData.pickupLocationType === 'loading-truck-pod') {
-              sliderValue = formData.pickupHowFurnished || 80;
-            }
-
-            // Convert slider value to calculation percentage
-            // Slider at 80% ("Whole house") = 100% for calculation
-            // Slider at 100% ("It's Loaded!") = 120% for calculation
-            let calculationPercentage = 0;
-            if (sliderValue <= 80) {
-              calculationPercentage = sliderValue * 1.25;
-            } else {
-              calculationPercentage = 100 + (sliderValue - 80);
-            }
-
-            // Formula: packing_factor × square_feet × 0.5 × calculation_percentage
-            packingLaborCharge = packingFactor * startSquareFeet * 0.5 * (calculationPercentage / 100);
-          }
-        }
-      }
-
-      // Add Packing and Boxing as a header with sub-items
-      if (packingLaborCharge > 0) {
-        const materialsCharge = packingLaborCharge * 0.20;
-        const totalPackingCharge = packingLaborCharge + materialsCharge;
-
-        items.push({
-          description: `Packing and Boxing (${packingLevel})`,
-          amount: Math.round(totalPackingCharge),
-          subItems: [
-            {
-              description: 'Labor',
-              amount: Math.round(packingLaborCharge)
-            },
-            {
-              description: 'Materials and Supplies',
-              amount: Math.round(materialsCharge)
-            }
-          ]
-        });
-      }
-    }
-
-    // If Fixed Budget Requested, check if budget is sufficient (don't artificially increase labor)
-    if (formData.fixedBudgetRequested && formData.desiredBudget) {
-      const desiredBudget = parseFloat(formData.desiredBudget.replace(/,/g, ''));
-
-      if (!isNaN(desiredBudget) && desiredBudget > 0) {
-        // Calculate fixed costs (everything except Moving)
-        let fixedCosts = 0;
-        let originalMovingLabor = 0;
-
-        items.forEach(item => {
-          if (item.description !== 'Moving') {
-            fixedCosts += item.amount;
-          } else if (item.subItems) {
-            const laborSubItem = item.subItems.find(sub => sub.description === 'Labor');
-            originalMovingLabor = laborSubItem?.amount || 0;
-          }
-        });
-
-        // Calculate what budget allows for
-        // Formula: desiredBudget = fixedCosts + movingLabor + (movingLabor * 0.05)
-        // Solving: movingLabor = (desiredBudget - fixedCosts) / 1.05
-        const availableForMoving = desiredBudget - fixedCosts;
-        const budgetAllowsLabor = availableForMoving / 1.05;
-
-        // Minimum is 2 movers for 1 hour = $170
-        const minimumMovingLabor = 170;
-
-        if (budgetAllowsLabor < minimumMovingLabor) {
-          // Budget is insufficient
-          setIsBudgetInsufficient(true);
-        } else {
-          setIsBudgetInsufficient(false);
-
-          // Only reduce labor if budget is insufficient
-          // NEVER increase labor beyond the normal recommendation
-          if (budgetAllowsLabor < originalMovingLabor) {
-            // Budget is constraining - reduce labor to fit
-            const movingItemIndex = items.findIndex(item => item.description === 'Moving');
-            if (movingItemIndex !== -1) {
-              const materialsCharge = budgetAllowsLabor * 0.05;
-              const totalMovingCharge = budgetAllowsLabor + materialsCharge;
-
-              items[movingItemIndex] = {
-                description: 'Moving',
-                amount: Math.round(totalMovingCharge),
-                subItems: [
-                  {
-                    description: 'Labor',
-                    amount: Math.round(budgetAllowsLabor)
-                  },
-                  {
-                    description: 'Materials and Supplies',
-                    amount: Math.round(materialsCharge)
-                  }
-                ]
-              };
-            }
-          }
-          // If budgetAllowsLabor >= originalMovingLabor, leave the Moving item unchanged
-        }
-      }
-    } else {
-      setIsBudgetInsufficient(false);
-    }
-
-    // Calculate total
+    // ===== 10. CALCULATE TOTALS =====
     const total = items.reduce((sum, item) => sum + item.amount, 0);
 
+    // Calculate category totals for range display (matching website)
+    let movingLabor = Math.round(baseMovingLabor);
+    let movingMaterials = materialsCharge;
+    let otherServices = packingCost + junkCost;
+    let fixedTotal = Math.round(totalTravelCharge);
+
+    // Add stairs to fixed
+    if (hasStairs(fromPropertyType, fromStories, fromFloorLevel, fromElevator)) fixedTotal += 25;
+    if (hasStop && hasStairs(stopPropertyType, stopStories, stopFloorLevel, stopElevator)) fixedTotal += 25;
+    if (!isLaborOnly && hasStairs(toPropertyType, toStories, toFloorLevel, toElevator)) fixedTotal += 25;
+
+    // Add heavy items to fixed
+    fixedTotal += heavyTotal;
+
     setQuote({
-      baseRate,
       items,
-      total
+      total,
+      movingLabor,
+      movingMaterials,
+      otherServices,
+      fixedTotal,
+      minimumCharge: minimum
     });
   };
 
-  // Recalculate quote when form data or distance data changes
+  // Recalculate quote when relevant data changes
   useEffect(() => {
     calculateQuote();
-  }, [formData, distanceData]);
+  }, [
+    serviceType, laborServiceType, fromSquareFootage, belongingsAmount,
+    fromPropertyType, fromStories, fromFloorLevel, fromElevator, fromStorageUnits,
+    toPropertyType, toStories, toFloorLevel, toElevator,
+    hasStop, stopAction, stopPropertyType, stopSquareFootage, stopBelongingsAmount,
+    stopStories, stopFloorLevel, stopElevator, stopStorageUnits,
+    heavyItems, tvCount, packingAmount, junkRemovalAmount,
+    totalDistance, totalDuration, unloadingTrucks, deadhead
+  ]);
 
-  // Calculate crew configurations for fixed budget (applies to Moving labor only)
-  const calculateBudgetCrewOptions = () => {
-    if (!formData.fixedBudgetRequested || !formData.desiredBudget || !quote) {
-      return null;
+  // Helper function to get 3 days around selected date, skipping Sundays
+  const getThreeDaysAroundDate = (selectedDateStr: string): string[] => {
+    const selectedDate = new Date(selectedDateStr + 'T12:00:00'); // Noon to avoid timezone issues
+    const days: string[] = [];
+
+    // Get day before (skip Sunday - go to Saturday)
+    let prevDate = new Date(selectedDate);
+    prevDate.setDate(prevDate.getDate() - 1);
+    if (prevDate.getDay() === 0) { // Sunday
+      prevDate.setDate(prevDate.getDate() - 1); // Go to Saturday
     }
+    days.push(prevDate.toISOString().split('T')[0]);
 
-    const desiredBudget = parseFloat(formData.desiredBudget);
-    if (isNaN(desiredBudget) || desiredBudget <= 0) {
-      return null;
+    // Selected date (if Sunday, this shouldn't happen but handle it)
+    days.push(selectedDateStr);
+
+    // Get day after (skip Sunday - go to Monday)
+    let nextDate = new Date(selectedDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+    if (nextDate.getDay() === 0) { // Sunday
+      nextDate.setDate(nextDate.getDate() + 1); // Go to Monday
     }
+    days.push(nextDate.toISOString().split('T')[0]);
 
-    // Find the normal Moving labor amount (without budget constraints)
-    let normalMovingLabor = 0;
-    let normalMovingMaterials = 0;
+    return days;
+  };
 
-    const movingItem = quote.items.find(item => item.description === 'Moving');
-    if (movingItem && movingItem.subItems) {
-      const laborSubItem = movingItem.subItems.find(sub => sub.description === 'Labor');
-      const materialsSubItem = movingItem.subItems.find(sub => sub.description === 'Materials and Supplies');
-      normalMovingLabor = laborSubItem?.amount || 0;
-      normalMovingMaterials = materialsSubItem?.amount || 0;
-    }
+  // Format date for display
+  const formatDateLabel = (dateStr: string): string => {
+    const date = new Date(dateStr + 'T12:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
 
-    // Calculate fixed costs (everything except Moving labor and its materials)
-    // Moving materials are 5% of Moving labor, so they'll be calculated based on the new labor amount
-    let fixedCosts = 0;
+  const getDayName = (dateStr: string): string => {
+    const date = new Date(dateStr + 'T12:00:00');
+    return date.toLocaleDateString('en-US', { weekday: 'short' });
+  };
 
-    quote.items.forEach(item => {
-      if (item.description === 'Moving') {
-        // Skip entirely - we'll calculate new moving labor and materials
-      } else {
-        // All other items are fixed costs (Travel, Stairs, Heavy Items, Junk, Packing, etc.)
-        fixedCosts += item.amount;
-      }
-    });
+  // Shift date by days, skipping Sundays
+  const shiftDateSkippingSundays = (dateStr: string, days: number): string => {
+    const date = new Date(dateStr + 'T12:00:00');
+    let shifted = new Date(date);
+    const direction = days > 0 ? 1 : -1;
+    let remaining = Math.abs(days);
 
-    // Available budget for moving labor + materials
-    // Formula: desiredBudget = fixedCosts + movingLabor + (movingLabor * 0.05)
-    // Solving for movingLabor: movingLabor = (desiredBudget - fixedCosts) / 1.05
-    const availableForMoving = desiredBudget - fixedCosts;
-    let movingLaborBudget = availableForMoving / 1.05;
-
-    // Check if budget is sufficient to cover normal recommended labor
-    // If yes, return early - no need to calculate alternative crew configurations
-    if (normalMovingLabor > 0 && movingLaborBudget >= normalMovingLabor) {
-      const normalTotal = normalMovingLabor + normalMovingMaterials;
-      const totalWithFixedCosts = Math.round(fixedCosts + normalTotal);
-
-      return {
-        viable: true,
-        budgetSufficient: true,
-        message: `Your budget of $${desiredBudget.toLocaleString()} is sufficient to cover the recommended labor. The quote shows the normal recommended crew and hours (not adjusted for budget).`,
-        desiredBudget,
-        fixedCosts,
-        movingLaborBudget: normalMovingLabor,
-        movingMaterialsBudget: normalMovingMaterials,
-        estimatedTotal: totalWithFixedCosts
-      };
-    }
-
-    const movingMaterialsBudget = movingLaborBudget * 0.05;
-
-    // Hourly rate per person is $85
-    const hourlyRatePerPerson = 85;
-
-    // Minimum viable option is 2 people for 1 hour
-    const minimumLaborCost = 2 * 1 * hourlyRatePerPerson;
-
-    if (movingLaborBudget < minimumLaborCost) {
-      // Calculate minimum budget: fixedCosts + minimumLabor + materials (5% of labor)
-      // Using formula: minimumBudget = fixedCosts + (minimumLabor * 1.05)
-      const minimumBudget = Math.ceil(fixedCosts + (minimumLaborCost * 1.05));
-
-      return {
-        viable: false,
-        message: `With your address locations and requested services, the minimum budget for 2 movers to work at least 1 hour is $${minimumBudget.toLocaleString()}`
-      };
-    }
-
-    // Calculate viable crew configurations
-    // 2 people: 1-5 hours per person
-    // 3+ people: 3-5 hours per person (don't allow too many people finishing too quickly)
-    const options: Array<{ crewSize: number; hours: number; totalHours: number; laborCost: number; totalCost: number }> = [];
-
-    for (let crewSize = 2; crewSize <= 6; crewSize++) {
-      // Calculate max hours this crew can work within moving labor budget
-      const maxHours = movingLaborBudget / (crewSize * hourlyRatePerPerson);
-
-      // Determine minimum hours based on crew size
-      const minHours = crewSize === 2 ? 1 : 3;
-
-      // Only include if hours per person is between min and 5 hours
-      if (maxHours >= minHours && maxHours <= 5) {
-        const totalHours = crewSize * maxHours;
-        const laborCost = crewSize * maxHours * hourlyRatePerPerson;
-        const materialsCost = laborCost * 0.05;
-        const totalCost = laborCost + materialsCost;
-        options.push({ crewSize, hours: maxHours, totalHours, laborCost, totalCost });
+    while (remaining > 0) {
+      shifted.setDate(shifted.getDate() + direction);
+      // Skip Sundays (day 0)
+      if (shifted.getDay() !== 0) {
+        remaining--;
       }
     }
 
-    if (options.length === 0) {
-      // Calculate minimum budget for viable crew configuration
-      const minimumBudget = Math.ceil(fixedCosts + (minimumLaborCost * 1.05));
+    return shifted.toISOString().split('T')[0];
+  };
 
-      return {
-        viable: false,
-        message: `With your address locations and requested services, the minimum budget for 2 movers to work at least 1 hour is $${minimumBudget.toLocaleString()}`
-      };
+  // Navigate calendar left/right
+  const handleCalendarNav = (direction: 'prev' | 'next') => {
+    if (!moveDate) return;
+    const newDate = shiftDateSkippingSundays(moveDate, direction === 'next' ? 1 : -1);
+    setMoveDate(newDate);
+  };
+
+  // Parse time string like "8:00 AM" or "2:30 PM" to minutes from midnight
+  const parseTimeToMinutes = (timeStr: string): number => {
+    if (!timeStr) return 480; // Default to 8am
+    const match = timeStr.match(/(\d+):(\d+)\s*(AM|PM)?/i);
+    if (!match) return 480;
+    let hours = parseInt(match[1], 10);
+    const minutes = parseInt(match[2], 10);
+    const period = match[3]?.toUpperCase();
+    if (period === 'PM' && hours !== 12) hours += 12;
+    if (period === 'AM' && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  };
+
+  // Fetch calendar data when moveDate changes
+  useEffect(() => {
+    if (!moveDate) {
+      setCalendarDays([]);
+      return;
     }
 
-    return {
-      viable: true,
-      movingLaborBudget,
-      movingMaterialsBudget,
-      fixedCosts,
-      options,
-      desiredBudget
+    const fetchCalendarData = async () => {
+      setIsLoadingCalendar(true);
+      try {
+        const threeDates = getThreeDaysAroundDate(moveDate);
+
+        // Fetch jobs for all 3 dates in parallel
+        const [jobResponses, techsResponse] = await Promise.all([
+          Promise.all(
+            threeDates.map(date =>
+              fetch(`/api/schedule?date=${date}`).then(res => res.json())
+            )
+          ),
+          fetch(`/api/homebase/schedule?dates=${threeDates.join(',')}`).then(res => res.json()).catch(() => ({ data: [] }))
+        ]);
+
+        const calendarData: CalendarDay[] = threeDates.map((date, index) => ({
+          date,
+          dateLabel: formatDateLabel(date),
+          dayName: getDayName(date),
+          jobs: (jobResponses[index]?.jobs || []).map((job: any) => {
+            const startMins = parseTimeToMinutes(job.startTime);
+            let endMins = parseTimeToMinutes(job.endTime);
+            // If no end time or end is before start, assume 2 hour duration
+            if (!job.endTime || endMins <= startMins) {
+              endMins = startMins + 120;
+            }
+            return {
+              id: job.id,
+              serialId: job.serialId,
+              customerName: job.customerName || 'No Name',
+              startTime: job.startTime || '',
+              endTime: job.endTime || '',
+              startMinutes: startMins,
+              endMinutes: endMins,
+              jobType: job.jobType || '',
+              status: job.status || '',
+              tags: job.tags || [],
+            };
+          }),
+          isSelected: date === moveDate,
+        }));
+
+        setCalendarDays(calendarData);
+
+        // Set techs data
+        if (techsResponse?.data) {
+          setCalendarTechs(techsResponse.data);
+        } else {
+          setCalendarTechs([]);
+        }
+      } catch (error) {
+        console.error('Failed to fetch calendar data:', error);
+        setCalendarDays([]);
+        setCalendarTechs([]);
+      } finally {
+        setIsLoadingCalendar(false);
+      }
     };
-  };
 
-  const budgetCrewOptions = calculateBudgetCrewOptions();
+    fetchCalendarData();
+  }, [moveDate]);
 
-  // Helper function to format hours and minutes
-  const formatHoursMinutes = (hours: number) => {
-    const wholeHours = Math.floor(hours);
-    const minutes = Math.round((hours - wholeHours) * 60);
-    if (minutes === 0) {
-      return `${wholeHours} hour${wholeHours !== 1 ? 's' : ''}`;
-    }
-    return `${wholeHours} hr${wholeHours !== 1 ? 's' : ''} ${minutes} min`;
-  };
-
-  // Manual property data fetch functions
-  const fetchPickupPropertyData = async () => {
-    if (!formData.pickupAddress || !formData.pickupCity || !formData.pickupState || !formData.pickupZip) {
-      alert('Please enter a complete pickup address first');
-      return;
-    }
-
-    const fullAddress = `${formData.pickupAddress}, ${formData.pickupCity}, ${formData.pickupState} ${formData.pickupZip}`;
-
-    setIsLoadingPickupProperty(true);
-    try {
-      const response = await fetch('/api/move-wt/get-property-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: fullAddress }),
-      });
-
-      const result = await response.json();
-
-      if (result.success && result.data) {
-        // Format bed/bath as "X bed / Y bath" if available
-        const bedBath = (result.data.bedrooms && result.data.bathrooms)
-          ? `${result.data.bedrooms} bed / ${result.data.bathrooms} bath`
-          : '';
-
-        // Validate square feet (must be between 500 and 8000)
-        const squareFeet = result.data.squareFeet;
-        const validSquareFeet = (squareFeet && squareFeet >= 500 && squareFeet <= 8000)
-          ? squareFeet.toString()
-          : '';
-
-        // Validate estimated value (must be between $50,000 and $5,000,000)
-        const estimatedValue = result.data.estimatedValue;
-        const validEstimatedValue = (estimatedValue && estimatedValue >= 50000 && estimatedValue <= 5000000)
-          ? estimatedValue.toString()
-          : '';
-
-        setFormData(prev => ({
-          ...prev,
-          pickupHouseSquareFeet: validSquareFeet || prev.pickupHouseSquareFeet,
-          pickupZestimate: validEstimatedValue || prev.pickupZestimate,
-          pickupApartmentSquareFeet: validSquareFeet || prev.pickupApartmentSquareFeet,
-          pickupApartmentBedBath: bedBath || prev.pickupApartmentBedBath,
-        }));
-      } else {
-        alert(result.message || 'Could not fetch property data');
-      }
-    } catch (error) {
-      console.error('[Manual Fetch Pickup] Error:', error);
-      alert('Failed to fetch property data');
-    } finally {
-      setIsLoadingPickupProperty(false);
-    }
-  };
-
-  const fetchDeliveryPropertyData = async () => {
-    if (!formData.deliveryAddress || !formData.deliveryCity || !formData.deliveryState || !formData.deliveryZip) {
-      alert('Please enter a complete delivery address first');
-      return;
-    }
-
-    const fullAddress = `${formData.deliveryAddress}, ${formData.deliveryCity}, ${formData.deliveryState} ${formData.deliveryZip}`;
-
-    setIsLoadingDeliveryProperty(true);
-    try {
-      const response = await fetch('/api/move-wt/get-property-data', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: fullAddress }),
-      });
-
-      const result = await response.json();
-
-      if (result.success && result.data) {
-        // Format bed/bath as "X bed / Y bath" if available
-        const bedBath = (result.data.bedrooms && result.data.bathrooms)
-          ? `${result.data.bedrooms} bed / ${result.data.bathrooms} bath`
-          : '';
-
-        // Validate square feet (must be between 500 and 8000)
-        const squareFeet = result.data.squareFeet;
-        const validSquareFeet = (squareFeet && squareFeet >= 500 && squareFeet <= 8000)
-          ? squareFeet.toString()
-          : '';
-
-        // Validate estimated value (must be between $50,000 and $5,000,000)
-        const estimatedValue = result.data.estimatedValue;
-        const validEstimatedValue = (estimatedValue && estimatedValue >= 50000 && estimatedValue <= 5000000)
-          ? estimatedValue.toString()
-          : '';
-
-        setFormData(prev => ({
-          ...prev,
-          deliveryHouseSquareFeet: validSquareFeet || prev.deliveryHouseSquareFeet,
-          deliveryZestimate: validEstimatedValue || prev.deliveryZestimate,
-          deliveryApartmentSquareFeet: validSquareFeet || prev.deliveryApartmentSquareFeet,
-          deliveryApartmentBedBath: bedBath || prev.deliveryApartmentBedBath,
-        }));
-      } else {
-        alert(result.message || 'Could not fetch property data');
-      }
-    } catch (error) {
-      console.error('[Manual Fetch Delivery] Error:', error);
-      alert('Failed to fetch property data');
-    } finally {
-      setIsLoadingDeliveryProperty(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!jobNumber || !address) {
-      alert('Please load a job number first');
-      return;
-    }
-
+  // Handle save estimate
+  const handleSave = async () => {
     setIsSaving(true);
+    setSaveMessage(null);
 
     try {
-      await saveFormData(true); // true = show success message
-      console.log("Form submitted:", formData);
+      const payload = {
+        // Include existing ID for updates
+        estimateId: currentEstimateId,
+
+        // Customer Info
+        fullName: customerName,
+        phone: customerPhone,
+        email: customerEmail,
+
+        // Service Type
+        serviceType: serviceType,
+
+        // Labor-specific fields
+        laborServiceType: laborServiceType,
+        laborItemAmount: laborItemAmount,
+        loadingItemAmount: loadingItemAmount,
+        officeItemAmount: officeItemAmount,
+        truckPodLengths: truckPodLengths,
+        unloadingTrucks: unloadingTrucks,
+        unloadingStorageType: unloadingStorageType,
+
+        // FROM Location
+        fromAddress: fromAddress,
+        fromUnit: fromUnit,
+        fromPropertyType: fromPropertyType,
+        fromBedrooms: fromBedrooms,
+        fromSquareFootage: fromSquareFootage,
+        fromZestimate: fromZestimate,
+        fromGarage: fromGarage,
+        fromStories: fromStories,
+        fromFloorLevel: fromFloorLevel,
+        fromElevator: fromElevator,
+        fromStorageUnits: fromStorageUnits,
+        fromIsCurrentHome: fromIsCurrentHome,
+        fromDetails: fromDetails,
+
+        // TO Location
+        toAddress: toAddress,
+        toUnit: toUnit,
+        toPropertyType: toPropertyType,
+        toSquareFootage: toSquareFootage,
+        toZestimate: toZestimate,
+        toStories: toStories,
+        toFloorLevel: toFloorLevel,
+        toElevator: toElevator,
+        toStorageUnits: toStorageUnits,
+        toIsCurrentHome: toIsCurrentHome,
+        toDetails: toDetails,
+
+        // STOP Location
+        hasStop: hasStop,
+        stopAddress: stopAddress,
+        stopUnit: stopUnit,
+        stopPropertyType: stopPropertyType,
+        stopAction: stopAction,
+        stopBedrooms: stopBedrooms,
+        stopSquareFootage: stopSquareFootage,
+        stopGarage: stopGarage,
+        stopStories: stopStories,
+        stopFloorLevel: stopFloorLevel,
+        stopElevator: stopElevator,
+        stopStorageUnits: stopStorageUnits,
+        stopDetails: stopDetails,
+        stopBelongingsAmount: stopBelongingsAmount,
+        stopHeavyItems: stopHeavyItems,
+
+        // Belongings & Heavy Items
+        belongingsAmount: belongingsAmount,
+        heavyItems: heavyItems,
+        gunSafeOver300: gunSafeOver300,
+        gunSafeGroundLevel: gunSafeGroundLevel,
+        pianoType: pianoType,
+        pianoGroundLevel: pianoGroundLevel,
+        poolTableDisassembly: poolTableDisassembly,
+        poolTableGroundLevel: poolTableGroundLevel,
+        mattressGroundLevel: mattressGroundLevel,
+        tvCount: tvCount,
+        exerciseEquipmentTypes: exerciseEquipmentTypes,
+        toolTypes: toolTypes,
+        toolOtherText: toolOtherText,
+
+        // Route Info
+        totalDistance: totalDistance,
+        totalDuration: totalDuration,
+
+        // Other Services
+        packingAmount: packingAmount,
+        packingRooms: packingRooms,
+        junkRemovalAmount: junkRemovalAmount,
+      };
+
+      const response = await fetch('/api/move-wt-new/save-estimate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Update IDs if this was a new estimate
+        if (result.estimate?.id) setCurrentEstimateId(result.estimate.id);
+        if (result.quoteId) setCurrentQuoteId(result.quoteId);
+
+        setSaveMessage({
+          type: 'success',
+          text: result.isUpdate ? 'Estimate updated!' : `Saved! Quote ID: ${result.quoteId || result.estimate?.quote_id}`,
+        });
+
+        // Clear message after 3 seconds
+        setTimeout(() => setSaveMessage(null), 3000);
+      } else {
+        setSaveMessage({ type: 'error', text: result.error || 'Failed to save' });
+      }
     } catch (error) {
-      console.error('Save form error:', error);
+      console.error('Save error:', error);
+      setSaveMessage({ type: 'error', text: 'Failed to save estimate' });
     } finally {
       setIsSaving(false);
     }
   };
 
-  const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+  // Handle labor service type change - reset relevant fields
+  const handleLaborServiceTypeChange = (type: string) => {
+    setLaborServiceType(type);
+    // Reset slider values to defaults
+    setLaborItemAmount('2');
+    setLoadingItemAmount('7');
+    setOfficeItemAmount('7');
+    // Reset truck/pod selections
+    setTruckPodLengths(['']);
+    setUnloadingTrucks([{ id: 1, length: null, fullness: '8' }]);
+    setUnloadingStorageType(null);
+    // Reset property type
+    setFromPropertyType('home');
+    setFromStorageUnits([{ id: 1, size: null, type: null, unitNumber: '', fullness: '5' }]);
+    // Reset heavy items
+    setHeavyItems([]);
+    setGunSafeOver300(null);
+    setGunSafeGroundLevel(null);
+    setPianoType(null);
+    setPianoGroundLevel(null);
+    setPoolTableDisassembly(null);
+    setPoolTableGroundLevel(null);
+    setMattressGroundLevel(null);
+    setTvCount(null);
+    setExerciseEquipmentTypes([]);
+    setToolTypes([]);
+    setToolOtherText('');
+    // Reset floor/elevator
+    setFromFloorLevel('1');
+    setFromElevator(null);
+  };
+
+  // Truck/POD helpers for loading
+  const addTruckPod = () => {
+    setTruckPodLengths(prev => [...prev, '']);
+  };
+
+  const removeTruckPod = (index: number) => {
+    setTruckPodLengths(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const updateTruckPodLength = (index: number, length: string) => {
+    setTruckPodLengths(prev => prev.map((l, i) => i === index ? length : l));
+  };
+
+  // Unloading truck helpers
+  const addUnloadingTruck = () => {
+    setUnloadingTrucks(prev => [...prev, { id: Date.now(), length: null, fullness: '8' }]);
+  };
+
+  const removeUnloadingTruck = (id: number) => {
+    setUnloadingTrucks(prev => prev.filter(t => t.id !== id));
+  };
+
+  const updateUnloadingTruck = (id: number, field: 'length' | 'fullness', value: string | null) => {
+    setUnloadingTrucks(prev => prev.map(t => t.id === id ? { ...t, [field]: value } : t));
+  };
+
+  // Storage unit helpers
+  const addStorageUnit = (location: 'from' | 'to' | 'stop') => {
+    const newUnit: StorageUnit = { id: Date.now(), size: null, type: null, unitNumber: '', fullness: '5' };
+    if (location === 'from') {
+      setFromStorageUnits(prev => [...prev, newUnit]);
+    } else if (location === 'to') {
+      setToStorageUnits(prev => [...prev, newUnit]);
+    } else {
+      setStopStorageUnits(prev => [...prev, newUnit]);
+    }
+  };
+
+  const removeStorageUnit = (location: 'from' | 'to' | 'stop', unitId: number) => {
+    if (location === 'from') {
+      setFromStorageUnits(prev => prev.filter(u => u.id !== unitId));
+    } else if (location === 'to') {
+      setToStorageUnits(prev => prev.filter(u => u.id !== unitId));
+    } else {
+      setStopStorageUnits(prev => prev.filter(u => u.id !== unitId));
+    }
+  };
+
+  const updateStorageUnit = (location: 'from' | 'to' | 'stop', unitId: number, field: keyof StorageUnit, value: string | null) => {
+    const updateFn = (units: StorageUnit[]) =>
+      units.map(u => u.id === unitId ? { ...u, [field]: value } : u);
+    if (location === 'from') {
+      setFromStorageUnits(prev => updateFn(prev));
+    } else if (location === 'to') {
+      setToStorageUnits(prev => updateFn(prev));
+    } else {
+      setStopStorageUnits(prev => updateFn(prev));
+    }
+  };
+
+  // Heavy item toggle
+  const toggleHeavyItem = (item: string) => {
+    setHeavyItems(prev =>
+      prev.includes(item)
+        ? prev.filter(i => i !== item)
+        : [...prev, item]
+    );
+  };
+
+  const toggleExerciseEquipment = (type: string) => {
+    setExerciseEquipmentTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
+  };
+
+  const toggleToolType = (type: string) => {
+    setToolTypes(prev =>
+      prev.includes(type)
+        ? prev.filter(t => t !== type)
+        : [...prev, type]
+    );
+  };
+
+  const toggleStopHeavyItem = (item: string) => {
+    setStopHeavyItems(prev =>
+      prev.includes(item)
+        ? prev.filter(i => i !== item)
+        : [...prev, item]
+    );
+  };
+
+  // Remove stop
+  const handleRemoveStop = () => {
+    setHasStop(false);
+    setStopAddress('');
+    setStopUnit('');
+    setStopPropertyType('home');
+    setStopAction(null);
+    setStopBedrooms(null);
+    setStopSquareFootage(null);
+    setStopGarage(null);
+    setStopStories(null);
+    setStopStorageUnits([{ id: 1, size: null, type: null, unitNumber: '', fullness: '5' }]);
+    setStopFloorLevel('1');
+    setStopElevator(null);
+    setStopDetails('');
+    setStopBelongingsAmount('2');
+    setStopHeavyItems([]);
+  };
+
+  // Belongings label
+  const getBelongingsLabel = (val: string) => {
+    const num = parseInt(val);
+    const labels = ['A few items', 'A little bit', 'Some items', 'A fair amount', 'Quite a bit', 'About half', 'More than half', 'Most of it', 'Almost all', 'Nearly everything', 'Everything'];
+    return labels[num] || labels[8];
+  };
+
+  const getStorageFullnessLabel = (val: string) => {
+    const num = parseInt(val || '5');
+    const labels = ['Nearly Empty', 'Mostly Empty', 'Quite Empty', 'Somewhat Empty', 'Less than Half', 'About Half', 'More than Half', 'Fairly Full', 'Mostly Full', 'Almost Full', 'Packed Full'];
+    return labels[num] || labels[8];
+  };
+
+  // Fetch recent estimates on mount
+  useEffect(() => {
+    const fetchRecentEstimates = async () => {
+      try {
+        const response = await fetch('/api/move-wt-new/recent-estimates?limit=6');
+        const data = await response.json();
+        if (data.success && data.estimates) {
+          setRecentEstimates(data.estimates);
+        }
+      } catch (error) {
+        console.error('Failed to fetch recent estimates:', error);
+      } finally {
+        setIsLoadingRecentEstimates(false);
+      }
+    };
+    fetchRecentEstimates();
+  }, []);
+
+  // Handler for tile click - fetch estimate by phone number
+  const handleTileClick = async (phoneNumber: string, displayName: string) => {
+    console.log('Selected:', displayName, phoneNumber);
+    if (!phoneNumber) return;
+
+    setIsLoadingJob(true);
+    try {
+      const response = await fetch('/api/move-wt-new/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ searchType: 'phone', searchValue: phoneNumber }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.estimates && data.estimates.length > 0) {
+        // Load the most recent estimate (first one, sorted by updated_at desc)
+        loadSearchResult(data.estimates[0]);
+      }
+    } catch (error) {
+      console.error('Failed to load estimate:', error);
+    } finally {
+      setIsLoadingJob(false);
+    }
+  };
+
+  // Search handler
+  const handleSearch = async () => {
+    if (!searchValue.trim()) return;
+
+    setIsSearching(true);
+    setSearchResults([]);
+
+    try {
+      const response = await fetch('/api/move-wt-new/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ searchType, searchValue: searchValue.trim() }),
+      });
+
+      const data = await response.json();
+      if (data.success && data.estimates) {
+        if ((searchType === 'workizJob' || searchType === 'quoteId') && data.estimates.length === 1) {
+          loadSearchResult(data.estimates[0]);
+        } else {
+          setSearchResults(data.estimates);
+        }
+      }
+    } catch (error) {
+      console.error('Search failed:', error);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchValue('');
+    setSearchResults([]);
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const loadSearchResult = (estimate: any) => {
+    console.log('Loading estimate:', estimate);
+    setSearchResults([]);
+
+    // Track the estimate ID for saving
+    if (estimate.id) setCurrentEstimateId(estimate.id);
+    if (estimate.quote_id) setCurrentQuoteId(estimate.quote_id);
+
+    // Customer info
+    if (estimate.full_name) setCustomerName(estimate.full_name);
+    if (estimate.phone) setCustomerPhone(estimate.phone);
+    if (estimate.email) setCustomerEmail(estimate.email);
+
+    // Service type
+    if (estimate.service_type) setServiceType(estimate.service_type);
+
+    // Labor-specific fields
+    if (estimate.labor_service_type) setLaborServiceType(estimate.labor_service_type);
+    if (estimate.labor_item_amount) setLaborItemAmount(estimate.labor_item_amount);
+    if (estimate.loading_item_amount) setLoadingItemAmount(estimate.loading_item_amount);
+    if (estimate.office_item_amount) setOfficeItemAmount(estimate.office_item_amount);
+    if (estimate.truck_pod_lengths) setTruckPodLengths(estimate.truck_pod_lengths);
+    if (estimate.unloading_trucks) setUnloadingTrucks(estimate.unloading_trucks);
+    if (estimate.unloading_storage_type) setUnloadingStorageType(estimate.unloading_storage_type);
+
+    // FROM Location Fields
+    if (estimate.from_address) setFromAddress(estimate.from_address);
+    if (estimate.from_unit) setFromUnit(estimate.from_unit);
+    if (estimate.from_property_type) setFromPropertyType(estimate.from_property_type);
+    if (estimate.from_bedrooms) setFromBedrooms(estimate.from_bedrooms);
+    if (estimate.from_square_footage) setFromSquareFootage(estimate.from_square_footage);
+    if (estimate.from_garage) setFromGarage(estimate.from_garage);
+    if (estimate.from_stories) setFromStories(estimate.from_stories);
+    if (estimate.from_floor_level) setFromFloorLevel(estimate.from_floor_level);
+    if (estimate.from_elevator) setFromElevator(estimate.from_elevator);
+    if (estimate.from_storage_units) setFromStorageUnits(estimate.from_storage_units);
+    if (estimate.from_is_current_home !== null && estimate.from_is_current_home !== undefined) {
+      setFromIsCurrentHome(estimate.from_is_current_home);
+    }
+    if (estimate.from_details) setFromDetails(estimate.from_details);
+
+    // TO Location Fields
+    if (estimate.to_address) setToAddress(estimate.to_address);
+    if (estimate.to_unit) setToUnit(estimate.to_unit);
+    if (estimate.to_property_type) setToPropertyType(estimate.to_property_type);
+    if (estimate.to_stories) setToStories(estimate.to_stories);
+    if (estimate.to_floor_level) setToFloorLevel(estimate.to_floor_level);
+    if (estimate.to_elevator) setToElevator(estimate.to_elevator);
+    if (estimate.to_storage_units) setToStorageUnits(estimate.to_storage_units);
+    if (estimate.to_is_current_home !== null && estimate.to_is_current_home !== undefined) {
+      setToIsCurrentHome(estimate.to_is_current_home);
+    }
+    if (estimate.to_details) setToDetails(estimate.to_details);
+
+    // STOP Location Fields
+    if (estimate.has_stop) setHasStop(estimate.has_stop);
+    if (estimate.stop_address) setStopAddress(estimate.stop_address);
+    if (estimate.stop_unit) setStopUnit(estimate.stop_unit);
+    if (estimate.stop_property_type) setStopPropertyType(estimate.stop_property_type);
+    if (estimate.stop_action) setStopAction(estimate.stop_action);
+    if (estimate.stop_bedrooms) setStopBedrooms(estimate.stop_bedrooms);
+    if (estimate.stop_square_footage) setStopSquareFootage(estimate.stop_square_footage);
+    if (estimate.stop_garage) setStopGarage(estimate.stop_garage);
+    if (estimate.stop_stories) setStopStories(estimate.stop_stories);
+    if (estimate.stop_floor_level) setStopFloorLevel(estimate.stop_floor_level);
+    if (estimate.stop_elevator) setStopElevator(estimate.stop_elevator);
+    if (estimate.stop_storage_units) setStopStorageUnits(estimate.stop_storage_units);
+    if (estimate.stop_details) setStopDetails(estimate.stop_details);
+    if (estimate.stop_belongings_amount) setStopBelongingsAmount(estimate.stop_belongings_amount);
+    if (estimate.stop_heavy_items) setStopHeavyItems(estimate.stop_heavy_items);
+
+    // Belongings & Heavy Items (from location)
+    if (estimate.belongings_amount) setBelongingsAmount(estimate.belongings_amount);
+    if (estimate.heavy_items) setHeavyItems(estimate.heavy_items);
+    if (estimate.gun_safe_over_300) setGunSafeOver300(estimate.gun_safe_over_300);
+    if (estimate.gun_safe_ground_level) setGunSafeGroundLevel(estimate.gun_safe_ground_level);
+    if (estimate.piano_type) setPianoType(estimate.piano_type);
+    if (estimate.piano_ground_level) setPianoGroundLevel(estimate.piano_ground_level);
+    if (estimate.pool_table_disassembly) setPoolTableDisassembly(estimate.pool_table_disassembly);
+    if (estimate.pool_table_ground_level) setPoolTableGroundLevel(estimate.pool_table_ground_level);
+    if (estimate.mattress_ground_level) setMattressGroundLevel(estimate.mattress_ground_level);
+    if (estimate.tv_count) setTvCount(estimate.tv_count);
+    if (estimate.exercise_equipment_types) setExerciseEquipmentTypes(estimate.exercise_equipment_types);
+    if (estimate.tool_types) setToolTypes(estimate.tool_types);
+    if (estimate.tool_other_text) setToolOtherText(estimate.tool_other_text);
+
+    // Move Date/Time
+    if (estimate.move_date) setMoveDate(estimate.move_date);
+    if (estimate.time_slot) setTimeSlot(estimate.time_slot);
+    if (estimate.move_duration) setMoveDuration(estimate.move_duration);
+    if (estimate.move_date_unknown) setMoveDateUnknown(estimate.move_date_unknown);
+
+    // Notes and Tags
+    if (estimate.timing_notes) setTimingNotes(estimate.timing_notes);
+    if (estimate.tags && Array.isArray(estimate.tags)) {
+      // Always include 'Move' tag
+      const loadedTags = estimate.tags.includes('Move') ? estimate.tags : ['Move', ...estimate.tags];
+      setTags(loadedTags);
+    }
+
+    // Other Services
+    if (estimate.packing_amount) setPackingAmount(estimate.packing_amount);
+    if (estimate.packing_rooms) setPackingRooms(estimate.packing_rooms);
+    if (estimate.junk_removal_amount) setJunkRemovalAmount(estimate.junk_removal_amount);
+  };
+
+  // Tag toggle handler - Move cannot be deselected
+  const handleTagChange = (tag: string) => {
+    if (tag === 'Move') return; // Move is always selected
+    setTags(prev =>
+      prev.includes(tag)
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
+
+  // Get tag color classes
+  const getTagColorClasses = (tag: string, isSelected: boolean) => {
+    if (['OOT', 'Cat', 'RN', 'ET'].includes(tag)) {
+      return isSelected
+        ? 'bg-red-500 text-white border-red-600'
+        : 'border-red-300 text-red-700 hover:bg-red-50';
+    } else if (['2', '3', '4', '5', '6+'].includes(tag)) {
+      return isSelected
+        ? 'bg-green-500 text-white border-green-600'
+        : 'border-green-300 text-green-700 hover:bg-green-50';
+    } else if (['Move', 'WT'].includes(tag)) {
+      return isSelected
+        ? 'bg-blue-500 text-white border-blue-600'
+        : 'border-blue-300 text-blue-700 hover:bg-blue-50';
+    } else if (['Trk', 'Lbr'].includes(tag)) {
+      return isSelected
+        ? 'bg-purple-500 text-white border-purple-600'
+        : 'border-purple-300 text-purple-700 hover:bg-purple-50';
+    } else if (tag === 'PM') {
+      return isSelected
+        ? 'bg-yellow-400 text-gray-800 border-yellow-500'
+        : 'border-yellow-300 text-yellow-700 hover:bg-yellow-50';
+    }
+    return isSelected
+      ? 'bg-gray-500 text-white border-gray-600'
+      : 'border-gray-300 text-gray-700 hover:bg-gray-50';
+  };
+
+  // Pill button component
+  const PillButton = ({ selected, onClick, children, className = '' }: { selected: boolean; onClick: () => void; children: React.ReactNode; className?: string }) => (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`px-3 py-1.5 rounded-full border-2 text-xs font-medium transition-all whitespace-nowrap ${
+        selected
+          ? 'text-white border-transparent'
+          : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+      } ${className}`}
+      style={selected ? { backgroundColor: 'rgba(6, 100, 155, 0.8)', borderColor: 'rgba(6, 100, 155, 0.8)' } : undefined}
+    >
+      {children}
+    </button>
+  );
+
+  // Load Google Maps script
+  useEffect(() => {
+    if (window.google && window.google.maps && window.google.maps.places) {
+      setGoogleMapsReady(true);
+      return;
+    }
+
+    window.initMoveWTMap = () => {
+      setGoogleMapsReady(true);
+    };
+
+    const existingScript = document.querySelector('script[src*="maps.googleapis.com"]');
+    if (!existingScript) {
+      const script = document.createElement('script');
+      script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places&callback=initMoveWTMap`;
+      script.async = true;
+      script.defer = true;
+      document.head.appendChild(script);
+    } else {
+      const checkReady = setInterval(() => {
+        if (window.google && window.google.maps && window.google.maps.places) {
+          clearInterval(checkReady);
+          setGoogleMapsReady(true);
+        }
+      }, 100);
+      setTimeout(() => clearInterval(checkReady), 10000);
+    }
+  }, []);
+
+  // Initialize map when addresses are entered
+  useEffect(() => {
+    if (!googleMapsReady || !mapRef.current || !fromAddress) return;
+    if (serviceType === 'truck' && !toAddress) return;
+
+    const map = new window.google.maps.Map(mapRef.current, {
+      zoom: 10,
+      center: { lat: 43.6150, lng: -116.2023 }, // Boise, ID
+      mapTypeControl: true,
+      streetViewControl: false,
+      fullscreenControl: false,
+    });
+    mapInstanceRef.current = map;
+
+    // For Labor Only - just show a single marker
+    if (serviceType === 'labor') {
+      const geocoder = new window.google.maps.Geocoder();
+      geocoder.geocode({ address: fromAddress }, (results: any, status: any) => {
+        if (status === 'OK' && results[0]) {
+          const location = results[0].geometry.location;
+          map.setCenter(location);
+          map.setZoom(11);
+          new window.google.maps.Marker({
+            map: map,
+            position: location,
+            title: 'Service Location',
+            label: 'A',
+          });
+        }
+      });
+      setRouteLegs([]);
+      setTotalDistance('');
+      setTotalDuration('');
+      return;
+    }
+
+    // For Bring a Truck - show route with pins
+    const directionsRenderer = new window.google.maps.DirectionsRenderer({
+      map: map,
+      suppressMarkers: false,
+      polylineOptions: {
+        strokeColor: '#06649b',
+        strokeWeight: 5,
+      },
+    });
+    directionsRendererRef.current = directionsRenderer;
+
+    const waypoints: Array<{ location: string; stopover: boolean }> = [];
+    if (hasStop && stopAddress) {
+      waypoints.push({ location: stopAddress, stopover: true });
+    }
+
+    const directionsService = new window.google.maps.DirectionsService();
+    directionsService.route(
+      {
+        origin: fromAddress,
+        destination: toAddress,
+        waypoints: waypoints,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      },
+      (result: any, status: any) => {
+        if (status === 'OK' && result) {
+          directionsRenderer.setDirections(result);
+          const route = result.routes[0];
+          if (route && route.legs) {
+            const legs = route.legs.map((leg: any, index: number) => {
+              const startLabel = index === 0 ? 'A' : index === 1 ? 'B' : 'C';
+              const endLabel = index === 0 ? (hasStop && stopAddress ? 'B' : 'B') : index === 1 ? 'C' : 'D';
+              return {
+                start: startLabel,
+                end: endLabel,
+                distance: leg.distance?.text || '',
+                duration: leg.duration?.text || '',
+              };
+            });
+            setRouteLegs(legs);
+
+            let totalDistanceMeters = 0;
+            let totalDurationSeconds = 0;
+            route.legs.forEach((leg: any) => {
+              totalDistanceMeters += leg.distance?.value || 0;
+              totalDurationSeconds += leg.duration?.value || 0;
+            });
+
+            const miles = (totalDistanceMeters / 1609.34).toFixed(1);
+            const hours = Math.floor(totalDurationSeconds / 3600);
+            const minutes = Math.round((totalDurationSeconds % 3600) / 60);
+
+            setTotalDistance(`${miles} mi`);
+            setTotalDuration(hours > 0 ? `${hours}hr ${minutes}min` : `${minutes}min`);
+
+            // Calculate deadhead distances (office to start, final destination to office)
+            calculateDeadhead(directionsService, fromAddress, toAddress);
+          }
+        } else {
+          setRouteLegs([]);
+          setTotalDistance('');
+          setTotalDuration('');
+          setDeadhead(null);
+        }
+      }
+    );
+  }, [googleMapsReady, fromAddress, toAddress, hasStop, stopAddress, serviceType]);
+
+  // Calculate deadhead distances (office to start, final destination to office)
+  const calculateDeadhead = (
+    directionsService: any,
+    startAddress: string,
+    finalAddress: string | null
+  ) => {
+    let toStartMiles = 0;
+    let toStartMins = 0;
+    let returnMiles = 0;
+    let returnMins = 0;
+    let completed = 0;
+    const totalRequests = 2;
+
+    const checkComplete = () => {
+      completed++;
+      if (completed === totalRequests) {
+        setDeadhead({
+          toStartMiles,
+          toStartMins,
+          returnMiles,
+          returnMins
+        });
+      }
+    };
+
+    // Calculate Office -> First Stop (fromAddress)
+    directionsService.route(
+      {
+        origin: OFFICE_ADDRESS,
+        destination: startAddress,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      },
+      (result: any, status: any) => {
+        if (status === 'OK' && result.routes[0]?.legs[0]) {
+          const leg = result.routes[0].legs[0];
+          toStartMiles = (leg.distance?.value || 0) / 1609.34;
+          toStartMins = (leg.duration?.value || 0) / 60;
+        }
+        checkComplete();
+      }
+    );
+
+    // Calculate Final Stop -> Office (return travel)
+    const lastStop = finalAddress || startAddress;
+    directionsService.route(
+      {
+        origin: lastStop,
+        destination: OFFICE_ADDRESS,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      },
+      (result: any, status: any) => {
+        if (status === 'OK' && result.routes[0]?.legs[0]) {
+          const leg = result.routes[0].legs[0];
+          returnMiles = (leg.distance?.value || 0) / 1609.34;
+          returnMins = (leg.duration?.value || 0) / 60;
+        }
+        checkComplete();
+      }
+    );
+  };
+
+  // Initialize Google Places Autocomplete
+  useEffect(() => {
+    if (!googleMapsReady) return;
+
+    const idahoBounds = new window.google.maps.LatLngBounds(
+      new window.google.maps.LatLng(41.988, -117.243),
+      new window.google.maps.LatLng(49.001, -111.043)
+    );
+
+    const autocompleteOptions = {
+      bounds: idahoBounds,
+      strictBounds: true,
+      componentRestrictions: { country: 'us' },
+      fields: ['formatted_address', 'geometry'],
+      types: ['geocode'],
+    };
+
+    const stripCountry = (address: string) => {
+      return address.replace(/, USA$/, '').replace(/, United States$/, '');
+    };
+
+    // Initialize "From" autocomplete
+    if (fromInputRef.current && !fromAutocompleteRef.current) {
+      const fromAutocomplete = new window.google.maps.places.Autocomplete(
+        fromInputRef.current,
+        autocompleteOptions
+      );
+      fromAutocompleteRef.current = fromAutocomplete;
+
+      fromAutocomplete.addListener('place_changed', () => {
+        const place = fromAutocomplete.getPlace();
+        if (place && place.formatted_address) {
+          setFromAddress(stripCountry(place.formatted_address));
+        }
+      });
+    }
+
+    // Initialize "To" autocomplete (reset ref when serviceType changes to 'truck')
+    // The toInputRef DOM element is conditionally rendered based on serviceType
+    if (serviceType === 'truck') {
+      // Small delay to ensure DOM element is available after conditional render
+      const initToAutocomplete = () => {
+        if (toInputRef.current && !toAutocompleteRef.current) {
+          const toAutocomplete = new window.google.maps.places.Autocomplete(
+            toInputRef.current,
+            autocompleteOptions
+          );
+          toAutocompleteRef.current = toAutocomplete;
+
+          toAutocomplete.addListener('place_changed', () => {
+            const place = toAutocomplete.getPlace();
+            if (place && place.formatted_address) {
+              setToAddress(stripCountry(place.formatted_address));
+            }
+          });
+        }
+      };
+      setTimeout(initToAutocomplete, 100);
+    } else {
+      // Reset the autocomplete ref when serviceType is not 'truck'
+      toAutocompleteRef.current = null;
+    }
+
+    // Initialize "Stop" autocomplete
+    if (hasStop && stopInputRef.current && !stopAutocompleteRef.current) {
+      const initStopAutocomplete = () => {
+        if (stopInputRef.current && !stopAutocompleteRef.current) {
+          const stopAutocomplete = new window.google.maps.places.Autocomplete(
+            stopInputRef.current,
+            autocompleteOptions
+          );
+          stopAutocompleteRef.current = stopAutocomplete;
+
+          stopAutocomplete.addListener('place_changed', () => {
+            const place = stopAutocomplete.getPlace();
+            if (place && place.formatted_address) {
+              setStopAddress(stripCountry(place.formatted_address));
+            }
+          });
+        }
+      };
+      setTimeout(initStopAutocomplete, 100);
+    }
+  }, [googleMapsReady, hasStop, serviceType]);
+
+  // Don't render until mounted on client to avoid hydration mismatch
+  if (!isMounted) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="animate-pulse text-gray-400">Loading...</div>
+      </div>
+    );
+  }
 
   return (
-    <>
-      {googleMapsApiKey && (
-        <Script
-          src={`https://maps.googleapis.com/maps/api/js?key=${googleMapsApiKey}&libraries=places`}
-          strategy="afterInteractive"
-          onLoad={() => setIsGoogleLoaded(true)}
-        />
-      )}
-      <main className="min-h-screen bg-gray-50 pb-20">
-      {/* Header */}
-      <header className="shadow-sm sticky top-0 z-10" style={{ backgroundColor: '#06649b' }}>
-        <div className="px-4 py-4 flex items-center">
-          <button
-            onClick={() => router.push('/')}
-            className="text-white mr-3"
-          >
-            <ArrowLeftIcon className="h-6 w-6" />
-          </button>
-          <div className="flex-1">
-            <h1 className="text-xl font-bold text-white">Move Walk-Through</h1>
-            {isLoadingJob ? (
-              <div className="flex items-center gap-2 text-sm text-gray-100">
-                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                <span>Loading job details...</span>
-              </div>
-            ) : address ? (
-              <p className="text-sm text-gray-100">{address}</p>
-            ) : (
-              <p className="text-sm text-gray-100">Complete the move walk-through</p>
-            )}
+    <div className="min-h-screen bg-gray-50">
+      {/* Recent Leads Tiles */}
+      {isLoadingRecentEstimates ? (
+        <div className="px-4 py-3">
+          <div className="animate-pulse">
+            <div className="h-4 bg-gray-200 rounded w-24 mx-auto mb-2"></div>
+            <div className="grid grid-cols-2 gap-2 max-w-sm mx-auto">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="h-10 bg-gray-200 rounded-lg"></div>
+              ))}
+            </div>
           </div>
         </div>
-      </header>
-
-      {/* Recent Forms Quick Links */}
-      {recentForms.length > 0 && (
-        <div className="px-4 py-3 bg-gray-100 border-b border-gray-200">
+      ) : recentEstimates.length > 0 ? (
+        <div className="px-4 py-3">
           <p className="text-xs text-gray-500 mb-2 text-center">Recent Leads</p>
-          <div className="grid grid-cols-2 gap-2">
-            {recentForms.map((form) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-2xl mx-auto">
+            {recentEstimates.map((estimate) => (
               <button
-                key={form.id}
-                onClick={() => handleLoadRecentForm(form.phoneNumber)}
+                key={estimate.id}
+                onClick={() => handleTileClick(estimate.displayPhone, estimate.displayName)}
                 disabled={isLoadingJob}
-                className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm text-left"
+                className="px-2 py-1.5 bg-white border border-gray-300 rounded-lg text-xs font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm text-left"
               >
-                <div className="font-semibold truncate">{form.displayName || 'Unknown'}</div>
-                {form.phoneNumber && (
-                  <div className="text-gray-500 text-xs">{form.phoneNumber}</div>
+                <div className="font-semibold truncate">{estimate.displayName || 'Unknown'}</div>
+                {estimate.displayPhone && (
+                  <div className="text-gray-400 text-xs">{estimate.displayPhone}</div>
                 )}
               </button>
             ))}
           </div>
         </div>
+      ) : (
+        <div className="px-4 py-3 text-center text-gray-500 text-sm">
+          No recent leads
+        </div>
       )}
 
-      <div className="px-6 py-8 space-y-6">
-        {/* Search Section */}
-        <div className="bg-white rounded-2xl shadow-md p-4">
-          <div className="space-y-3">
-            <div className="flex items-center justify-center gap-3">
-              <input
-                id="jobNumber"
-                type="text"
-                value={jobNumber}
-                onChange={(e) => setJobNumber(e.target.value)}
-                placeholder="Job #"
-                className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                id="searchPhone"
-                type="tel"
-                value={searchPhone}
-                onChange={handleSearchPhoneChange}
-                placeholder="Phone #"
-                className="w-40 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <input
-                id="searchQuoteNum"
-                type="text"
-                inputMode="numeric"
-                maxLength={4}
-                value={searchQuoteNum}
-                onChange={(e) => setSearchQuoteNum(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                placeholder="Quote #"
-                className="w-20 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="flex items-center justify-center gap-3">
-              <button
-                type="button"
-                onClick={handleLoadJob}
-                disabled={isLoadingJob || (!jobNumber && !searchPhone && !searchQuoteNum)}
-                className="px-6 py-2 bg-blue-600 rounded-lg font-semibold text-white transition-colors disabled:bg-gray-400"
-              >
-                {isLoadingJob ? 'Loading...' : 'Load'}
-              </button>
-              <button
-                type="button"
-                onClick={handleClear}
-                className="px-6 py-2 bg-gray-500 rounded-lg font-semibold text-white transition-colors"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-          {address && (
-            <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
-              <p className="text-sm font-medium text-green-900">Address:</p>
-              <p className="text-sm text-green-800">{address}</p>
-            </div>
-          )}
-        </div>
-
-        {/* Upload to Google Drive Button */}
-        <div className="bg-white rounded-2xl shadow-md p-4">
-          <a
-            href={folderUrl || '#'}
-            target="_blank"
-            rel="noopener noreferrer"
-            className={`flex items-center justify-center gap-2 py-2.5 px-5 rounded-lg font-semibold text-white transition-all text-sm ${
-              folderUrl && !isLoadingJob
-                ? 'bg-green-500 hover:bg-green-600 active:scale-95 cursor-pointer'
-                : 'bg-gray-400 cursor-not-allowed pointer-events-none'
-            }`}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-            </svg>
-            <span>
-              {isLoadingJob ? 'Loading...' : folderUrl ? 'Upload Walk-Through Pictures and Videos' : 'Upload Walk-Through Pictures and Videos'}
-            </span>
-          </a>
-          {folderUrl && !isLoadingJob && (
-            <div className="flex flex-col items-center mt-2 gap-1">
-              <p className="text-xs text-center text-gray-500">
-                Opens Google Drive folder
+      {/* Map Section */}
+      <div className="px-4 py-3">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+            <div className="px-3 py-2 border-b border-gray-200 flex items-center gap-2" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+              <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <p className="text-sm text-gray-700 font-medium">
+                {serviceType === 'labor' ? 'Service Location' : 'Move Route'}
               </p>
-              <button
-                type="button"
-                onClick={handleCopyFolderLink}
-                className={`text-sm font-bold cursor-pointer transition-colors ${
-                  isFolderLinkCopied
-                    ? 'text-gray-400'
-                    : 'text-blue-600 hover:text-blue-800'
-                }`}
-              >
-                Copy Folder Link
-              </button>
+              {totalDistance && totalDuration && (
+                <span className="ml-auto text-xs font-medium" style={{ color: '#06649b' }}>
+                  {totalDistance} • {totalDuration}
+                </span>
+              )}
             </div>
-          )}
+            <div ref={mapRef} className="h-[300px] w-full">
+              {(serviceType === 'labor' ? !fromAddress : (!fromAddress || !toAddress)) && (
+                <div className="h-full flex items-center justify-center bg-gray-100 text-gray-500 text-sm">
+                  {serviceType === 'labor' ? 'Enter address to see location' : 'Enter addresses to see route'}
+                </div>
+              )}
+            </div>
+            {/* Route Legs */}
+            {routeLegs.length > 0 && (
+              <div className="px-3 py-2 border-t border-gray-200 bg-gray-50">
+                <div className="flex flex-wrap gap-3 text-xs">
+                  {/* Office → A (trip to first pickup) */}
+                  <div className="flex items-center gap-1">
+                    <span className="w-5 h-5 bg-gray-500 rounded-full flex items-center justify-center text-white font-bold text-xs" title="Office">
+                      🏢
+                    </span>
+                    <span className="text-gray-400">→</span>
+                    <span className="w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
+                      A
+                    </span>
+                  </div>
+                  {/* Actual route legs from Google */}
+                  {routeLegs.map((leg, index) => (
+                    <div key={index} className="flex items-center gap-1">
+                      <span className="w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
+                        {leg.start}
+                      </span>
+                      <span className="text-gray-400">→</span>
+                      <span className="w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
+                        {leg.end}
+                      </span>
+                      <span className="text-gray-600 ml-1">{leg.distance} • {leg.duration}</span>
+                    </div>
+                  ))}
+                  {/* Final dropoff → Office (return trip) */}
+                  <div className="flex items-center gap-1">
+                    <span className="w-5 h-5 bg-rose-500 rounded-full flex items-center justify-center text-white font-bold text-xs">
+                      {routeLegs.length > 0 ? routeLegs[routeLegs.length - 1].end : 'B'}
+                    </span>
+                    <span className="text-gray-400">→</span>
+                    <span className="w-5 h-5 bg-gray-500 rounded-full flex items-center justify-center text-white font-bold text-xs" title="Office">
+                      🏢
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="max-w-2xl mx-auto px-4 space-y-6 md:pb-24">
+      {/* Calendar Section - Shows 3 days from Workiz */}
+      <div className="px-4 py-3">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+            <div className="px-3 py-2 border-b border-gray-200 flex items-center gap-2" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+              <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm text-gray-700 font-medium">Calendar</p>
+              {isLoadingCalendar && (
+                <svg className="animate-spin w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              )}
+              {/* Navigation arrows */}
+              {moveDate && (
+                <div className="ml-auto flex items-center gap-1">
+                  <button
+                    onClick={() => handleCalendarNav('prev')}
+                    className="p-1 rounded hover:bg-gray-200 transition-colors"
+                    title="Previous day (skip Sunday)"
+                  >
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <button
+                    onClick={() => handleCalendarNav('next')}
+                    className="p-1 rounded hover:bg-gray-200 transition-colors"
+                    title="Next day (skip Sunday)"
+                  >
+                    <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="w-full overflow-hidden">
+              {!moveDate ? (
+                <div className="h-[300px] flex items-center justify-center bg-gray-100 text-gray-500 text-sm">
+                  Select a move date to see calendar
+                </div>
+              ) : calendarDays.length === 0 && !isLoadingCalendar ? (
+                <div className="h-[300px] flex items-center justify-center bg-gray-100 text-gray-500 text-sm">
+                  No calendar data available
+                </div>
+              ) : (() => {
+                // Calculate hours to display based on job times
+                const START_HOUR = 8; // 8 AM
+                const MIN_END_HOUR = 12; // Always show at least until noon
+                const allJobs = calendarDays.flatMap(d => d.jobs);
+                const latestEndMinutes = allJobs.length > 0
+                  ? Math.max(...allJobs.map(j => j.endMinutes))
+                  : MIN_END_HOUR * 60;
+                const endHour = Math.max(MIN_END_HOUR, Math.ceil(latestEndMinutes / 60));
+                const hoursToShow = endHour - START_HOUR + 1; // +1 to include the end hour row
+                const HOUR_HEIGHT = 50; // pixels per hour
+                const totalHeight = hoursToShow * HOUR_HEIGHT;
 
-        {/* Clear Job Details Button */}
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => {
-              if (confirm('Are you sure you want to clear all job details? Customer info will be preserved.')) {
-                // Keep customer info, clear everything else
-                const preservedData = {
-                  firstName: formData.firstName,
-                  lastName: formData.lastName,
-                  company: formData.company,
-                  phone: formData.phone,
-                  phoneName: formData.phoneName,
-                  email: formData.email,
-                  emailName: formData.emailName,
-                };
-                setFormData(prev => ({
-                  // Service Type - reset to defaults
-                  serviceType: "truck",
-                  waiveTravel: false,
-                  travelBilling: "local",
-                  travelCost: "",
-                  pickupManualOverride: false,
-                  pickupManualOverrideHours: "",
+                return (
+                  <div className="flex">
+                    {/* Time column */}
+                    <div className="w-12 flex-shrink-0 border-r border-gray-200">
+                      {/* Empty header space */}
+                      <div className="h-10 border-b border-gray-200"></div>
+                      {/* Hour labels */}
+                      <div style={{ height: totalHeight }} className="relative">
+                        {Array.from({ length: hoursToShow }, (_, i) => {
+                          const hour = START_HOUR + i;
+                          const label = hour === 12 ? '12pm' : hour > 12 ? `${hour - 12}pm` : `${hour}am`;
+                          return (
+                            <div
+                              key={hour}
+                              className="absolute w-full text-right pr-1 text-xs text-gray-500"
+                              style={{ top: i * HOUR_HEIGHT - 6 }}
+                            >
+                              {label}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
 
-                  // Customer Information - PRESERVE
-                  ...preservedData,
-                  customerHomeAddressType: "pickup" as "" | "pickup" | "delivery",
+                    {/* Days columns */}
+                    <div className="flex-1 grid grid-cols-3 divide-x divide-gray-200">
+                      {calendarDays.map((day) => (
+                        <div key={day.date} className="flex flex-col">
+                          {/* Day Header */}
+                          <div className={`h-10 px-2 py-1 text-center border-b ${day.isSelected ? 'bg-[#06649b] text-white' : 'bg-gray-50'}`}>
+                            <p className={`text-xs font-medium ${day.isSelected ? 'text-white' : 'text-gray-500'}`}>{day.dayName}</p>
+                            <p className={`text-sm font-bold leading-tight ${day.isSelected ? 'text-white' : 'text-gray-700'}`}>{day.dateLabel}</p>
+                          </div>
+                          {/* Time grid with jobs */}
+                          <div className="relative" style={{ height: totalHeight }}>
+                            {/* Hour row backgrounds */}
+                            {Array.from({ length: hoursToShow }, (_, i) => (
+                              <div
+                                key={i}
+                                className={`absolute w-full border-b border-gray-100 ${i % 2 === 0 ? 'bg-gray-50' : 'bg-white'}`}
+                                style={{ top: i * HOUR_HEIGHT, height: HOUR_HEIGHT }}
+                              />
+                            ))}
+                            {/* Jobs - with overlap handling */}
+                            {(() => {
+                              // Sort jobs by start time
+                              const sortedJobs = [...day.jobs].sort((a, b) => a.startMinutes - b.startMinutes);
 
-                  // Labor Only
-                  laborOnlySameAddress: true,
+                              // Calculate column positions for overlapping jobs
+                              const jobPositions: Map<string, { column: number; totalColumns: number }> = new Map();
+                              const columns: Array<{ endMinutes: number; jobId: string }[]> = [];
 
-                  // Addresses - Pickup (clear all)
-                  pickupAddress: "",
-                  pickupUnit: "",
-                  pickupCity: "",
-                  pickupState: "",
-                  pickupZip: "",
-                  pickupLocationType: "house",
-                  pickupLocationOther: "",
-                  pickupBusinessName: "",
-                  pickupBusinessSquareFeet: "",
-                  pickupOtherSquareFeet: "",
-                  pickupHouseSquareFeet: "",
-                  pickupZestimate: "",
-                  pickupHowFurnished: 80,
-                  pickupApartmentSquareFeet: "",
-                  pickupApartmentBedBath: "",
-                  pickupApartmentHowFurnished: 80,
-                  pickupStorageUnitQuantity: 1,
-                  pickupStorageUnitSizes: [""],
-                  pickupStorageUnitHowFull: [""],
-                  pickupStorageUnitConditioned: [""],
-                  pickupTruckPodLength: "",
-                  pickupTruckPodWidth: "",
-                  pickupTruckPodHowFull: 100,
+                              sortedJobs.forEach(job => {
+                                // Find first column where this job can fit (no overlap)
+                                let columnIndex = 0;
+                                while (columnIndex < columns.length) {
+                                  const column = columns[columnIndex];
+                                  const lastInColumn = column[column.length - 1];
+                                  const lastJob = sortedJobs.find(j => j.id === lastInColumn.jobId);
+                                  if (lastJob && lastJob.endMinutes <= job.startMinutes) {
+                                    break; // Can fit in this column
+                                  }
+                                  columnIndex++;
+                                }
 
-                  // Addresses - Delivery (clear all)
-                  deliveryAddress: "",
-                  deliveryUnit: "",
-                  deliveryCity: "",
-                  deliveryState: "",
-                  deliveryZip: "",
-                  deliveryLocationType: "house",
-                  deliveryLocationOther: "",
-                  deliveryBusinessName: "",
-                  deliveryHouseSquareFeet: "",
-                  deliveryZestimate: "",
-                  deliveryHowFurnished: 80,
-                  deliveryApartmentSquareFeet: "",
-                  deliveryApartmentBedBath: "",
-                  deliveryApartmentHowFurnished: 80,
-                  deliveryStorageUnitQuantity: 1,
-                  deliveryStorageUnitSizes: [""],
-                  deliveryStorageUnitConditioned: [""],
-                  deliveryPODQuantity: 1,
-                  deliveryPODSize: "",
-                  deliveryTruckLength: "",
-                  deliveryAddressUnknown: false,
+                                // Create new column if needed
+                                if (columnIndex >= columns.length) {
+                                  columns.push([]);
+                                }
 
-                  // Additional Stop (clear all)
-                  hasAdditionalStop: false,
-                  additionalStopAddress: "",
-                  additionalStopUnit: "",
-                  additionalStopCity: "",
-                  additionalStopState: "",
-                  additionalStopZip: "",
-                  additionalStopLocationType: "house",
-                  additionalStopLocationOther: "",
-                  additionalStopBusinessName: "",
-                  additionalStopHouseSquareFeet: "",
-                  additionalStopZestimate: "",
-                  additionalStopHowFurnished: 80,
-                  additionalStopApartmentBedBath: "",
-                  additionalStopStorageUnitQuantity: 1,
-                  additionalStopStorageUnitSizes: [""],
-                  additionalStopStorageUnitConditioned: [""],
-                  additionalStopNotes: "",
+                                columns[columnIndex].push({ endMinutes: job.endMinutes, jobId: job.id });
+                                jobPositions.set(job.id, { column: columnIndex, totalColumns: 0 });
+                              });
 
-                  // Pickup Access (clear all)
-                  pickupStairs: 1,
-                  pickupNarrowDoorways: false,
-                  pickupElevator: false,
-                  pickupParkingDistance: "close",
-                  pickupAccessNotes: "",
+                              // Calculate total columns for each job's time range
+                              sortedJobs.forEach(job => {
+                                let maxConcurrent = 1;
+                                sortedJobs.forEach(other => {
+                                  if (other.id !== job.id) {
+                                    // Check if jobs overlap
+                                    if (other.startMinutes < job.endMinutes && other.endMinutes > job.startMinutes) {
+                                      const otherPos = jobPositions.get(other.id);
+                                      const thisPos = jobPositions.get(job.id);
+                                      if (otherPos && thisPos) {
+                                        maxConcurrent = Math.max(maxConcurrent, Math.max(otherPos.column, thisPos.column) + 1);
+                                      }
+                                    }
+                                  }
+                                });
+                                const pos = jobPositions.get(job.id);
+                                if (pos) {
+                                  pos.totalColumns = Math.max(pos.totalColumns, maxConcurrent);
+                                }
+                              });
 
-                  // Delivery Access (clear all)
-                  deliveryStairs: 1,
-                  deliveryNarrowDoorways: false,
-                  deliveryElevator: false,
-                  deliveryParkingDistance: "close",
-                  deliveryAccessNotes: "",
+                              // Update totalColumns based on overlapping jobs
+                              sortedJobs.forEach(job => {
+                                const pos = jobPositions.get(job.id);
+                                if (!pos) return;
+                                sortedJobs.forEach(other => {
+                                  if (other.id !== job.id && other.startMinutes < job.endMinutes && other.endMinutes > job.startMinutes) {
+                                    const otherPos = jobPositions.get(other.id);
+                                    if (otherPos) {
+                                      const maxCols = Math.max(pos.totalColumns, otherPos.totalColumns);
+                                      pos.totalColumns = maxCols;
+                                      otherPos.totalColumns = maxCols;
+                                    }
+                                  }
+                                });
+                              });
 
-                  // Heavy/Special Items (clear all)
-                  gunSafes: false,
-                  gunSafesQty: 1,
-                  gunSafesDetails: "",
-                  pianos: false,
-                  pianosQty: 1,
-                  pianosDetails: "",
-                  poolTables: false,
-                  poolTablesQty: 1,
-                  poolTablesDetails: "",
-                  otherHeavyItems: false,
-                  otherHeavyItemsDetails: "",
-                  largeTVs: false,
-                  largeTVsQty: 1,
-                  largeTVsDetails: "",
-                  purpleGreenMattress: false,
-                  purpleGreenMattressDetails: "",
-                  treadmills: false,
-                  treadmillsDetails: "",
-                  largeAppliances: false,
-                  applianceFridge: false,
-                  applianceFridgeQty: 1,
-                  applianceWasher: false,
-                  applianceWasherQty: 1,
-                  applianceDryer: false,
-                  applianceDryerQty: 1,
-                  applianceOven: false,
-                  applianceOvenQty: 1,
-                  applianceDishwasher: false,
-                  applianceDishwasherQty: 1,
-                  applianceOtherDetails: "",
-                  plants: false,
-                  plantsDetails: "",
-                  bunkBeds: false,
-                  bunkBedsQty: 1,
-                  bunkBedsDetails: "",
-                  trampoline: false,
-                  trampolineQty: 1,
-                  trampolineDetails: "",
-                  tableSaw: false,
-                  tableSawQty: 1,
-                  tableSawDetails: "",
-                  gymEquipment: false,
-                  gymEquipmentQty: 1,
-                  gymEquipmentDetails: "",
-                  sauna: false,
-                  saunaQty: 1,
-                  saunaDetails: "",
-                  playsets: false,
-                  playsetsQty: 1,
-                  playsetsDetails: "",
-                  specialDisassemblyOther: false,
-                  specialDisassemblyOtherDetails: "",
+                              return sortedJobs.map((job) => {
+                                const topOffset = ((job.startMinutes - START_HOUR * 60) / 60) * HOUR_HEIGHT;
+                                const height = Math.max(20, ((job.endMinutes - job.startMinutes) / 60) * HOUR_HEIGHT);
+                                const pos = jobPositions.get(job.id) || { column: 0, totalColumns: 1 };
+                                const padding = 4; // pixels padding on each side
+                                const totalPadding = padding * 2 * pos.totalColumns;
+                                const availableWidth = pos.totalColumns > 1
+                                  ? `calc((100% - ${totalPadding}px) / ${pos.totalColumns})`
+                                  : 'calc(100% - 8px)';
+                                const leftOffset = pos.totalColumns > 1
+                                  ? `calc(${(pos.column / pos.totalColumns) * 100}% + ${padding}px)`
+                                  : '4px';
 
-                  // Pets
-                  catsPresent: false,
-
-                  // Packing (clear all)
-                  packingStatus: "moderate",
-                  needsPacking: false,
-                  packingKitchen: false,
-                  packingGarage: false,
-                  packingAttic: false,
-                  packingWardrobeBoxes: false,
-                  packingFragileItems: false,
-    packingBedrooms: false,
-    packingNotes: "",
-                  junkRemovalNeeded: false,
-                  junkRemovalAmount: "",
-                  junkRemovalDetails: "",
-
-                  // Insurance
-                  needsInsurance: false,
-                  estimatedValue: "",
-
-                  // Timing (clear)
-                  walkThroughDate: "",
-    walkThroughTime: "",
-    walkThroughDuration: "1",
-                  preferredDate: "",
-    preferredTime: "",
-    moveDuration: "3",
-                  moveDateUnknown: false,
-                  timeFlexible: false,
-                  readyToSchedule: false,
-                  timingNotes: "",
-                  tags: [],
-
-                  // Estimates
-                  estimatedCrewSize: "2-3",
-                  crewSizeNotes: "",
-
-                  // Special Notes (clear)
-                  specialRequests: "",
-                  fixedBudgetRequested: false,
-                  desiredBudget: "",
-
-                  // House Quality Rating
-                  houseQuality: 3,
-
-                  // Tools Needed (clear all)
-                  hd4Wheel: false,
-                  airSled: false,
-                  applianceDolly: false,
-                  socketWrenches: false,
-                  safeDolly: false,
-                  toolCustom1: "",
-                  toolCustom2: "",
-                  toolCustom3: "",
-                }));
-                setDistanceData(null);
-                setQuote({ baseRate: 0, items: [], total: 0 });
-              }
-            }}
-            className="px-4 py-2 text-sm font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
-          >
-            Clear Job Details
-          </button>
+                                return (
+                                  <div
+                                    key={job.id}
+                                    className={`absolute rounded px-1 py-0.5 overflow-hidden border text-[10px] leading-tight ${
+                                      job.status === 'Completed' ? 'bg-green-100 border-green-300' :
+                                      job.status === 'Cancelled' ? 'bg-red-100 border-red-300 opacity-60' :
+                                      'bg-blue-100 border-blue-300'
+                                    }`}
+                                    style={{
+                                      top: Math.max(0, topOffset),
+                                      height,
+                                      width: availableWidth,
+                                      left: leftOffset,
+                                    }}
+                                    title={`${job.customerName} - ${job.startTime} to ${job.endTime}`}
+                                  >
+                                    <div className="font-bold text-gray-900 text-xs">{job.startTime}</div>
+                                    {job.customerName && job.customerName !== 'No Name' && job.customerName !== 'Unknown' && (
+                                      <div className="text-gray-700 truncate">{job.customerName}</div>
+                                    )}
+                                    {height > 35 && job.tags.length > 0 && (
+                                      <div className="flex flex-wrap gap-1 mt-0.5">
+                                        {job.tags.map((tag, tagIndex) => {
+                                          // Match tag colors from Move Date and Time block
+                                          let colorClasses = 'bg-gray-400 text-white';
+                                          if (['OOT', 'Cat', 'RN', 'ET'].includes(tag)) {
+                                            colorClasses = 'bg-red-500 text-white';
+                                          } else if (['2', '3', '4', '5', '6+'].includes(tag)) {
+                                            colorClasses = 'bg-green-500 text-white';
+                                          } else if (['Move', 'WT'].includes(tag)) {
+                                            colorClasses = 'bg-blue-500 text-white';
+                                          } else if (['Trk', 'Lbr'].includes(tag)) {
+                                            colorClasses = 'bg-purple-500 text-white';
+                                          } else if (tag === 'PM') {
+                                            colorClasses = 'bg-yellow-400 text-gray-800';
+                                          } else if (tag.toLowerCase().includes('junk')) {
+                                            colorClasses = 'bg-orange-500 text-white';
+                                          }
+                                          return (
+                                            <span
+                                              key={tagIndex}
+                                              className={`px-1.5 py-0.5 rounded text-[11px] font-bold ${colorClasses}`}
+                                            >
+                                              {tag}
+                                            </span>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              });
+                            })()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+            {/* Techs Row */}
+            {moveDate && calendarDays.length > 0 && (
+              <div className="border-t border-gray-300 flex">
+                {/* Techs label */}
+                <div className="w-12 flex-shrink-0 border-r border-gray-200 bg-gray-50 flex items-center justify-center">
+                  <span className="text-xs font-medium text-gray-600 -rotate-0">Techs</span>
+                </div>
+                {/* Techs for each day */}
+                <div className="flex-1 grid grid-cols-3 divide-x divide-gray-200">
+                  {calendarDays.map((day, dayIndex) => {
+                    const dayTechs = calendarTechs.find(t => t.date === day.date)?.techs || [];
+                    return (
+                      <div
+                        key={day.date}
+                        className={`p-2 min-h-[44px] ${day.isSelected ? 'bg-blue-50' : 'bg-gray-50'}`}
+                      >
+                        <div className="flex flex-wrap gap-1.5 justify-center">
+                          {dayTechs.length === 0 ? (
+                            <span className="text-xs text-gray-400">-</span>
+                          ) : (
+                            dayTechs.map((tech, techIndex) => (
+                              <div
+                                key={techIndex}
+                                title={tech.name}
+                                className={`relative w-8 h-8 rounded flex items-center justify-center text-xs font-bold ${
+                                  tech.hasTimeOff
+                                    ? 'bg-gray-300 text-gray-500'
+                                    : tech.isScheduled
+                                    ? 'bg-purple-500 text-white'
+                                    : 'bg-gray-200 text-gray-400'
+                                }`}
+                              >
+                                {tech.initials}
+                                {/* Diagonal line for time off */}
+                                {tech.hasTimeOff && (
+                                  <div className="absolute inset-0 overflow-hidden rounded">
+                                    <div
+                                      className="absolute bg-gray-500"
+                                      style={{
+                                        width: '140%',
+                                        height: '2px',
+                                        top: '50%',
+                                        left: '-20%',
+                                        transform: 'rotate(-45deg)',
+                                        transformOrigin: 'center',
+                                      }}
+                                    />
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
+      </div>
 
-        {/* Timing & Scheduling */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-pink-500">
-          <h2 className="text-xl font-bold text-pink-900 mb-4">Timing & Scheduling</h2>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Walk-Through Date
-              </label>
-              <div className="flex items-center gap-6">
-                <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
-                  <input
-                    type="text"
-                    readOnly
-                    value={formData.walkThroughDate ? new Date(formData.walkThroughDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
-                    placeholder="mm/dd/yyyy"
-                    onClick={() => { saveFormDataToStorage(); router.push('/schedule?picker=walkthrough'); }}
-                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
-                  />
-                </div>
-                <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
-                  <select
-                    name="walkThroughTime"
-                    value={formData.walkThroughTime}
-                    onChange={handleInputChange}
-                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
-                  >
-                    <option value="">--:-- --</option>
-                    {Array.from({ length: 65 }, (_, i) => {
-                      const hour = Math.floor(i / 4) + 6;
-                      const minute = (i % 4) * 15;
-                      if (hour > 22 || (hour === 22 && minute > 0)) return null;
-                      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                      const ampm = hour < 12 ? 'AM' : 'PM';
-                      const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                      const label = `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
-                      return <option key={value} value={value}>{label}</option>;
-                    }).filter(Boolean)}
-                  </select>
-
-                </div>
-              </div>
-              <div className="flex items-center gap-2 mt-2">
+      {/* Search & Customer Details Row */}
+      <div className="px-4 py-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl mx-auto">
+          {/* Search Section */}
+          <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+            <div className="px-3 py-2 border-b border-gray-200" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+              <p className="text-sm text-gray-700 font-medium">Search</p>
+            </div>
+            <div className="p-3">
+              <div className="flex gap-2 mb-2">
                 <select
-                  name="walkThroughDuration"
-                  value={formData.walkThroughDuration}
-                  onChange={handleInputChange}
-                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  value={searchType}
+                  onChange={(e) => setSearchType(e.target.value as typeof searchType)}
+                  className="border border-gray-300 rounded-lg px-2 py-2 text-sm bg-white"
                 >
-                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
-                    <option key={n} value={n}>{n}hr</option>
-                  ))}
+                  <option value="phone">Phone</option>
+                  <option value="name">Name</option>
+                  <option value="quoteId">Quote #</option>
+                  <option value="workizJob">Job #</option>
                 </select>
-                <button
-                  type="button"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium"
-                  onClick={async () => {
-                    // Validate required fields
-                    if (!formData.tags || formData.tags.length < 2) {
-                      alert('check tags');
-                      return;
-                    }
-                    if (!formData.walkThroughDate) {
-                      alert('Please select a walk-through date');
-                      return;
-                    }
-                    if (!formData.walkThroughTime) {
-                      alert('Please select a walk-through time');
-                      return;
-                    }
-                    if (!formData.firstName || !formData.lastName) {
-                      alert('Please enter customer first and last name');
-                      return;
-                    }
-                    if (!phones[0]?.number) {
-                      alert('Please enter a phone number');
-                      return;
-                    }
-                    if (!emails[0]?.email) {
-                      alert('Please enter an email address');
-                      return;
-                    }
-                    
-                    // Get the current home/business address based on customerHomeAddressType
-                    const isPickup = formData.customerHomeAddressType === 'pickup';
-                    const address = isPickup ? formData.pickupAddress : formData.deliveryAddress;
-                    const city = isPickup ? formData.pickupCity : formData.deliveryCity;
-                    const state = isPickup ? formData.pickupState : formData.deliveryState;
-                    const zip = isPickup ? formData.pickupZip : formData.deliveryZip;
-                    
-                    if (!address && !city && !state && !zip) {
-                      alert("Please enter the customer current home or business address");
-                      return;
-                    }
-                    
-                    const phone = phones[0]?.number || '';
-                    const email = emails[0]?.email || '';
-                    
-                    try {
-                      console.log('[Schedule WT] Tags being sent:', formData.tags);
-                      const response = await fetch('/api/move-wt/schedule-walkthrough', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          walkThroughDate: formData.walkThroughDate,
-                          walkThroughTime: formData.walkThroughTime,
-                          walkThroughDuration: formData.walkThroughDuration || '1',
-                          firstName: formData.firstName,
-                          lastName: formData.lastName,
-                          phone,
-                          email,
-                          address,
-                          city,
-                          state,
-                          zip,
-                          timingNotes: formData.timingNotes,
-                          tags: formData.tags,
-                        }),
-                      });
-
-                      const data = await response.json();
-
-                      if (data.success) {
-                        alert('Walk-through scheduled successfully in Workiz!');
-                      } else {
-                        alert('Failed to schedule: ' + (data.error || 'Unknown error'));
-                      }
-                    } catch (error) {
-                      console.error('Schedule error:', error);
-                      alert('Failed to schedule walk-through. Please try again.');
-                    }
-                  }}
-                >
-                  Schedule
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Move Date
-              </label>
-              <div className="flex items-center gap-6">
-                <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
-                  <input
-                    type="text"
-                    readOnly
-                    value={formData.preferredDate ? new Date(formData.preferredDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'numeric', day: 'numeric', year: '2-digit' }) : ''}
-                    placeholder="mm/dd/yyyy"
-                    onClick={() => { saveFormDataToStorage(); router.push('/schedule?picker=moving'); }}
-                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full cursor-pointer"
-                  />
-                </div>
-                <div className="relative flex-shrink-0 w-[105px] 2xl:w-[160px]">
-                  <select
-                    name="preferredTime"
-                    value={formData.preferredTime}
-                    onChange={handleInputChange}
-                    className="bg-white px-2 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full"
-                  >
-                    <option value="">--:-- --</option>
-                    {Array.from({ length: 65 }, (_, i) => {
-                      const hour = Math.floor(i / 4) + 6;
-                      const minute = (i % 4) * 15;
-                      if (hour > 22 || (hour === 22 && minute > 0)) return null;
-                      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                      const ampm = hour < 12 ? 'AM' : 'PM';
-                      const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                      const label = `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
-                      return <option key={value} value={value}>{label}</option>;
-                    }).filter(Boolean)}
-                  </select>
-
-                </div>
-              </div>
-              <div className="flex items-center gap-2 mt-2">
-                <select
-                  name="moveDuration"
-                  value={formData.moveDuration}
-                  onChange={handleInputChange}
-                  className="bg-white px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
-                    <option key={n} value={n}>{n}hr</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 font-medium"
-                  onClick={async () => {
-                    // Validate required fields
-                    if (!formData.tags || formData.tags.length < 2) { alert('check tags'); return; }
-                    if (!formData.preferredDate) { alert('Please select a move date'); return; }
-                    if (!formData.preferredTime) { alert('Please select a move time'); return; }
-                    if (!formData.firstName || !formData.lastName) { alert('Please enter customer first and last name'); return; }
-                    if (!phones[0]?.number) { alert('Please enter a phone number'); return; }
-                    if (!emails[0]?.email) { alert('Please enter an email address'); return; }
-                    if (!formData.pickupAddress) { alert('Please enter the pickup address'); return; }
-                    const phone = phones[0]?.number || '';
-                    const email = emails[0]?.email || '';
-                    try {
-                      console.log('[Schedule Move] Tags being sent:', formData.tags);
-                      const response = await fetch('/api/move-wt/schedule-moving', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                          moveDate: formData.preferredDate,
-                          moveTime: formData.preferredTime,
-                          moveDuration: formData.moveDuration || '4',
-                          firstName: formData.firstName,
-                          lastName: formData.lastName,
-                          phone,
-                          email,
-                          pickupAddress: formData.pickupAddress,
-                          pickupCity: formData.pickupCity,
-                          pickupState: formData.pickupState,
-                          pickupZip: formData.pickupZip,
-                          deliveryAddress: formData.deliveryAddress,
-                          deliveryCity: formData.deliveryCity,
-                          deliveryState: formData.deliveryState,
-                          deliveryZip: formData.deliveryZip,
-                          timingNotes: formData.timingNotes,
-                          tags: formData.tags,
-                        }),
-                      });
-                      const data = await response.json();
-                      if (data.success) { alert('Moving job scheduled successfully in Workiz!'); }
-                      else { alert('Failed to schedule: ' + (data.error || 'Unknown error')); }
-                    } catch (error) { console.error('Schedule error:', error); alert('Failed to schedule moving job. Please try again.'); }
-                  }}
-                >
-                  Schedule
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="moveDateUnknown"
-                checked={formData.moveDateUnknown}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Move date is unknown
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="timeFlexible"
-                checked={formData.timeFlexible}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Move date is flexible
-              </label>
-            </div>
-
-            {/* Job Tags */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Job Tags
-              </label>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 gap-2">
-                {['Move', 'WT', 'Trk', 'Lbr', 'PM', 'RN', 'ET', 'OOT', 'Cat', '2', '3', '4', '5', '6+'].map(tag => {
-                  // Determine color based on tag
-                  let colorClasses = '';
-                  if (['OOT', 'Cat', 'RN', 'ET'].includes(tag)) {
-                    colorClasses = formData.tags.includes(tag)
-                      ? 'bg-red-500 text-white border-red-600'
-                      : 'border-red-300 text-red-700 hover:bg-red-50';
-                  } else if (['2', '3', '4', '5', '6+'].includes(tag)) {
-                    colorClasses = formData.tags.includes(tag)
-                      ? 'bg-green-500 text-white border-green-600'
-                      : 'border-green-300 text-green-700 hover:bg-green-50';
-                  } else if (['Move', 'WT'].includes(tag)) {
-                    colorClasses = formData.tags.includes(tag)
-                      ? 'bg-blue-500 text-white border-blue-600'
-                      : 'border-blue-300 text-blue-700 hover:bg-blue-50';
-                  } else if (['Trk', 'Lbr'].includes(tag)) {
-                    colorClasses = formData.tags.includes(tag)
-                      ? 'bg-purple-500 text-white border-purple-600'
-                      : 'border-purple-300 text-purple-700 hover:bg-purple-50';
-                  } else if (tag === 'PM') {
-                    colorClasses = formData.tags.includes(tag)
-                      ? 'bg-yellow-400 text-gray-800 border-yellow-500'
-                      : 'border-yellow-300 text-yellow-700 hover:bg-yellow-50';
+                <input
+                  type="text"
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder={
+                    searchType === 'phone' ? '(208) 555-1234' :
+                    searchType === 'name' ? 'John Smith' :
+                    searchType === 'quoteId' ? 'Q-1234' :
+                    searchType === 'workizJob' ? '3456' : ''
                   }
+                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={handleSearch}
+                  disabled={isSearching || !searchValue.trim()}
+                  className="flex-1 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  style={{ backgroundColor: 'rgba(6, 100, 155, 0.8)' }}
+                  onMouseEnter={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = '#06649b'; }}
+                  onMouseLeave={(e) => { if (!e.currentTarget.disabled) e.currentTarget.style.backgroundColor = 'rgba(6, 100, 155, 0.8)'; }}
+                >
+                  {isSearching ? 'Searching...' : 'Search'}
+                </button>
+                <button
+                  onClick={clearSearch}
+                  className="bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium"
+                >
+                  Clear
+                </button>
+              </div>
 
-                  return (
+              {/* Search Results */}
+              {searchResults.length > 0 && (
+                <div className="border-t border-gray-200 pt-2 mt-2">
+                  <p className="text-xs text-gray-500 mb-2 text-center">{searchResults.length} quote(s) found</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {searchResults.map((result) => (
+                      <button
+                        key={result.id}
+                        onClick={() => loadSearchResult(result)}
+                        className="px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-blue-50 hover:border-blue-300 transition-colors shadow-sm text-left"
+                      >
+                        <div className="font-semibold truncate">{result.full_name || 'Unknown'}</div>
+                        {result.phone && <div className="text-gray-500 text-xs">{result.phone}</div>}
+                        {result.from_address && <div className="text-gray-400 text-xs truncate">From: {result.from_address}</div>}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Customer Details */}
+          <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+            <div className="px-3 py-2 border-b border-gray-200" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+              <p className="text-sm text-gray-700 font-medium">Customer Details</p>
+            </div>
+            <div className="p-3 space-y-2">
+              <div>
+                <label className="text-xs text-gray-600 font-medium">Name</label>
+                <input
+                  type="text"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  placeholder="Full Name"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 font-medium">Phone</label>
+                <input
+                  type="tel"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  placeholder="(208) 555-1234"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-600 font-medium">Email</label>
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={(e) => setCustomerEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Two Column Layout - Left column first on mobile */}
+      <div className="px-4 pb-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 max-w-4xl mx-auto">
+
+          {/* LEFT COLUMN */}
+          <div className="space-y-4">
+
+            {/* Service Type */}
+            <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+              <div className="px-3 py-2 border-b border-gray-200" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+                <p className="text-sm text-gray-700 font-medium">Service Type</p>
+              </div>
+              <div className="p-3">
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setServiceType('truck')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      serviceType === 'truck'
+                        ? 'text-white'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                    style={serviceType === 'truck' ? { backgroundColor: 'rgba(6, 100, 155, 0.8)' } : undefined}
+                  >
+                    Bring a Truck
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setServiceType('labor')}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      serviceType === 'labor'
+                        ? 'text-white'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                    style={serviceType === 'labor' ? { backgroundColor: 'rgba(6, 100, 155, 0.8)' } : undefined}
+                  >
+                    Labor Only
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Move Date & Time */}
+            <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+              <div className="px-3 py-2 border-b border-gray-200" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+                <p className="text-sm text-gray-700 font-medium">Move Date & Time</p>
+              </div>
+              <div className="p-3 space-y-3">
+                {/* Date and Time pickers */}
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="date"
+                    value={moveDate}
+                    onChange={(e) => {
+                      setMoveDate(e.target.value);
+                      // Auto-open time dropdown after selecting date
+                      if (e.target.value && timeSelectRef.current) {
+                        setTimeout(() => {
+                          const select = timeSelectRef.current;
+                          if (select) {
+                            select.focus();
+                            // Try to open the dropdown programmatically
+                            const event = new MouseEvent('mousedown', {
+                              view: window,
+                              bubbles: true,
+                              cancelable: true,
+                            });
+                            select.dispatchEvent(event);
+                          }
+                        }, 150);
+                      }
+                    }}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
+                  <select
+                    ref={timeSelectRef}
+                    value={timeSlot}
+                    onChange={(e) => setTimeSlot(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  >
+                    <option value="">Select Time</option>
+                    <option value="7:00 AM">7:00 AM</option>
+                    <option value="7:30 AM">7:30 AM</option>
+                    <option value="8:00 AM">8:00 AM</option>
+                    <option value="8:30 AM">8:30 AM</option>
+                    <option value="9:00 AM">9:00 AM</option>
+                    <option value="9:30 AM">9:30 AM</option>
+                    <option value="10:00 AM">10:00 AM</option>
+                    <option value="10:30 AM">10:30 AM</option>
+                    <option value="11:00 AM">11:00 AM</option>
+                    <option value="11:30 AM">11:30 AM</option>
+                    <option value="12:00 PM">12:00 PM</option>
+                    <option value="12:30 PM">12:30 PM</option>
+                    <option value="1:00 PM">1:00 PM</option>
+                    <option value="1:30 PM">1:30 PM</option>
+                    <option value="2:00 PM">2:00 PM</option>
+                    <option value="2:30 PM">2:30 PM</option>
+                    <option value="3:00 PM">3:00 PM</option>
+                    <option value="3:30 PM">3:30 PM</option>
+                    <option value="4:00 PM">4:00 PM</option>
+                    <option value="4:30 PM">4:30 PM</option>
+                    <option value="5:00 PM">5:00 PM</option>
+                    <option value="5:30 PM">5:30 PM</option>
+                    <option value="6:00 PM">6:00 PM</option>
+                    <option value="6:30 PM">6:30 PM</option>
+                    <option value="7:00 PM">7:00 PM</option>
+                    <option value="7:30 PM">7:30 PM</option>
+                    <option value="8:00 PM">8:00 PM</option>
+                  </select>
+                </div>
+
+                {/* Duration, Schedule Move, Schedule WT - all on one row */}
+                <div className="flex items-center gap-2">
+                  <select
+                    value={moveDuration}
+                    onChange={(e) => setMoveDuration(e.target.value)}
+                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm w-20"
+                  >
+                    {[1,2,3,4,5,6,7,8,9,10,11,12].map(n => (
+                      <option key={n} value={n}>{n}hr</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="flex-1 px-3 py-2 text-white rounded-lg text-sm font-medium transition-colors"
+                    style={{ backgroundColor: 'rgba(6, 100, 155, 0.8)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#06649b'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(6, 100, 155, 0.8)'}
+                    onClick={async () => {
+                      // Validate required tags
+                      const hasTrkOrLbr = tags.includes('Trk') || tags.includes('Lbr');
+                      const hasCrewSize = ['2', '3', '4', '5', '6+'].some(t => tags.includes(t));
+                      if (!hasTrkOrLbr) { alert('Please select Trk or Lbr'); return; }
+                      if (!hasCrewSize) { alert('Please select crew size (2, 3, 4, 5, or 6+)'); return; }
+                      if (!moveDate) { alert('Please select a move date'); return; }
+                      if (!timeSlot) { alert('Please select a move time'); return; }
+                      if (!customerName) { alert('Please enter customer name'); return; }
+                      if (!customerPhone) { alert('Please enter phone number'); return; }
+                      if (!customerEmail) { alert('Please enter an email address'); return; }
+                      if (!fromAddress) { alert('Please enter the pickup address'); return; }
+
+                      // Parse name into first/last
+                      const nameParts = customerName.trim().split(' ');
+                      const firstName = nameParts[0] || '';
+                      const lastName = nameParts.slice(1).join(' ') || '';
+
+                      try {
+                        console.log('[Schedule Move] Tags being sent:', tags);
+                        const response = await fetch('/api/move-wt/schedule-moving', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            moveDate,
+                            moveTime: timeSlot,
+                            moveDuration: moveDuration || '4',
+                            firstName,
+                            lastName,
+                            phone: customerPhone,
+                            email: customerEmail,
+                            pickupAddress: fromAddress,
+                            pickupCity: '',
+                            pickupState: '',
+                            pickupZip: '',
+                            deliveryAddress: toAddress,
+                            deliveryCity: '',
+                            deliveryState: '',
+                            deliveryZip: '',
+                            timingNotes,
+                            tags,
+                          }),
+                        });
+                        const data = await response.json();
+                        if (data.success) {
+                          alert('Moving job scheduled successfully in Workiz!');
+                        } else {
+                          alert('Failed to schedule: ' + (data.error || 'Unknown error'));
+                        }
+                      } catch (error) {
+                        console.error('Schedule error:', error);
+                        alert('Failed to schedule moving job. Please try again.');
+                      }
+                    }}
+                  >
+                    Schedule Move
+                  </button>
+                  <button
+                    type="button"
+                    className="flex-1 px-3 py-2 text-white rounded-lg text-sm font-medium transition-colors"
+                    style={{ backgroundColor: 'rgba(6, 100, 155, 0.8)' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#06649b'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'rgba(6, 100, 155, 0.8)'}
+                    onClick={async () => {
+                      // Validate required tags
+                      const hasTrkOrLbr = tags.includes('Trk') || tags.includes('Lbr');
+                      const hasCrewSize = ['2', '3', '4', '5', '6+'].some(t => tags.includes(t));
+                      if (!hasTrkOrLbr) { alert('Please select Trk or Lbr'); return; }
+                      if (!hasCrewSize) { alert('Please select crew size (2, 3, 4, 5, or 6+)'); return; }
+                      if (!moveDate) { alert('Please select a walk-through date'); return; }
+                      if (!timeSlot) { alert('Please select a walk-through time'); return; }
+                      if (!customerName) { alert('Please enter customer name'); return; }
+                      if (!customerPhone) { alert('Please enter phone number'); return; }
+                      if (!customerEmail) { alert('Please enter an email address'); return; }
+                      if (!fromAddress) { alert('Please enter the customer address'); return; }
+
+                      // Parse name into first/last
+                      const nameParts = customerName.trim().split(' ');
+                      const firstName = nameParts[0] || '';
+                      const lastName = nameParts.slice(1).join(' ') || '';
+
+                      try {
+                        console.log('[Schedule WT] Tags being sent:', tags);
+                        const response = await fetch('/api/move-wt/schedule-walkthrough', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            walkThroughDate: moveDate,
+                            walkThroughTime: timeSlot,
+                            walkThroughDuration: moveDuration || '1',
+                            firstName,
+                            lastName,
+                            phone: customerPhone,
+                            email: customerEmail,
+                            address: fromAddress,
+                            city: '',
+                            state: '',
+                            zip: '',
+                            timingNotes,
+                            tags,
+                          }),
+                        });
+                        const data = await response.json();
+                        if (data.success) {
+                          alert('Walk-through scheduled successfully in Workiz!');
+                        } else {
+                          alert('Failed to schedule: ' + (data.error || 'Unknown error'));
+                        }
+                      } catch (error) {
+                        console.error('Schedule error:', error);
+                        alert('Failed to schedule walk-through. Please try again.');
+                      }
+                    }}
+                  >
+                    Schedule WT
+                  </button>
+                </div>
+
+                {/* Job Tags */}
+                <div className="grid grid-cols-4 sm:grid-cols-7 gap-1.5">
+                  {['Move', 'WT', 'Trk', 'Lbr', 'PM', 'RN', 'ET', 'OOT', 'Cat', '2', '3', '4', '5', '6+'].map(tag => (
                     <button
                       key={tag}
                       type="button"
                       onClick={() => handleTagChange(tag)}
-                      className={`px-3 py-1.5 rounded-md border-2 font-medium transition-all duration-200 ${colorClasses}`}
+                      className={`px-2 py-1.5 rounded-lg border-2 text-xs font-medium transition-all ${tag === 'Move' ? 'cursor-not-allowed' : ''} ${getTagColorClasses(tag, tags.includes(tag))}`}
                     >
                       {tag}
                     </button>
-                  );
-                })}
-              </div>
-            </div>
+                  ))}
+                </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Additional Notes
-              </label>
-              <textarea
-                name="timingNotes"
-                value={formData.timingNotes}
-                onChange={handleInputChange}
-                rows={3}
-                placeholder="Additional notes about timing and scheduling"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-          </div>
-        </section>
-
-        {/* Service Type */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-indigo-500">
-          <h2 className="text-xl font-bold text-indigo-900 mb-4">Service Type</h2>
-
-          <div className="flex gap-6">
-            <div className="flex items-center">
-              <input
-                type="radio"
-                id="serviceTruck"
-                name="serviceType"
-                value="truck"
-                checked={formData.serviceType === "truck"}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-              />
-              <label htmlFor="serviceTruck" className="ml-2 text-sm font-medium text-gray-700">
-                Truck
-              </label>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="radio"
-                id="serviceLaborOnly"
-                name="serviceType"
-                value="labor-only"
-                checked={formData.serviceType === "labor-only"}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-              />
-              <label htmlFor="serviceLaborOnly" className="ml-2 text-sm font-medium text-gray-700">
-                Labor Only
-              </label>
-            </div>
-
-            <div className="flex items-center ml-auto">
-              <input
-                type="checkbox"
-                id="waiveTravel"
-                name="waiveTravel"
-                checked={formData.waiveTravel}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="waiveTravel" className="ml-2 text-sm font-medium text-gray-700">
-                Waive Travel
-              </label>
-            </div>
-          </div>
-        </section>
-
-        {/* Customer Information */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-cyan-500">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-bold text-cyan-900">Customer Information</h2>
-            <button
-              type="button"
-              onClick={handleFindCustomer}
-              disabled={!formData.firstName.trim() || !formData.lastName.trim() || isLoadingJob}
-              className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-            >
-              {isLoadingJob ? 'Searching...' : 'Find Customer'}
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  First Name
-                </label>
-                <input
-                  type="text"
-                  name="firstName"
-                  value={formData.firstName}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                {/* Additional Notes */}
+                <textarea
+                  value={timingNotes}
+                  onChange={(e) => setTimingNotes(e.target.value)}
+                  rows={4}
+                  placeholder="Additional notes"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y"
                 />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Last Name
-                </label>
-                <input
-                  type="text"
-                  name="lastName"
-                  value={formData.lastName}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Company
-              </label>
-              <input
-                type="text"
-                name="company"
-                value={formData.company}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-
-            {/* Dynamic Phone Entries */}
-            <div className="space-y-2">
-              {phones.map((phone, index) => (
-                <div key={index} className="flex items-end gap-2">
-                  <div className="flex-1 grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Phone
-                      </label>
-                      <input
-                        type="tel"
-                        value={phone.number}
-                        onChange={(e) => handlePhoneNumberChange(index, e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Name
-                      </label>
-                      <input
-                        type="text"
-                        value={phone.name}
-                        onChange={(e) => handlePhoneNameChange(index, e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                  {index > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemovePhone(index)}
-                      className="px-3 py-2 text-red-600 hover:text-red-800 transition-colors"
-                      title="Remove phone"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={handleAddPhone}
-                className="text-sm text-blue-600 hover:text-blue-800 cursor-pointer transition-colors"
-              >
-                +Phone
-              </button>
-            </div>
-
-            {/* Dynamic Email Entries */}
-            <div className="space-y-2">
-              {emails.map((email, index) => (
-                <div key={index} className="flex items-end gap-2">
-                  <div className="flex-1 grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Email
-                      </label>
-                      <input
-                        type="email"
-                        value={email.email}
-                        onChange={(e) => handleEmailChange(index, e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Name
-                      </label>
-                      <input
-                        type="text"
-                        value={email.name}
-                        onChange={(e) => handleEmailNameChange(index, e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                  {index > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveEmail(index)}
-                      className="px-3 py-2 text-red-600 hover:text-red-800 transition-colors"
-                      title="Remove email"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              ))}
-              <button
-                type="button"
-                onClick={handleAddEmail}
-                className="text-sm text-blue-600 hover:text-blue-800 cursor-pointer transition-colors"
-              >
-                +Email
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* Addresses */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-slate-500">
-          <h2 className="text-xl font-bold text-slate-900 mb-4">Addresses</h2>
-
-          <div className="space-y-6">
-            {/* Start Address / Customer Address Section */}
-            <div className="border-l-4 border-blue-500 bg-blue-50 p-4 rounded-r-lg">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-6">
-                  <h3 className="text-lg font-semibold text-blue-900">
-                    {formData.serviceType === 'labor-only' ? 'Customer Address' : 'Start Address'}
-                  </h3>
-                  {formData.serviceType === 'labor-only' ? (
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={formData.laborOnlySameAddress}
-                        onChange={() => {
-                          setFormData(prev => ({
-                            ...prev,
-                            laborOnlySameAddress: !prev.laborOnlySameAddress
-                          }));
-                        }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-600">Same as Service Address</span>
-                    </label>
-                  ) : (
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="customerHomeAddress"
-                        checked={formData.customerHomeAddressType === "pickup"}
-                        onChange={() => {
-                          setFormData(prev => {
-                            // If setting pickup as customer home and service type is truck, reset invalid delivery/additional stop locations
-                            const invalidLocationTypes = ['pod', 'truck'];
-                            const shouldResetLocations = prev.serviceType === 'truck';
-                            return {
-                              ...prev,
-                              customerHomeAddressType: "pickup",
-                              deliveryLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.deliveryLocationType) ? "storage-unit" : prev.deliveryLocationType,
-                              additionalStopLocationType: shouldResetLocations && invalidLocationTypes.includes(prev.additionalStopLocationType) ? "storage-unit" : prev.additionalStopLocationType
-                            };
-                          });
-                        }}
-                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                      />
-                      <span className="text-sm text-gray-600">Current Home or Business</span>
-                    </label>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={handleMakePictureFolder}
-                  disabled={!formData.pickupAddress.trim() || isLoadingJob}
-                  className="px-3 py-1 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors"
-                >
-                  {isLoadingJob ? 'Creating...' : 'Make Picture Folder'}
-                </button>
-              </div>
-              <div className="space-y-2">
-                {/* Property Type - Hidden for labor-only when Service Address is separate */}
-                {!(formData.serviceType === 'labor-only' && !formData.laborOnlySameAddress) && (
-                <select
-                  name="pickupLocationType"
-                  value={formData.pickupLocationType}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  {formData.serviceType === 'labor-only' && formData.laborOnlySameAddress ? (
-                    <>
-                      <option value="moving-between-rooms">Moving items between rooms</option>
-                      <option value="loading-truck-pod">Loading a Truck or POD</option>
-                      <option value="unloading-truck-pod">Unloading a Truck or POD</option>
-                      <option value="business">Business</option>
-                      <option value="other">Other</option>
-                    </>
-                  ) : formData.customerHomeAddressType === 'delivery' ? (
-                    <>
-                      <option value="house">House</option>
-                      <option value="apartment">Apartment</option>
-                      <option value="storage-unit">Storage Unit</option>
-                      <option value="business">Business</option>
-                      <option value="other">Other</option>
-                    </>
-                  ) : (
-                    <>
-                      <option value="house">House</option>
-                      <option value="apartment">Apartment</option>
-                      {formData.customerHomeAddressType !== 'pickup' && (
-                        <option value="storage-unit">Storage Unit</option>
-                      )}
-                      {formData.serviceType !== 'truck' && (
-                        <>
-                          <option value="truck">Truck</option>
-                          <option value="pod">POD</option>
-                        </>
-                      )}
-                      <option value="business">Business</option>
-                      <option value="other">Other</option>
-                    </>
-                  )}
-                </select>
-                )}
-
-                {/* Manual Override for Labor Hours */}
-                <div className="flex items-center gap-3 mt-2">
+                {/* No Date checkbox */}
+                <label className="flex items-center gap-2 text-xs text-gray-600">
                   <input
                     type="checkbox"
-                    id="pickupManualOverride"
-                    name="pickupManualOverride"
-                    checked={formData.pickupManualOverride}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    checked={moveDateUnknown}
+                    onChange={(e) => setMoveDateUnknown(e.target.checked)}
+                    className="rounded"
                   />
-                  <label htmlFor="pickupManualOverride" className="text-sm font-medium text-gray-700">
-                    Manual Override
-                  </label>
-                  {formData.pickupManualOverride && (
+                  No Date
+                </label>
+              </div>
+            </div>
+
+            {/* Other Services */}
+            <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+              <div className="px-3 py-2 border-b border-gray-200" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+                <p className="text-sm text-gray-700 font-medium">Other Services</p>
+              </div>
+              <div className="p-3 space-y-4">
+                {/* Boxing & Packing */}
+                <div>
+                  <p className="text-xs text-gray-600 mb-2 font-medium">Boxing &amp; Packing</p>
+                  <div className="flex items-center gap-3">
                     <input
-                      type="number"
-                      name="pickupManualOverrideHours"
-                      value={formData.pickupManualOverrideHours}
-                      onChange={handleInputChange}
-                      placeholder="Hours"
-                      step="0.5"
+                      type="range"
                       min="0"
-                      className="w-20 px-2 py-1 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      max="10"
+                      value={packingAmount}
+                      onChange={(e) => setPackingAmount(e.target.value)}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
                     />
+                    <span className="text-sm font-medium min-w-[100px]" style={{ color: '#06649b' }}>
+                      {(() => {
+                        const val = parseInt(packingAmount);
+                        const labels = ['None', 'A few items', 'A little bit', 'Some items', 'A fair amount', 'About half', 'More than half', 'Most of it', 'Almost all', 'Nearly everything', 'Everything'];
+                        return labels[val] || labels[0];
+                      })()}
+                    </span>
+                  </div>
+                  {parseInt(packingAmount) > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {['Kitchen', 'Bedrooms', 'Garage', 'Bathrooms'].map((room) => (
+                        <button
+                          key={room}
+                          type="button"
+                          onClick={() => setPackingRooms(prev => prev.includes(room) ? prev.filter(r => r !== room) : [...prev, room])}
+                          className={`px-3 py-1 rounded-full border text-xs font-medium transition-all ${
+                            packingRooms.includes(room)
+                              ? 'text-white border-transparent'
+                              : 'bg-white text-gray-700 border-gray-300 hover:border-gray-400'
+                          }`}
+                          style={packingRooms.includes(room) ? { backgroundColor: 'rgba(6, 100, 155, 0.8)' } : undefined}
+                        >
+                          {room}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
-                {/* Business Name field */}
-                {formData.pickupLocationType === 'business' && (
-                  <div className="space-y-2">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Business Name
-                      </label>
-                      <input
-                        type="text"
-                        name="pickupBusinessName"
-                        value={formData.pickupBusinessName}
-                        onChange={handleInputChange}
-                        placeholder="Enter business name"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Square Feet
-                      </label>
-                      <input
-                        type="text"
-                        name="pickupBusinessSquareFeet"
-                        value={formData.pickupBusinessSquareFeet}
-                        onChange={handleInputChange}
-                        placeholder="Enter square feet"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {/* How Much is Getting Moved Slider - Always visible for Start Address (hidden for labor-only when Service Address is separate, and for unloading-truck-pod) */}
-                {!(formData.serviceType === 'labor-only' && !formData.laborOnlySameAddress) && formData.pickupLocationType !== 'unloading-truck-pod' && (
-                  <div className="space-y-1">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      How much is getting moved?
-                    </label>
-                    <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
-                      <input
-                        type="range"
-                        name="pickupHowFurnished"
-                        min="0"
-                        max="100"
-                        step="20"
-                        value={formData.pickupHowFurnished}
-                        onChange={handleInputChange}
-                        className="flex-1"
-                      />
-                      <span className="text-sm font-medium text-blue-700 min-w-[140px]">
-                        {formData.pickupLocationType === 'storage-unit'
-                          ? getStorageUnitSliderText(Number(formData.pickupHowFurnished))
-                          : getHowFurnishedText(Number(formData.pickupHowFurnished))}
-                      </span>
-                    </div>
-                  </div>
-                )}
-
-                {formData.pickupLocationType === 'storage-unit' && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-700">Quantity:</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newQty = Math.max(1, formData.pickupStorageUnitQuantity - 1);
-                          setFormData(prev => ({
-                            ...prev,
-                            pickupStorageUnitQuantity: newQty,
-                            pickupStorageUnitSizes: prev.pickupStorageUnitSizes.slice(0, newQty),
-                            pickupStorageUnitHowFull: prev.pickupStorageUnitHowFull.slice(0, newQty),
-                            pickupStorageUnitConditioned: prev.pickupStorageUnitConditioned.slice(0, newQty)
-                          }));
-                        }}
-                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                      >
-                        -
-                      </button>
-                      <span className="w-12 text-center font-semibold">{formData.pickupStorageUnitQuantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFormData(prev => ({
-                            ...prev,
-                            pickupStorageUnitQuantity: prev.pickupStorageUnitQuantity + 1,
-                            pickupStorageUnitSizes: [...prev.pickupStorageUnitSizes, ""],
-                            pickupStorageUnitHowFull: [...prev.pickupStorageUnitHowFull, ""],
-                            pickupStorageUnitConditioned: [...prev.pickupStorageUnitConditioned, ""]
-                          }));
-                        }}
-                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
-                    {Array.from({ length: formData.pickupStorageUnitQuantity }).map((_, index) => (
-                      <div key={index} className="grid grid-cols-3 gap-2">
-                        <select
-                          value={formData.pickupStorageUnitSizes[index] || ""}
-                          onChange={(e) => {
-                            const newSizes = [...formData.pickupStorageUnitSizes];
-                            newSizes[index] = e.target.value;
-                            setFormData(prev => ({ ...prev, pickupStorageUnitSizes: newSizes }));
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">Size</option>
-                          <option value="<100sf">&lt;100sf</option>
-                          <option value="100-200sf">100-200sf</option>
-                          <option value="200-300sf">200-300sf</option>
-                          <option value="300-400sf">300-400sf</option>
-                          <option value="400+sf">400+sf</option>
-                        </select>
-                        <select
-                          value={formData.pickupStorageUnitHowFull[index] || ""}
-                          onChange={(e) => {
-                            const newHowFull = [...formData.pickupStorageUnitHowFull];
-                            newHowFull[index] = e.target.value;
-                            setFormData(prev => ({ ...prev, pickupStorageUnitHowFull: newHowFull }));
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        >
-                          <option value="">How Full</option>
-                          <option value="light">Light</option>
-                          <option value="medium">Medium</option>
-                          <option value="packed">Packed</option>
-                        </select>
-                        <div className="flex flex-col items-center justify-center">
-                          <span className="text-sm font-medium text-gray-700 mb-1">Conditioned</span>
-                          <div className="flex items-center gap-2">
-                            <label className="flex items-center gap-1 cursor-pointer">
-                              <input
-                                type="radio"
-                                name={`pickupStorageConditioned-${index}`}
-                                checked={formData.pickupStorageUnitConditioned[index] === "yes"}
-                                onChange={() => {
-                                  const newConditioned = [...formData.pickupStorageUnitConditioned];
-                                  newConditioned[index] = "yes";
-                                  setFormData(prev => ({ ...prev, pickupStorageUnitConditioned: newConditioned }));
-                                }}
-                                className="w-3 h-3 text-blue-600"
-                              />
-                              <span className="text-xs">Yes</span>
-                            </label>
-                            <label className="flex items-center gap-1 cursor-pointer">
-                              <input
-                                type="radio"
-                                name={`pickupStorageConditioned-${index}`}
-                                checked={formData.pickupStorageUnitConditioned[index] === "no"}
-                                onChange={() => {
-                                  const newConditioned = [...formData.pickupStorageUnitConditioned];
-                                  newConditioned[index] = "no";
-                                  setFormData(prev => ({ ...prev, pickupStorageUnitConditioned: newConditioned }));
-                                }}
-                                className="w-3 h-3 text-blue-600"
-                              />
-                              <span className="text-xs">No</span>
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {formData.pickupLocationType === 'unloading-truck-pod' && (
-                  <div className="space-y-2">
-                    <div className="flex gap-2">
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Length (ft)
-                        </label>
-                        <input
-                          type="text"
-                          name="pickupTruckPodLength"
-                          value={formData.pickupTruckPodLength}
-                          onChange={handleInputChange}
-                          placeholder="Length"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Width (ft)
-                        </label>
-                        <input
-                          type="text"
-                          name="pickupTruckPodWidth"
-                          value={formData.pickupTruckPodWidth}
-                          onChange={handleInputChange}
-                          placeholder="Width"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        How full is the truck/POD?
-                      </label>
-                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
-                        <input
-                          type="range"
-                          name="pickupTruckPodHowFull"
-                          min="20"
-                          max="100"
-                          step="20"
-                          value={formData.pickupTruckPodHowFull}
-                          onChange={handleInputChange}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium text-blue-700 min-w-[60px]">
-                          {formData.pickupTruckPodHowFull}%
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {formData.pickupLocationType === 'other' && (
-                  <div className="space-y-2">
-                    <div>
-                      <input
-                        type="text"
-                        name="pickupLocationOther"
-                        value={formData.pickupLocationOther}
-                        onChange={handleInputChange}
-                        placeholder="Specify Location Type"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Square Feet
-                      </label>
-                      <input
-                        type="text"
-                        name="pickupOtherSquareFeet"
-                        value={formData.pickupOtherSquareFeet}
-                        onChange={handleInputChange}
-                        placeholder="Enter square feet"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Street Address
-                    </label>
-                    <input
-                      key={`pickup-address-${autocompleteReinitKey}`}
-                      ref={pickupAddressRef}
-                      type="text"
-                      name="pickupAddress"
-                      value={formData.pickupAddress}
-                      onChange={handleInputChange}
-                      autoComplete="off"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Unit/Apt #
-                    </label>
-                    <input
-                      type="text"
-                      name="pickupUnit"
-                      value={formData.pickupUnit}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div className="col-span-2">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      City
-                    </label>
-                    <input
-                      type="text"
-                      name="pickupCity"
-                      value={formData.pickupCity}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      State
-                    </label>
-                    <input
-                      type="text"
-                      name="pickupState"
-                      value={formData.pickupState}
-                      onChange={handleInputChange}
-                      maxLength={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                </div>
-
+                {/* Junk Removal */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    ZIP Code
+                  <p className="text-xs text-gray-600 mb-2 font-medium">Junk Removal</p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="0"
+                      max="8"
+                      value={junkRemovalAmount}
+                      onChange={(e) => setJunkRemovalAmount(e.target.value)}
+                      className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                    />
+                    <span className="text-sm font-medium min-w-[100px]" style={{ color: '#06649b' }}>
+                      {(() => {
+                        const val = parseInt(junkRemovalAmount);
+                        const labels = ['None', '1/8 load', '1/4 load', '3/8 load', '1/2 load', '5/8 load', '3/4 load', '7/8 load', 'Full load'];
+                        return labels[val] || labels[0];
+                      })()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+          {/* END LEFT COLUMN */}
+
+          {/* RIGHT COLUMN */}
+          <div className="space-y-4">
+
+            {/* ========== MOVING FROM ========== */}
+            <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+              {/* Header with marker */}
+              <div className="px-3 py-2 flex items-center gap-2 border-b border-gray-200" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+                <div className="w-6 h-6 bg-rose-500 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                  A
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm text-gray-700 font-medium">
+                    {serviceType === 'labor' ? 'Service Address' : 'Where are you moving from?'}
+                  </p>
+                  <label className="flex items-center gap-1 mt-0.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={fromIsCurrentHome}
+                      onChange={(e) => handleFromCurrentHomeChange(e.target.checked)}
+                      className="w-3 h-3 rounded border-gray-300 bg-white text-rose-500 focus:ring-rose-500"
+                    />
+                    <span className="text-gray-500 text-xs">This is my current home or business</span>
                   </label>
+                </div>
+              </div>
+
+              <div className="p-3 space-y-3">
+                {/* Address inputs */}
+                <div className="flex gap-2">
+                  <input
+                    ref={fromInputRef}
+                    type="text"
+                    value={fromAddress}
+                    onChange={(e) => setFromAddress(e.target.value)}
+                    placeholder={serviceType === 'labor' ? 'Enter service address' : 'Enter pickup address'}
+                    autoComplete="one-time-code"
+                    autoCapitalize="off"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                  />
                   <input
                     type="text"
-                    inputMode="numeric"
-                    pattern="[0-9]*"
-                    name="pickupZip"
-                    value={formData.pickupZip}
-                    onChange={(e) => {
-                      const numericValue = e.target.value.replace(/\D/g, '');
-                      setFormData(prev => ({ ...prev, pickupZip: numericValue }));
-                    }}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    value={fromUnit}
+                    onChange={(e) => setFromUnit(e.target.value)}
+                    placeholder="Unit"
+                    className="w-16 border border-gray-300 rounded-lg px-2 py-2 text-sm"
                   />
                 </div>
 
-                {(formData.pickupLocationType === 'house' || formData.pickupLocationType === 'loading-truck-pod') && (
+                {/* Property Data - Sq Ft, Value, $ button - Only when current home */}
+                {fromIsCurrentHome && (
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      name="pickupHouseSquareFeet"
-                      value={isLoadingPickupProperty ? '' : formatNumberWithCommas(formData.pickupHouseSquareFeet)}
-                      onChange={handleInputChange}
-                      placeholder={isLoadingPickupProperty ? "Loading..." : "Square Feet"}
-                      disabled={isLoadingPickupProperty}
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      value={isLoadingFromProperty ? '' : formatNumberWithCommas(fromSquareFootage)}
+                      onChange={(e) => setFromSquareFootage(e.target.value.replace(/,/g, ''))}
+                      placeholder={isLoadingFromProperty ? "Loading..." : "Sq Ft"}
+                      disabled={isLoadingFromProperty}
+                      className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                     <input
                       type="text"
-                      name="pickupZestimate"
-                      value={isLoadingPickupProperty ? '' : formatNumberWithCommas(formData.pickupZestimate)}
-                      onChange={handleInputChange}
-                      placeholder={isLoadingPickupProperty ? "Loading..." : "Value"}
-                      disabled={isLoadingPickupProperty}
-                      className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      value={isLoadingFromProperty ? '' : formatNumberWithCommas(fromZestimate)}
+                      onChange={(e) => setFromZestimate(e.target.value.replace(/,/g, ''))}
+                      placeholder={isLoadingFromProperty ? "Loading..." : "Value"}
+                      disabled={isLoadingFromProperty}
+                      className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                     <button
                       type="button"
-                      onClick={fetchPickupPropertyData}
-                      disabled={isLoadingPickupProperty}
-                      className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                      onClick={fetchFromPropertyData}
+                      disabled={isLoadingFromProperty}
+                      className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
                       title="Fetch property data from Zillow"
                     >
                       $
@@ -5223,2807 +2749,1373 @@ function MoveWalkthroughContent() {
                   </div>
                 )}
 
-                {formData.pickupLocationType === 'apartment' && (
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      name="pickupApartmentSquareFeet"
-                      value={isLoadingPickupProperty ? '' : formatNumberWithCommas(formData.pickupApartmentSquareFeet)}
-                      onChange={handleInputChange}
-                      placeholder={isLoadingPickupProperty ? "Loading..." : "Square Feet"}
-                      disabled={isLoadingPickupProperty}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                    />
-                    <div className="flex-1 flex gap-1 min-w-0">
-                      <input
-                        type="text"
-                        name="pickupApartmentBedBath"
-                        value={isLoadingPickupProperty ? '' : formData.pickupApartmentBedBath}
-                        onChange={handleInputChange}
-                        placeholder={isLoadingPickupProperty ? "Loading..." : "Bed/Bath"}
-                        disabled={isLoadingPickupProperty}
-                        className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                      />
-                      <button
-                        type="button"
-                        onClick={fetchPickupPropertyData}
-                        disabled={isLoadingPickupProperty}
-                        className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                        title="Fetch property data from Zillow"
-                      >
-                        sf
-                      </button>
+                {/* LABOR SERVICE TYPE - Only for Labor Only */}
+                {serviceType === 'labor' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Service Type</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <PillButton selected={laborServiceType === 'between-rooms'} onClick={() => handleLaborServiceTypeChange('between-rooms')}>
+                        Moving items between rooms
+                      </PillButton>
+                      <PillButton selected={laborServiceType === 'loading'} onClick={() => handleLaborServiceTypeChange('loading')}>
+                        Loading a truck or pod
+                      </PillButton>
+                      <PillButton selected={laborServiceType === 'unloading'} onClick={() => handleLaborServiceTypeChange('unloading')}>
+                        Unloading a truck or pod
+                      </PillButton>
+                      <PillButton selected={laborServiceType === 'office'} onClick={() => handleLaborServiceTypeChange('office')}>
+                        Office
+                      </PillButton>
+                      <PillButton selected={laborServiceType === 'other'} onClick={() => handleLaborServiceTypeChange('other')}>
+                        Other
+                      </PillButton>
                     </div>
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Service Address Section - Labor Only */}
-            {formData.serviceType === 'labor-only' && !formData.laborOnlySameAddress && (
-              <div className="border-l-4 border-green-500 bg-green-50 p-4 rounded-r-lg">
-                <div className="mb-3">
-                  <h3 className="text-lg font-semibold text-green-900">Service Address</h3>
-                </div>
-                <div className="space-y-2">
-                  <select
-                    name="deliveryLocationType"
-                    value={formData.deliveryLocationType}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="storage-to-truck">Storage Unit to Truck</option>
-                    <option value="truck-to-storage">Truck to Storage Unit</option>
-                    <option value="other">Other</option>
-                  </select>
-
-                  {/* Notes field for Service Address "Other" */}
-                  {formData.deliveryLocationType === 'other' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Notes
-                      </label>
-                      <textarea
-                        name="deliveryLocationOther"
-                        value={formData.deliveryLocationOther}
-                        onChange={handleInputChange}
-                        placeholder="Describe the service location..."
-                        rows={2}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  )}
-
-                  {/* How Much is Getting Moved Slider - For House (Service Address) - HIDDEN since options changed */}
-                  {false && formData.deliveryLocationType === 'house' && (
-                    <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        How much is getting moved?
-                      </label>
-                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
-                        <input
-                          type="range"
-                          name="pickupHowFurnished"
-                          min="0"
-                          max="100"
-                          step="20"
-                          value={formData.pickupHowFurnished}
-                          onChange={handleInputChange}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium text-green-700 min-w-[140px]">
-                          {getHowFurnishedText(Number(formData.pickupHowFurnished))}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* How Much is Getting Moved Slider - For Apartment (Service Address) - HIDDEN since options changed */}
-                  {false && formData.deliveryLocationType === 'apartment' && (
-                    <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        How much is getting moved?
-                      </label>
-                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
-                        <input
-                          type="range"
-                          name="pickupApartmentHowFurnished"
-                          min="0"
-                          max="100"
-                          step="20"
-                          value={formData.pickupApartmentHowFurnished}
-                          onChange={handleInputChange}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium text-green-700 min-w-[140px]">
-                          {getHowFurnishedText(Number(formData.pickupApartmentHowFurnished)).replace('Whole house', 'Whole apartment')}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Street Address
-                      </label>
-                      <input
-                        key={`delivery-address-${autocompleteReinitKey}`}
-                        ref={deliveryAddressRef}
-                        type="text"
-                        name="deliveryAddress"
-                        value={formData.deliveryAddress}
-                        onChange={handleInputChange}
-                        autoComplete="off"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Unit/Apt #
-                      </label>
-                      <input
-                        type="text"
-                        name="deliveryUnit"
-                        value={formData.deliveryUnit}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        City
-                      </label>
-                      <input
-                        type="text"
-                        name="deliveryCity"
-                        value={formData.deliveryCity}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        State
-                      </label>
-                      <input
-                        type="text"
-                        name="deliveryState"
-                        value={formData.deliveryState}
-                        onChange={handleInputChange}
-                        maxLength={2}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
+                {/* LABOR: Loading - Show "Moving From" options */}
+                {serviceType === 'labor' && laborServiceType === 'loading' && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      ZIP Code
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      name="deliveryZip"
-                      value={formData.deliveryZip}
-                      onChange={(e) => {
-                        const numericValue = e.target.value.replace(/\D/g, '');
-                        setFormData(prev => ({ ...prev, deliveryZip: numericValue }));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Moving From</p>
+                    <div className="flex gap-1.5">
+                      <PillButton selected={fromPropertyType === 'home'} onClick={() => handleFromPropertyTypeChange('home')}>
+                        Residence
+                      </PillButton>
+                      <PillButton selected={fromPropertyType === 'storage'} onClick={() => handleFromPropertyTypeChange('storage')}>
+                        Storage
+                      </PillButton>
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Unloading - Show "Unloading To" options */}
+                {serviceType === 'labor' && laborServiceType === 'unloading' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Unloading To</p>
+                    <div className="flex gap-1.5">
+                      <PillButton selected={toPropertyType === 'home'} onClick={() => handleToPropertyTypeChange('home')}>
+                        Residence
+                      </PillButton>
+                      <PillButton selected={toPropertyType === 'storage'} onClick={() => handleToPropertyTypeChange('storage')}>
+                        Storage
+                      </PillButton>
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Between-rooms or Loading (Residence) or Office - Show Square Footage */}
+                {serviceType === 'labor' && (
+                  laborServiceType === 'between-rooms' ||
+                  (laborServiceType === 'loading' && fromPropertyType === 'home') ||
+                  laborServiceType === 'office'
+                ) && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Square Footage</p>
+                    <div className="flex flex-wrap gap-1">
+                      {squareFootageOptions.map((option) => (
+                        <PillButton
+                          key={`labor-sqft-${option}`}
+                          selected={fromSquareFootage === option}
+                          onClick={() => setFromSquareFootage(option)}
+                        >
+                          {option}
+                        </PillButton>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Loading (Storage) - Show Storage Units */}
+                {serviceType === 'labor' && laborServiceType === 'loading' && fromPropertyType === 'storage' && (
+                  <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                    {fromStorageUnits.map((unit, index) => (
+                      <div key={unit.id} className="mb-2 last:mb-0">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs font-medium text-gray-700">Unit {index + 1}</span>
+                          {fromStorageUnits.length > 1 && (
+                            <button onClick={() => removeStorageUnit('from', unit.id)} className="text-red-500 text-xs">Remove</button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mb-1">
+                          <span className="text-xs text-gray-500 mr-1">Size:</span>
+                          {unitSizeOptions.map((option) => (
+                            <PillButton key={`labor-from-${unit.id}-${option}`} selected={unit.size === option} onClick={() => updateStorageUnit('from', unit.id, 'size', option)}>
+                              {option}
+                            </PillButton>
+                          ))}
+                        </div>
+                        <div className="flex gap-1 mb-1">
+                          <span className="text-xs text-gray-500 mr-1">Type:</span>
+                          <PillButton selected={unit.type === 'conditioned'} onClick={() => updateStorageUnit('from', unit.id, 'type', 'conditioned')}>Conditioned</PillButton>
+                          <PillButton selected={unit.type === 'standard'} onClick={() => updateStorageUnit('from', unit.id, 'type', 'standard')}>Standard</PillButton>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Fullness:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="10"
+                            value={unit.fullness}
+                            onChange={(e) => updateStorageUnit('from', unit.id, 'fullness', e.target.value)}
+                            className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                          />
+                          <span className="text-xs text-rose-500 font-medium min-w-[70px]">{getStorageFullnessLabel(unit.fullness)}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <button onClick={() => addStorageUnit('from')} className="text-rose-500 text-xs font-medium mt-1">+ Add Unit</button>
+                  </div>
+                )}
+
+                {/* LABOR: Between-rooms - Show "How much needs moved" slider */}
+                {serviceType === 'labor' && laborServiceType === 'between-rooms' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">How much needs moved?</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="10"
+                        value={laborItemAmount}
+                        onChange={(e) => setLaborItemAmount(e.target.value)}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                      />
+                      <span className="text-xs text-rose-500 font-medium min-w-[80px]">{getBelongingsLabel(laborItemAmount)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Between-rooms - Show Stories */}
+                {serviceType === 'labor' && laborServiceType === 'between-rooms' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Stories</p>
+                    <div className="flex gap-1">
+                      {storiesOptions.map((option) => (
+                        <PillButton key={`labor-stories-${option}`} selected={fromStories === option} onClick={() => setFromStories(option)} className="w-10">
+                          {option}
+                        </PillButton>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Loading (Residence) - Show "How much needs moved" slider */}
+                {serviceType === 'labor' && laborServiceType === 'loading' && fromPropertyType === 'home' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">How much do you need help moving?</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="10"
+                        value={loadingItemAmount}
+                        onChange={(e) => setLoadingItemAmount(e.target.value)}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                      />
+                      <span className="text-xs text-rose-500 font-medium min-w-[80px]">{getBelongingsLabel(loadingItemAmount)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Loading - Show Truck/POD Length */}
+                {serviceType === 'labor' && laborServiceType === 'loading' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Truck/POD Length</p>
+                    {truckPodLengths.map((length, index) => (
+                      <div key={index} className="flex items-center gap-2 mb-2">
+                        <div className="flex flex-wrap gap-1 flex-1">
+                          {["8'", "10'", "12'", "15'", "16'", "20'", "26'"].map((option) => (
+                            <PillButton key={`truck-${index}-${option}`} selected={length === option} onClick={() => updateTruckPodLength(index, option)}>
+                              {option}
+                            </PillButton>
+                          ))}
+                        </div>
+                        {truckPodLengths.length > 1 && (
+                          <button onClick={() => removeTruckPod(index)} className="text-red-500 text-xs">Remove</button>
+                        )}
+                      </div>
+                    ))}
+                    <button onClick={addTruckPod} className="text-rose-500 text-xs font-medium">+ Add Another Truck/POD</button>
+                  </div>
+                )}
+
+                {/* LABOR: Unloading - Show Truck/POD Length with Fullness */}
+                {serviceType === 'labor' && laborServiceType === 'unloading' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Truck/POD</p>
+                    {unloadingTrucks.map((truck, index) => (
+                      <div key={truck.id} className="mb-3 bg-gray-50 rounded-lg p-2 border border-gray-200">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs font-medium text-gray-700">Truck {index + 1}</span>
+                          {unloadingTrucks.length > 1 && (
+                            <button onClick={() => removeUnloadingTruck(truck.id)} className="text-red-500 text-xs">Remove</button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mb-2">
+                          <span className="text-xs text-gray-500 mr-1">Length:</span>
+                          {["8'", "10'", "12'", "15'", "16'", "20'", "26'"].map((option) => (
+                            <PillButton key={`unload-${truck.id}-${option}`} selected={truck.length === option} onClick={() => updateUnloadingTruck(truck.id, 'length', option)}>
+                              {option}
+                            </PillButton>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Fullness:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="10"
+                            value={truck.fullness}
+                            onChange={(e) => updateUnloadingTruck(truck.id, 'fullness', e.target.value)}
+                            className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                          />
+                          <span className="text-xs text-rose-500 font-medium min-w-[70px]">{getStorageFullnessLabel(truck.fullness)}</span>
+                        </div>
+                      </div>
+                    ))}
+                    <button onClick={addUnloadingTruck} className="text-rose-500 text-xs font-medium">+ Add Another Truck/POD</button>
+                  </div>
+                )}
+
+                {/* LABOR: Unloading (Residence) - Show Stories */}
+                {serviceType === 'labor' && laborServiceType === 'unloading' && toPropertyType === 'home' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Stories</p>
+                    <div className="flex gap-1">
+                      {storiesOptions.map((option) => (
+                        <PillButton key={`unload-stories-${option}`} selected={fromStories === option} onClick={() => setFromStories(option)} className="w-10">
+                          {option}
+                        </PillButton>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Unloading (Storage) - Show Storage Type */}
+                {serviceType === 'labor' && laborServiceType === 'unloading' && toPropertyType === 'storage' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Storage Type</p>
+                    <div className="flex gap-1.5">
+                      <PillButton selected={unloadingStorageType === 'conditioned'} onClick={() => setUnloadingStorageType('conditioned')}>Conditioned</PillButton>
+                      <PillButton selected={unloadingStorageType === 'standard'} onClick={() => setUnloadingStorageType('standard')}>Standard</PillButton>
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Office - Show Floor Level */}
+                {serviceType === 'labor' && laborServiceType === 'office' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Floor Level</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        value={fromFloorLevel}
+                        onChange={(e) => setFromFloorLevel(e.target.value)}
+                        className="w-16 border border-gray-300 rounded-lg px-2 py-1 text-sm text-center"
+                      />
+                      {parseInt(fromFloorLevel) >= 2 && (
+                        <div className="flex gap-1">
+                          <span className="text-xs text-gray-500">Elevator?</span>
+                          <PillButton selected={fromElevator === 'yes'} onClick={() => setFromElevator('yes')}>Yes</PillButton>
+                          <PillButton selected={fromElevator === 'no'} onClick={() => setFromElevator('no')}>No</PillButton>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Office - Show "How much needs moved" slider */}
+                {serviceType === 'labor' && laborServiceType === 'office' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">How much needs moved?</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="10"
+                        value={officeItemAmount}
+                        onChange={(e) => setOfficeItemAmount(e.target.value)}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                      />
+                      <span className="text-xs text-rose-500 font-medium min-w-[80px]">{getBelongingsLabel(officeItemAmount)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* LABOR: Heavy/Special Items - Show for all except "other" */}
+                {serviceType === 'labor' && laborServiceType !== 'other' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Heavy/Special Items</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(laborServiceType === 'office'
+                        ? ['TVs over 45"', 'Exercise Equipment']
+                        : heavyItemOptions
+                      ).map((item) => (
+                        <PillButton
+                          key={`labor-heavy-${item}`}
+                          selected={heavyItems.includes(item)}
+                          onClick={() => setHeavyItems(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item])}
+                        >
+                          {item}
+                        </PillButton>
+                      ))}
+                    </div>
+
+                    {/* Heavy Item Details - Sub-selections */}
+                    {heavyItems.length > 0 && (
+                      <div className="mt-2 ml-2 p-2 bg-gray-50 rounded-lg border-l-2 border-[#F66256] text-xs space-y-2">
+                        {/* TVs */}
+                        {heavyItems.includes('TVs over 45"') && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">TVs over 45"</span>
+                            <span className="text-gray-600">How many?</span>
+                            {['1', '2', '3', '4', '5'].map((count) => (
+                              <PillButton key={`labor-tv-${count}`} selected={tvCount === count} onClick={() => setTvCount(count)}>{count}</PillButton>
+                            ))}
+                          </div>
+                        )}
+                        {/* Piano */}
+                        {heavyItems.includes('Piano') && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Piano</span>
+                              <span className="text-gray-600">Type:</span>
+                              <PillButton selected={pianoType === 'upright'} onClick={() => setPianoType('upright')}>Upright</PillButton>
+                              <PillButton selected={pianoType === 'grand'} onClick={() => setPianoType('grand')}>Grand</PillButton>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap ml-4">
+                              <span className="text-gray-600">Ground Level?</span>
+                              <PillButton selected={pianoGroundLevel === 'yes'} onClick={() => setPianoGroundLevel('yes')}>Yes</PillButton>
+                              <PillButton selected={pianoGroundLevel === 'no'} onClick={() => setPianoGroundLevel('no')}>No</PillButton>
+                            </div>
+                          </div>
+                        )}
+                        {/* Gun Safe */}
+                        {heavyItems.includes('Gun Safe') && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Gun Safe</span>
+                              <span className="text-gray-600">Over 300lbs?</span>
+                              <PillButton selected={gunSafeOver300 === 'yes'} onClick={() => setGunSafeOver300('yes')}>Yes</PillButton>
+                              <PillButton selected={gunSafeOver300 === 'no'} onClick={() => setGunSafeOver300('no')}>No</PillButton>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap ml-4">
+                              <span className="text-gray-600">Ground Level?</span>
+                              <PillButton selected={gunSafeGroundLevel === 'yes'} onClick={() => setGunSafeGroundLevel('yes')}>Yes</PillButton>
+                              <PillButton selected={gunSafeGroundLevel === 'no'} onClick={() => setGunSafeGroundLevel('no')}>No</PillButton>
+                            </div>
+                          </div>
+                        )}
+                        {/* Exercise Equipment */}
+                        {heavyItems.includes('Exercise Equipment') && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Exercise Equipment</span>
+                            <span className="text-gray-600">Types:</span>
+                            {['Treadmill', 'Free Weights', 'Multi-gym'].map((type) => (
+                              <PillButton key={`labor-exercise-${type}`} selected={exerciseEquipmentTypes.includes(type)} onClick={() => toggleExerciseEquipment(type)}>{type}</PillButton>
+                            ))}
+                          </div>
+                        )}
+                        {/* Purple/Green Mattress */}
+                        {heavyItems.includes('Purple/Green Mattress') && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Purple/Green Mattress</span>
+                            <span className="text-gray-600">Ground Level?</span>
+                            <PillButton selected={mattressGroundLevel === 'yes'} onClick={() => setMattressGroundLevel('yes')}>Yes</PillButton>
+                            <PillButton selected={mattressGroundLevel === 'no'} onClick={() => setMattressGroundLevel('no')}>No</PillButton>
+                          </div>
+                        )}
+                        {/* Shop/Garage */}
+                        {heavyItems.includes('Shop/Garage') && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Shop/Garage</span>
+                            <span className="text-gray-600">Items:</span>
+                            {['Toolchest', 'Table Saw', 'Other'].map((type) => (
+                              <PillButton key={`labor-tool-${type}`} selected={toolTypes.includes(type)} onClick={() => toggleToolType(type)}>{type}</PillButton>
+                            ))}
+                            {toolTypes.includes('Other') && (
+                              <input
+                                type="text"
+                                placeholder="Describe..."
+                                value={toolOtherText}
+                                onChange={(e) => setToolOtherText(e.target.value)}
+                                className="flex-1 min-w-[100px] border border-gray-300 rounded-lg px-2 py-1 text-xs"
+                              />
+                            )}
+                          </div>
+                        )}
+                        {/* Pool Table */}
+                        {heavyItems.includes('Pool Table') && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Pool Table</span>
+                              <span className="text-gray-600">Need Disassembly?</span>
+                              <PillButton selected={poolTableDisassembly === 'yes'} onClick={() => setPoolTableDisassembly('yes')}>Yes</PillButton>
+                              <PillButton selected={poolTableDisassembly === 'no'} onClick={() => setPoolTableDisassembly('no')}>No</PillButton>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap ml-4">
+                              <span className="text-gray-600">Ground Level?</span>
+                              <PillButton selected={poolTableGroundLevel === 'yes'} onClick={() => setPoolTableGroundLevel('yes')}>Yes</PillButton>
+                              <PillButton selected={poolTableGroundLevel === 'no'} onClick={() => setPoolTableGroundLevel('no')}>No</PillButton>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* LABOR: Details text area - for "other" type */}
+                {serviceType === 'labor' && laborServiceType === 'other' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Any other details we should know?</p>
+                    <textarea
+                      value={fromDetails}
+                      onChange={(e) => setFromDetails(e.target.value)}
+                      placeholder="E.g., narrow staircase, items in garage, specific access instructions..."
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y"
+                      rows={4}
                     />
                   </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            {/* Additional Stop Section */}
-            {formData.serviceType !== 'labor-only' && (
-            <div className="border-l-4 border-purple-500 bg-purple-50 p-4 rounded-r-lg">
-              <div className="flex items-center mb-3">
-                <input
-                  type="checkbox"
-                  name="hasAdditionalStop"
-                  checked={formData.hasAdditionalStop}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-lg font-semibold text-purple-900">
-                  Additional Stop
-                </label>
-              </div>
-
-              {formData.hasAdditionalStop && (
-                <div className="space-y-2">
-                  <select
-                    name="additionalStopLocationType"
-                    value={formData.additionalStopLocationType}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="house">House</option>
-                    <option value="apartment">Apartment</option>
-                    <option value="storage-unit">Storage Unit</option>
-                    {formData.serviceType !== 'truck' && (
-                      <>
-                        <option value="truck">Truck</option>
-                        <option value="pod">POD</option>
-                      </>
-                    )}
-                    <option value="business">Business</option>
-                      <option value="other">Other</option>
-                  </select>
-
-                  {/* Business Name field */}
-                  {formData.additionalStopLocationType === 'business' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Business Name
-                      </label>
-                      <input
-                        type="text"
-                        name="additionalStopBusinessName"
-                        value={formData.additionalStopBusinessName}
-                        onChange={handleInputChange}
-                        placeholder="Enter business name"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
+                {/* Property Type - Only for Truck service (Labor has its own property type handling) */}
+                {serviceType !== 'labor' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Property Type</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {propertyTypes.map((type) => (
+                        <PillButton
+                          key={type.id}
+                          selected={fromPropertyType === type.id}
+                          onClick={() => handleFromPropertyTypeChange(type.id as PropertyType)}
+                        >
+                          {type.label}
+                        </PillButton>
+                      ))}
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {formData.additionalStopLocationType === 'apartment' && (
-                    <div className="mt-2">
-                      <input
-                        type="text"
-                        name="additionalStopApartmentBedBath"
-                        value={formData.additionalStopApartmentBedBath}
-                        onChange={handleInputChange}
-                        placeholder="Bed/Bath"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  )}
-
-                  {/* How Much is Getting Added or Dropped Off Slider - Only for House */}
-                  {formData.additionalStopLocationType === 'house' && (
-                    <div className="space-y-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        How much is getting added or dropped off?
-                      </label>
-                      <div className="flex items-center gap-4 bg-white p-3 rounded-md border border-gray-200">
-                        <input
-                          type="range"
-                          name="additionalStopHowFurnished"
-                          min="0"
-                          max="100"
-                          step="20"
-                          value={formData.additionalStopHowFurnished}
-                          onChange={handleInputChange}
-                          className="flex-1"
-                        />
-                        <span className="text-sm font-medium text-purple-700 min-w-[140px]">
-                          {getAdditionalStopText(Number(formData.additionalStopHowFurnished))}
-                        </span>
+                {/* Storage-specific fields */}
+                {fromFields.showUnitSize && serviceType !== 'labor' && (
+                  <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                    {fromStorageUnits.map((unit, index) => (
+                      <div key={unit.id} className="mb-2 last:mb-0">
+                        <div className="flex justify-between items-center mb-1">
+                          <span className="text-xs font-medium text-gray-700">Unit {index + 1}</span>
+                          {fromStorageUnits.length > 1 && (
+                            <button onClick={() => removeStorageUnit('from', unit.id)} className="text-red-500 text-xs">Remove</button>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1 mb-1">
+                          <span className="text-xs text-gray-500 mr-1">Size:</span>
+                          {unitSizeOptions.map((option) => (
+                            <PillButton
+                              key={`from-${unit.id}-${option}`}
+                              selected={unit.size === option}
+                              onClick={() => updateStorageUnit('from', unit.id, 'size', option)}
+                            >
+                              {option}
+                            </PillButton>
+                          ))}
+                        </div>
+                        <div className="flex gap-1 mb-1">
+                          <span className="text-xs text-gray-500 mr-1">Type:</span>
+                          <PillButton selected={unit.type === 'conditioned'} onClick={() => updateStorageUnit('from', unit.id, 'type', 'conditioned')}>Conditioned</PillButton>
+                          <PillButton selected={unit.type === 'standard'} onClick={() => updateStorageUnit('from', unit.id, 'type', 'standard')}>Standard</PillButton>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-gray-500">Fullness:</span>
+                          <input
+                            type="range"
+                            min="0"
+                            max="10"
+                            value={unit.fullness}
+                            onChange={(e) => updateStorageUnit('from', unit.id, 'fullness', e.target.value)}
+                            className="flex-1 h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                          />
+                          <span className="text-xs text-rose-500 font-medium min-w-[70px]">{getStorageFullnessLabel(unit.fullness)}</span>
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                    <button onClick={() => addStorageUnit('from')} className="text-rose-500 text-xs font-medium mt-1">+ Add Unit</button>
+                  </div>
+                )}
 
-                  {formData.additionalStopLocationType === 'storage-unit' && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-700">Quantity:</span>
+                {/* Bedrooms - for home/apartment only (not labor) */}
+                {fromFields.showBedrooms && serviceType !== 'labor' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Bedrooms</p>
+                    <div className="flex gap-1">
+                      {bedroomOptions.map((option) => (
+                        <PillButton
+                          key={option}
+                          selected={fromBedrooms === option}
+                          onClick={() => setFromBedrooms(option)}
+                          className="w-10"
+                        >
+                          {option}
+                        </PillButton>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Square Footage - for home/apartment/office (not labor) */}
+                {fromFields.showSquareFootage && serviceType !== 'labor' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Square Footage</p>
+                    <div className="flex flex-wrap gap-1">
+                      {squareFootageOptions.map((option) => (
+                        <PillButton
+                          key={option}
+                          selected={fromSquareFootage === option}
+                          onClick={() => setFromSquareFootage(option)}
+                        >
+                          {option}
+                        </PillButton>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* How much will we be moving - for Truck only (not storage) */}
+                {serviceType !== 'labor' && fromPropertyType !== 'storage' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">How much will we be moving?</p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0"
+                        max="10"
+                        value={belongingsAmount}
+                        onChange={(e) => setBelongingsAmount(e.target.value)}
+                        className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                      />
+                      <span className="text-xs text-rose-500 font-medium min-w-[80px]">{getBelongingsLabel(belongingsAmount)}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Garage - for home only (not labor) */}
+                {fromFields.showGarage && serviceType !== 'labor' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Garage</p>
+                    <div className="flex flex-wrap gap-1">
+                      {garageOptions.map((option) => (
+                        <PillButton
+                          key={option}
+                          selected={fromGarage === option}
+                          onClick={() => setFromGarage(option)}
+                        >
+                          {option}
+                        </PillButton>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Stories - for home (not labor) */}
+                {fromFields.showStories && serviceType !== 'labor' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Stories</p>
+                    <div className="flex gap-1">
+                      {storiesOptions.map((option) => (
+                        <PillButton
+                          key={option}
+                          selected={fromStories === option}
+                          onClick={() => setFromStories(option)}
+                          className="w-10"
+                        >
+                          {option}
+                        </PillButton>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Floor Level & Elevator - for apartment/office */}
+                {(fromFields.showFloorLevel && fromPropertyType !== 'storage') && (
+                  <div className="flex gap-3">
+                    <div>
+                      <p className="text-xs text-gray-600 mb-1 font-medium">Floor Level</p>
+                      <div className="flex items-center gap-1">
                         <button
                           type="button"
-                          onClick={() => {
-                            const newQty = Math.max(1, formData.additionalStopStorageUnitQuantity - 1);
-                            setFormData(prev => ({
-                              ...prev,
-                              additionalStopStorageUnitQuantity: newQty,
-                              additionalStopStorageUnitSizes: prev.additionalStopStorageUnitSizes.slice(0, newQty),
-                              additionalStopStorageUnitConditioned: prev.additionalStopStorageUnitConditioned.slice(0, newQty)
-                            }));
-                          }}
-                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
+                          onClick={() => setFromFloorLevel(String(Math.max(1, parseInt(fromFloorLevel || '1') - 1)))}
+                          className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-600 hover:border-blue-400 text-sm"
                         >
                           -
                         </button>
-                        <span className="w-12 text-center font-semibold">{formData.additionalStopStorageUnitQuantity}</span>
+                        <input
+                          type="text"
+                          value={fromFloorLevel}
+                          onChange={(e) => setFromFloorLevel(e.target.value.replace(/\D/g, '') || '1')}
+                          className="w-10 border border-gray-300 rounded-lg px-2 py-1 text-center text-sm"
+                        />
                         <button
                           type="button"
-                          onClick={() => {
-                            setFormData(prev => ({
-                              ...prev,
-                              additionalStopStorageUnitQuantity: prev.additionalStopStorageUnitQuantity + 1,
-                              additionalStopStorageUnitSizes: [...prev.additionalStopStorageUnitSizes, ""],
-                              additionalStopStorageUnitConditioned: [...prev.additionalStopStorageUnitConditioned, ""]
-                            }));
-                          }}
-                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
+                          onClick={() => setFromFloorLevel(String(parseInt(fromFloorLevel || '1') + 1))}
+                          className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-600 hover:border-blue-400 text-sm"
                         >
                           +
                         </button>
                       </div>
-                      {Array.from({ length: formData.additionalStopStorageUnitQuantity }).map((_, index) => (
-                        <div key={index} className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            value={formData.additionalStopStorageUnitSizes[index] || ""}
-                            onChange={(e) => {
-                              const newSizes = [...formData.additionalStopStorageUnitSizes];
-                              newSizes[index] = e.target.value;
-                              setFormData(prev => ({ ...prev, additionalStopStorageUnitSizes: newSizes }));
-                            }}
-                            placeholder={`Unit ${index + 1} Size`}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          />
-                          <div className="flex flex-col items-center justify-center">
-                            <span className="text-sm font-medium text-gray-700 mb-1">Conditioned</span>
-                            <div className="flex items-center gap-2">
-                              <label className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name={`additionalStopStorageConditioned-${index}`}
-                                  checked={formData.additionalStopStorageUnitConditioned[index] === "yes"}
-                                  onChange={() => {
-                                    const newConditioned = [...formData.additionalStopStorageUnitConditioned];
-                                    newConditioned[index] = "yes";
-                                    setFormData(prev => ({ ...prev, additionalStopStorageUnitConditioned: newConditioned }));
-                                  }}
-                                  className="w-3 h-3 text-purple-600"
-                                />
-                                <span className="text-xs">Yes</span>
-                              </label>
-                              <label className="flex items-center gap-1 cursor-pointer">
-                                <input
-                                  type="radio"
-                                  name={`additionalStopStorageConditioned-${index}`}
-                                  checked={formData.additionalStopStorageUnitConditioned[index] === "no"}
-                                  onChange={() => {
-                                    const newConditioned = [...formData.additionalStopStorageUnitConditioned];
-                                    newConditioned[index] = "no";
-                                    setFormData(prev => ({ ...prev, additionalStopStorageUnitConditioned: newConditioned }));
-                                  }}
-                                  className="w-3 h-3 text-purple-600"
-                                />
-                                <span className="text-xs">No</span>
-                              </label>
-                            </div>
-                          </div>
+                    </div>
+                    {fromFields.showElevator && (
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1 font-medium">Elevator</p>
+                        <div className="flex gap-1">
+                          <PillButton selected={fromElevator === 'yes'} onClick={() => setFromElevator('yes')}>Yes</PillButton>
+                          <PillButton selected={fromElevator === 'no'} onClick={() => setFromElevator('no')}>No</PillButton>
                         </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Heavy/Special Items */}
+                {serviceType !== 'labor' && (
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Heavy/Special Items</p>
+                    <div className="flex flex-wrap gap-1">
+                      {heavyItemOptions.map((option) => (
+                        <PillButton
+                          key={option}
+                          selected={heavyItems.includes(option)}
+                          onClick={() => toggleHeavyItem(option)}
+                        >
+                          {option}
+                        </PillButton>
                       ))}
                     </div>
-                  )}
 
-                  {formData.additionalStopLocationType === 'other' && (
-                    <div>
-                      <input
-                        type="text"
-                        name="additionalStopLocationOther"
-                        value={formData.additionalStopLocationOther}
-                        onChange={handleInputChange}
-                        placeholder="Specify Location Type"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Street Address
-                      </label>
-                      <input
-                        key={`additionalStop-address-${autocompleteReinitKey}`}
-                        ref={additionalStopAddressRef}
-                        type="text"
-                        name="additionalStopAddress"
-                        value={formData.additionalStopAddress}
-                        onChange={handleInputChange}
-                        autoComplete="off"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Unit/Apt #
-                      </label>
-                      <input
-                        type="text"
-                        name="additionalStopUnit"
-                        value={formData.additionalStopUnit}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
+                    {/* Heavy Item Details */}
+                    {heavyItems.length > 0 && (
+                      <div className="mt-2 ml-2 p-2 bg-gray-50 rounded-lg border-l-2 border-[#F66256] text-xs space-y-2">
+                        {/* TVs */}
+                        {heavyItems.includes('TVs over 45"') && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">TVs over 45"</span>
+                            <span className="text-gray-600">How many?</span>
+                            {['1', '2', '3', '4', '5'].map((count) => (
+                              <PillButton key={count} selected={tvCount === count} onClick={() => setTvCount(count)}>{count}</PillButton>
+                            ))}
+                          </div>
+                        )}
+                        {/* Piano */}
+                        {heavyItems.includes('Piano') && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Piano</span>
+                              <span className="text-gray-600">Type:</span>
+                              <PillButton selected={pianoType === 'upright'} onClick={() => setPianoType('upright')}>Upright</PillButton>
+                              <PillButton selected={pianoType === 'grand'} onClick={() => setPianoType('grand')}>Grand</PillButton>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap ml-4">
+                              <span className="text-gray-600">Ground Level Both Locations?</span>
+                              <PillButton selected={pianoGroundLevel === 'yes'} onClick={() => setPianoGroundLevel('yes')}>Yes</PillButton>
+                              <PillButton selected={pianoGroundLevel === 'no'} onClick={() => setPianoGroundLevel('no')}>No</PillButton>
+                            </div>
+                          </div>
+                        )}
+                        {/* Gun Safe */}
+                        {heavyItems.includes('Gun Safe') && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Gun Safe</span>
+                              <span className="text-gray-600">Over 300lbs?</span>
+                              <PillButton selected={gunSafeOver300 === 'yes'} onClick={() => setGunSafeOver300('yes')}>Yes</PillButton>
+                              <PillButton selected={gunSafeOver300 === 'no'} onClick={() => setGunSafeOver300('no')}>No</PillButton>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap ml-4">
+                              <span className="text-gray-600">Ground Level Both Locations?</span>
+                              <PillButton selected={gunSafeGroundLevel === 'yes'} onClick={() => setGunSafeGroundLevel('yes')}>Yes</PillButton>
+                              <PillButton selected={gunSafeGroundLevel === 'no'} onClick={() => setGunSafeGroundLevel('no')}>No</PillButton>
+                            </div>
+                          </div>
+                        )}
+                        {/* Exercise Equipment */}
+                        {heavyItems.includes('Exercise Equipment') && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Exercise Equipment</span>
+                            <span className="text-gray-600">Types:</span>
+                            {['Treadmill', 'Free Weights', 'Multi-gym'].map((type) => (
+                              <PillButton key={type} selected={exerciseEquipmentTypes.includes(type)} onClick={() => toggleExerciseEquipment(type)}>{type}</PillButton>
+                            ))}
+                          </div>
+                        )}
+                        {/* Purple/Green Mattress */}
+                        {heavyItems.includes('Purple/Green Mattress') && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Purple/Green Mattress</span>
+                            <span className="text-gray-600">Ground Level?</span>
+                            <PillButton selected={mattressGroundLevel === 'yes'} onClick={() => setMattressGroundLevel('yes')}>Yes</PillButton>
+                            <PillButton selected={mattressGroundLevel === 'no'} onClick={() => setMattressGroundLevel('no')}>No</PillButton>
+                          </div>
+                        )}
+                        {/* Shop/Garage */}
+                        {heavyItems.includes('Shop/Garage') && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Shop/Garage</span>
+                            <span className="text-gray-600">Items:</span>
+                            {['Toolchest', 'Table Saw', 'Other'].map((type) => (
+                              <PillButton key={type} selected={toolTypes.includes(type)} onClick={() => toggleToolType(type)}>{type}</PillButton>
+                            ))}
+                            {toolTypes.includes('Other') && (
+                              <input
+                                type="text"
+                                placeholder="Describe..."
+                                value={toolOtherText}
+                                onChange={(e) => setToolOtherText(e.target.value)}
+                                className="flex-1 min-w-[100px] border border-gray-300 rounded-lg px-2 py-1 text-xs"
+                              />
+                            )}
+                          </div>
+                        )}
+                        {/* Pool Table */}
+                        {heavyItems.includes('Pool Table') && (
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Pool Table</span>
+                              <span className="text-gray-600">Need Disassembly?</span>
+                              <PillButton selected={poolTableDisassembly === 'yes'} onClick={() => setPoolTableDisassembly('yes')}>Yes</PillButton>
+                              <PillButton selected={poolTableDisassembly === 'no'} onClick={() => setPoolTableDisassembly('no')}>No</PillButton>
+                            </div>
+                            <div className="flex items-center gap-2 flex-wrap ml-4">
+                              <span className="text-gray-600">Ground Level Both Locations?</span>
+                              <PillButton selected={poolTableGroundLevel === 'yes'} onClick={() => setPoolTableGroundLevel('yes')}>Yes</PillButton>
+                              <PillButton selected={poolTableGroundLevel === 'no'} onClick={() => setPoolTableGroundLevel('no')}>No</PillButton>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
+                )}
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        City
-                      </label>
-                      <input
-                        type="text"
-                        name="additionalStopCity"
-                        value={formData.additionalStopCity}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        State
-                      </label>
-                      <input
-                        type="text"
-                        name="additionalStopState"
-                        value={formData.additionalStopState}
-                        onChange={handleInputChange}
-                        maxLength={2}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      ZIP Code
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      name="additionalStopZip"
-                      value={formData.additionalStopZip}
-                      onChange={(e) => {
-                        const numericValue = e.target.value.replace(/\D/g, '');
-                        setFormData(prev => ({ ...prev, additionalStopZip: numericValue }));
-                      }}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Notes
-                    </label>
-                    <textarea
-                      name="additionalStopNotes"
-                      value={formData.additionalStopNotes}
-                      onChange={handleInputChange}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                {/* Additional details */}
+                <div>
+                  <p className="text-xs text-gray-600 mb-1 font-medium">Additional Details</p>
+                  <textarea
+                    value={fromDetails}
+                    onChange={(e) => setFromDetails(e.target.value)}
+                    placeholder="Additional Details"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y"
+                    rows={4}
+                  />
                 </div>
-              )}
-            </div>
-            )}
-
-            {/* Delivery Address Section */}
-            {formData.serviceType !== 'labor-only' && (
-            <div className="border-l-4 border-green-500 bg-green-50 p-4 rounded-r-lg">
-              <div className="flex items-center gap-3 mb-3">
-                <h3 className="text-lg font-semibold text-green-900">Delivery Address</h3>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="customerHomeAddress"
-                    checked={formData.customerHomeAddressType === "delivery"}
-                    disabled={formData.deliveryAddressUnknown}
-                    onChange={() => {
-                      setFormData(prev => {
-                        // If setting delivery as customer home, reset pickup location to valid option (house, apartment, other)
-                        const invalidPickupTypes = ['storage-unit', 'truck', 'pod'];
-                        const needsReset = invalidPickupTypes.includes(prev.pickupLocationType);
-                        return {
-                          ...prev,
-                          customerHomeAddressType: "delivery",
-                          pickupLocationType: needsReset ? "house" : prev.pickupLocationType
-                        };
-                      });
-                    }}
-                    className="w-4 h-4 text-green-600 border-gray-300 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <span className={`text-sm ${formData.deliveryAddressUnknown ? 'text-gray-400' : 'text-gray-600'}`}>Current Home or Business</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    name="deliveryAddressUnknown"
-                    checked={formData.deliveryAddressUnknown}
-                    disabled={formData.customerHomeAddressType === "delivery"}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        // Clear all delivery address fields when Unknown is checked
-                        setFormData(prev => ({
-                          ...prev,
-                          deliveryAddressUnknown: true,
-                          deliveryAddress: "",
-                          deliveryUnit: "",
-                          deliveryCity: "",
-                          deliveryState: "",
-                          deliveryZip: "",
-                          deliveryLocationType: "house",
-                          deliveryLocationOther: "",
-                          deliveryHouseSquareFeet: "",
-                          deliveryZestimate: "",
-                          deliveryHowFurnished: 80,
-                          deliveryApartmentSquareFeet: "",
-                          deliveryApartmentBedBath: "",
-                          deliveryApartmentHowFurnished: 80,
-                          deliveryStorageUnitQuantity: 1,
-                          deliveryStorageUnitSizes: [""],
-    deliveryStorageUnitConditioned: [""],
-                          deliveryPODQuantity: 1,
-                          deliveryPODSize: "",
-                          deliveryTruckLength: "",
-                          deliveryStairs: 1,
-                          deliveryNarrowDoorways: false,
-                          deliveryElevator: false,
-                          deliveryParkingDistance: "close",
-                          deliveryAccessNotes: ""
-                        }));
-                      } else {
-                        setFormData(prev => ({ ...prev, deliveryAddressUnknown: false }));
-                      }
-                    }}
-                    className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <span className={`text-sm ${formData.customerHomeAddressType === "delivery" ? 'text-gray-400' : 'text-gray-700'}`}>Unknown</span>
-                </label>
               </div>
-              <div className="space-y-2">
-                <select
-                  name="deliveryLocationType"
-                  value={formData.deliveryLocationType}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="house">House</option>
-                  <option value="apartment">Apartment</option>
-                  {formData.customerHomeAddressType !== 'delivery' && (
-                    <option value="storage-unit">Storage Unit</option>
-                  )}
-                  {formData.serviceType !== 'truck' && (
-                    <>
-                      <option value="pod">POD</option>
-                      <option value="truck">Truck</option>
-                    </>
-                  )}
-                  <option value="business">Business</option>
-                      <option value="other">Other</option>
-                </select>
+            </div>
 
-                {/* Business Name field */}
-                {formData.deliveryLocationType === 'business' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Business Name
-                    </label>
-                    <input
-                      type="text"
-                      name="deliveryBusinessName"
-                      value={formData.deliveryBusinessName}
-                      onChange={handleInputChange}
-                      placeholder="Enter business name"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                )}
-
-                {formData.deliveryLocationType === 'truck' && (
-                  <input
-                    type="text"
-                    name="deliveryTruckLength"
-                    value={formData.deliveryTruckLength}
-                    onChange={handleInputChange}
-                    placeholder="Truck Length (ft)"
-                    className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                )}
-
-                {formData.deliveryLocationType === 'storage-unit' && (
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-gray-700">Quantity:</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const newQty = Math.max(1, formData.deliveryStorageUnitQuantity - 1);
-                          setFormData(prev => ({
-                            ...prev,
-                            deliveryStorageUnitQuantity: newQty,
-                            deliveryStorageUnitSizes: prev.deliveryStorageUnitSizes.slice(0, newQty),
-                            deliveryStorageUnitConditioned: prev.deliveryStorageUnitConditioned.slice(0, newQty)
-                          }));
-                        }}
-                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                      >
-                        -
-                      </button>
-                      <span className="w-12 text-center font-semibold">{formData.deliveryStorageUnitQuantity}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setFormData(prev => ({
-                            ...prev,
-                            deliveryStorageUnitQuantity: prev.deliveryStorageUnitQuantity + 1,
-                            deliveryStorageUnitSizes: [...prev.deliveryStorageUnitSizes, ""],
-                            deliveryStorageUnitConditioned: [...prev.deliveryStorageUnitConditioned, ""]
-                          }));
-                        }}
-                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                      >
-                        +
-                      </button>
+            {/* ========== ADDITIONAL STOP ========== */}
+            {serviceType === 'truck' && (
+              <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+                {/* Header - collapsible */}
+                {!hasStop ? (
+                  <button
+                    onClick={() => setHasStop(true)}
+                    className="w-full px-3 py-2 border-b border-gray-200 text-left flex items-center gap-2 hover:opacity-80 transition-colors"
+                    style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}
+                  >
+                    <span className="font-bold" style={{ color: '#06649b' }}>+</span>
+                    <span className="text-sm text-gray-700 font-medium">Add Additional Stop</span>
+                  </button>
+                ) : (
+                  <>
+                    <div className="px-3 py-2 flex items-center justify-between border-b border-gray-200" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-rose-500 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                          B
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-700 font-medium">Stop 1</p>
+                          <p className="text-gray-500 text-xs">Additional stop along your route</p>
+                        </div>
+                      </div>
+                      <button onClick={handleRemoveStop} className="text-red-500 hover:text-red-700 text-xs">Remove Stop</button>
                     </div>
-                    {Array.from({ length: formData.deliveryStorageUnitQuantity }).map((_, index) => (
-                      <div key={index} className="grid grid-cols-2 gap-2">
+
+                    <div className="p-3 space-y-3">
+                      {/* Address inputs */}
+                      <div className="flex gap-2">
+                        <input
+                          ref={stopInputRef}
+                          type="text"
+                          value={stopAddress}
+                          onChange={(e) => setStopAddress(e.target.value)}
+                          placeholder="Enter stop address"
+                          autoComplete="one-time-code"
+                          autoCapitalize="off"
+                          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                        />
                         <input
                           type="text"
-                          value={formData.deliveryStorageUnitSizes[index] || ""}
-                          onChange={(e) => {
-                            const newSizes = [...formData.deliveryStorageUnitSizes];
-                            newSizes[index] = e.target.value;
-                            setFormData(prev => ({ ...prev, deliveryStorageUnitSizes: newSizes }));
-                          }}
-                          placeholder={`Unit ${index + 1} Size`}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          value={stopUnit}
+                          onChange={(e) => setStopUnit(e.target.value)}
+                          placeholder="Unit"
+                          className="w-16 border border-gray-300 rounded-lg px-2 py-2 text-sm"
                         />
-                        <div className="flex flex-col items-center justify-center">
-                          <span className="text-sm font-medium text-gray-700 mb-1">Conditioned</span>
-                          <div className="flex items-center gap-2">
-                            <label className="flex items-center gap-1 cursor-pointer">
-                              <input
-                                type="radio"
-                                name={`deliveryStorageConditioned-${index}`}
-                                checked={formData.deliveryStorageUnitConditioned[index] === "yes"}
-                                onChange={() => {
-                                  const newConditioned = [...formData.deliveryStorageUnitConditioned];
-                                  newConditioned[index] = "yes";
-                                  setFormData(prev => ({ ...prev, deliveryStorageUnitConditioned: newConditioned }));
-                                }}
-                                className="w-3 h-3 text-green-600"
-                              />
-                              <span className="text-xs">Yes</span>
-                            </label>
-                            <label className="flex items-center gap-1 cursor-pointer">
-                              <input
-                                type="radio"
-                                name={`deliveryStorageConditioned-${index}`}
-                                checked={formData.deliveryStorageUnitConditioned[index] === "no"}
-                                onChange={() => {
-                                  const newConditioned = [...formData.deliveryStorageUnitConditioned];
-                                  newConditioned[index] = "no";
-                                  setFormData(prev => ({ ...prev, deliveryStorageUnitConditioned: newConditioned }));
-                                }}
-                                className="w-3 h-3 text-green-600"
-                              />
-                              <span className="text-xs">No</span>
-                            </label>
+                      </div>
+
+                      {/* Property Type */}
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1 font-medium">Property Type</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {propertyTypes.map((type) => (
+                            <PillButton
+                              key={`stop-${type.id}`}
+                              selected={stopPropertyType === type.id}
+                              onClick={() => handleStopPropertyTypeChange(type.id as PropertyType)}
+                            >
+                              {type.label}
+                            </PillButton>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Dropoff or Pickup */}
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1 font-medium">Are we dropping off or picking up here?</p>
+                        <div className="flex gap-2">
+                          <PillButton selected={stopAction === 'dropoff'} onClick={() => setStopAction('dropoff')}>Dropping Off</PillButton>
+                          <PillButton selected={stopAction === 'pickup'} onClick={() => setStopAction('pickup')}>Picking Up</PillButton>
+                        </div>
+                      </div>
+
+                      {/* Pickup-specific fields */}
+                      {stopAction === 'pickup' && (
+                        <>
+                          {/* Bedrooms - for home/apartment */}
+                          {stopFields.showBedrooms && (
+                            <div>
+                              <p className="text-xs text-gray-600 mb-1 font-medium">Bedrooms</p>
+                              <div className="flex gap-1">
+                                {bedroomOptions.map((option) => (
+                                  <PillButton key={`stop-bed-${option}`} selected={stopBedrooms === option} onClick={() => setStopBedrooms(option)} className="w-10">{option}</PillButton>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Square Footage - for home/apartment/office */}
+                          {stopFields.showSquareFootage && (
+                            <div>
+                              <p className="text-xs text-gray-600 mb-1 font-medium">Square Footage</p>
+                              <div className="flex flex-wrap gap-1">
+                                {squareFootageOptions.map((option) => (
+                                  <PillButton key={`stop-sqft-${option}`} selected={stopSquareFootage === option} onClick={() => setStopSquareFootage(option)}>{option}</PillButton>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Belongings Amount */}
+                          {stopPropertyType !== 'storage' && (
+                            <div>
+                              <p className="text-xs text-gray-600 mb-1 font-medium">How much are we picking up?</p>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="10"
+                                  value={stopBelongingsAmount}
+                                  onChange={(e) => setStopBelongingsAmount(e.target.value)}
+                                  className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:bg-[#F66256] [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:cursor-pointer [&::-moz-range-thumb]:w-5 [&::-moz-range-thumb]:h-5 [&::-moz-range-thumb]:bg-[#F66256] [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                                />
+                                <span className="text-xs text-rose-500 font-medium min-w-[80px]">{getBelongingsLabel(stopBelongingsAmount)}</span>
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Heavy Items for stop */}
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1 font-medium">Heavy/Special Items at Stop</p>
+                            <div className="flex flex-wrap gap-1">
+                              {heavyItemOptions.map((option) => (
+                                <PillButton
+                                  key={`stop-heavy-${option}`}
+                                  selected={stopHeavyItems.includes(option)}
+                                  onClick={() => toggleStopHeavyItem(option)}
+                                >
+                                  {option}
+                                </PillButton>
+                              ))}
+                            </div>
+
+                            {/* Stop Heavy Item Details - Sub-selections */}
+                            {stopHeavyItems.length > 0 && (
+                              <div className="mt-2 ml-2 p-2 bg-gray-50 rounded-lg border-l-2 border-[#F66256] text-xs space-y-2">
+                                {/* TVs */}
+                                {stopHeavyItems.includes('TVs over 45"') && (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">TVs over 45"</span>
+                                    <span className="text-gray-600">How many?</span>
+                                    {['1', '2', '3', '4', '5'].map((count) => (
+                                      <PillButton key={`stop-tv-${count}`} selected={tvCount === count} onClick={() => setTvCount(count)}>{count}</PillButton>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Piano */}
+                                {stopHeavyItems.includes('Piano') && (
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Piano</span>
+                                      <span className="text-gray-600">Type:</span>
+                                      <PillButton selected={pianoType === 'upright'} onClick={() => setPianoType('upright')}>Upright</PillButton>
+                                      <PillButton selected={pianoType === 'grand'} onClick={() => setPianoType('grand')}>Grand</PillButton>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap ml-4">
+                                      <span className="text-gray-600">Ground Level?</span>
+                                      <PillButton selected={pianoGroundLevel === 'yes'} onClick={() => setPianoGroundLevel('yes')}>Yes</PillButton>
+                                      <PillButton selected={pianoGroundLevel === 'no'} onClick={() => setPianoGroundLevel('no')}>No</PillButton>
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Gun Safe */}
+                                {stopHeavyItems.includes('Gun Safe') && (
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Gun Safe</span>
+                                      <span className="text-gray-600">Over 300lbs?</span>
+                                      <PillButton selected={gunSafeOver300 === 'yes'} onClick={() => setGunSafeOver300('yes')}>Yes</PillButton>
+                                      <PillButton selected={gunSafeOver300 === 'no'} onClick={() => setGunSafeOver300('no')}>No</PillButton>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap ml-4">
+                                      <span className="text-gray-600">Ground Level?</span>
+                                      <PillButton selected={gunSafeGroundLevel === 'yes'} onClick={() => setGunSafeGroundLevel('yes')}>Yes</PillButton>
+                                      <PillButton selected={gunSafeGroundLevel === 'no'} onClick={() => setGunSafeGroundLevel('no')}>No</PillButton>
+                                    </div>
+                                  </div>
+                                )}
+                                {/* Exercise Equipment */}
+                                {stopHeavyItems.includes('Exercise Equipment') && (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Exercise Equipment</span>
+                                    <span className="text-gray-600">Types:</span>
+                                    {['Treadmill', 'Free Weights', 'Multi-gym'].map((type) => (
+                                      <PillButton key={`stop-exercise-${type}`} selected={exerciseEquipmentTypes.includes(type)} onClick={() => toggleExerciseEquipment(type)}>{type}</PillButton>
+                                    ))}
+                                  </div>
+                                )}
+                                {/* Purple/Green Mattress */}
+                                {stopHeavyItems.includes('Purple/Green Mattress') && (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Purple/Green Mattress</span>
+                                    <span className="text-gray-600">Ground Level?</span>
+                                    <PillButton selected={mattressGroundLevel === 'yes'} onClick={() => setMattressGroundLevel('yes')}>Yes</PillButton>
+                                    <PillButton selected={mattressGroundLevel === 'no'} onClick={() => setMattressGroundLevel('no')}>No</PillButton>
+                                  </div>
+                                )}
+                                {/* Shop/Garage */}
+                                {stopHeavyItems.includes('Shop/Garage') && (
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Shop/Garage</span>
+                                    <span className="text-gray-600">Items:</span>
+                                    {['Toolchest', 'Table Saw', 'Other'].map((type) => (
+                                      <PillButton key={`stop-tool-${type}`} selected={toolTypes.includes(type)} onClick={() => toggleToolType(type)}>{type}</PillButton>
+                                    ))}
+                                    {toolTypes.includes('Other') && (
+                                      <input
+                                        type="text"
+                                        placeholder="Describe..."
+                                        value={toolOtherText}
+                                        onChange={(e) => setToolOtherText(e.target.value)}
+                                        className="flex-1 min-w-[100px] border border-gray-300 rounded-lg px-2 py-1 text-xs"
+                                      />
+                                    )}
+                                  </div>
+                                )}
+                                {/* Pool Table */}
+                                {stopHeavyItems.includes('Pool Table') && (
+                                  <div className="space-y-1">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="bg-[#F66256] text-white px-2 py-0.5 rounded text-xs">Pool Table</span>
+                                      <span className="text-gray-600">Need Disassembly?</span>
+                                      <PillButton selected={poolTableDisassembly === 'yes'} onClick={() => setPoolTableDisassembly('yes')}>Yes</PillButton>
+                                      <PillButton selected={poolTableDisassembly === 'no'} onClick={() => setPoolTableDisassembly('no')}>No</PillButton>
+                                    </div>
+                                    <div className="flex items-center gap-2 flex-wrap ml-4">
+                                      <span className="text-gray-600">Ground Level?</span>
+                                      <PillButton selected={poolTableGroundLevel === 'yes'} onClick={() => setPoolTableGroundLevel('yes')}>Yes</PillButton>
+                                      <PillButton selected={poolTableGroundLevel === 'no'} onClick={() => setPoolTableGroundLevel('no')}>No</PillButton>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+
+                      {/* Stories - for home */}
+                      {stopFields.showStories && (
+                        <div>
+                          <p className="text-xs text-gray-600 mb-1 font-medium">Stories</p>
+                          <div className="flex gap-1">
+                            {storiesOptions.map((option) => (
+                              <PillButton key={`stop-story-${option}`} selected={stopStories === option} onClick={() => setStopStories(option)} className="w-10">{option}</PillButton>
+                            ))}
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      )}
 
-                {formData.deliveryLocationType === 'pod' && (
-                  <div className="flex gap-2">
-                    <div className="flex items-center gap-2 w-1/2">
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          deliveryPODQuantity: Math.max(1, prev.deliveryPODQuantity - 1)
-                        }))}
-                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                      >
-                        -
-                      </button>
-                      <input
-                        type="number"
-                        name="deliveryPODQuantity"
-                        value={formData.deliveryPODQuantity}
-                        onChange={handleInputChange}
-                        min="1"
-                        placeholder="Qty"
-                        className="w-20 px-3 py-2 border border-gray-300 rounded-md text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          deliveryPODQuantity: prev.deliveryPODQuantity + 1
-                        }))}
-                        className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                      >
-                        +
-                      </button>
-                    </div>
-                    <input
-                      type="text"
-                      name="deliveryPODSize"
-                      value={formData.deliveryPODSize}
-                      onChange={handleInputChange}
-                      placeholder="POD Size"
-                      className="w-1/2 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                )}
-
-                {formData.deliveryLocationType === 'other' && (
-                  <div>
-                    <input
-                      type="text"
-                      name="deliveryLocationOther"
-                      value={formData.deliveryLocationOther}
-                      onChange={handleInputChange}
-                      placeholder="Specify Location Type"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                )}
-
-                {!formData.deliveryAddressUnknown && (
-                  <>
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Street Address
-                        </label>
-                        <input
-                          key={`delivery-address-alt-${autocompleteReinitKey}`}
-                          ref={deliveryAddressRef}
-                          type="text"
-                          name="deliveryAddress"
-                          value={formData.deliveryAddress}
-                          onChange={handleInputChange}
-                          autoComplete="off"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Unit/Apt #
-                        </label>
-                        <input
-                          type="text"
-                          name="deliveryUnit"
-                          value={formData.deliveryUnit}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <div className="col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          City
-                        </label>
-                        <input
-                          type="text"
-                          name="deliveryCity"
-                          value={formData.deliveryCity}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          State
-                        </label>
-                        <input
-                          type="text"
-                          name="deliveryState"
-                          value={formData.deliveryState}
-                          onChange={handleInputChange}
-                          maxLength={2}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        ZIP Code
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        name="deliveryZip"
-                        value={formData.deliveryZip}
-                        onChange={(e) => {
-                          const numericValue = e.target.value.replace(/\D/g, '');
-                          setFormData(prev => ({ ...prev, deliveryZip: numericValue }));
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-
-                    {formData.deliveryLocationType === 'house' && formData.customerHomeAddressType === 'delivery' && (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          name="deliveryHouseSquareFeet"
-                          value={isLoadingDeliveryProperty ? '' : formatNumberWithCommas(formData.deliveryHouseSquareFeet)}
-                          onChange={handleInputChange}
-                          placeholder={isLoadingDeliveryProperty ? "Loading..." : "Square Feet"}
-                          disabled={isLoadingDeliveryProperty}
-                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        />
-                        <input
-                          type="text"
-                          name="deliveryZestimate"
-                          value={isLoadingDeliveryProperty ? '' : formatNumberWithCommas(formData.deliveryZestimate)}
-                          onChange={handleInputChange}
-                          placeholder={isLoadingDeliveryProperty ? "Loading..." : "Value"}
-                          disabled={isLoadingDeliveryProperty}
-                          className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        />
-                        <button
-                          type="button"
-                          onClick={fetchDeliveryPropertyData}
-                          disabled={isLoadingDeliveryProperty}
-                          className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                          title="Fetch property data from Zillow"
-                        >
-                          $
-                        </button>
-                      </div>
-                    )}
-
-                    {formData.deliveryLocationType === 'apartment' && formData.customerHomeAddressType === 'delivery' && (
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          name="deliveryApartmentSquareFeet"
-                          value={isLoadingDeliveryProperty ? '' : formatNumberWithCommas(formData.deliveryApartmentSquareFeet)}
-                          onChange={handleInputChange}
-                          placeholder={isLoadingDeliveryProperty ? "Loading..." : "Square Feet"}
-                          disabled={isLoadingDeliveryProperty}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                        />
-                        <div className="flex-1 flex gap-1 min-w-0">
-                          <input
-                            type="text"
-                            name="deliveryApartmentBedBath"
-                            value={isLoadingDeliveryProperty ? '' : formData.deliveryApartmentBedBath}
-                            onChange={handleInputChange}
-                            placeholder={isLoadingDeliveryProperty ? "Loading..." : "Bed/Bath"}
-                            disabled={isLoadingDeliveryProperty}
-                            className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                          />
-                          <button
-                            type="button"
-                            onClick={fetchDeliveryPropertyData}
-                            disabled={isLoadingDeliveryProperty}
-                            className="px-2 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                            title="Fetch property data from Zillow"
-                          >
-                            sf
-                          </button>
+                      {/* Floor Level & Elevator - for apartment/office */}
+                      {(stopFields.showFloorLevel && stopPropertyType !== 'storage') && (
+                        <div className="flex gap-3">
+                          <div>
+                            <p className="text-xs text-gray-600 mb-1 font-medium">Floor Level</p>
+                            <div className="flex items-center gap-1">
+                              <button type="button" onClick={() => setStopFloorLevel(String(Math.max(1, parseInt(stopFloorLevel || '1') - 1)))} className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-600 hover:border-blue-400 text-sm">-</button>
+                              <input type="text" value={stopFloorLevel} onChange={(e) => setStopFloorLevel(e.target.value.replace(/\D/g, '') || '1')} className="w-10 border border-gray-300 rounded-lg px-2 py-1 text-center text-sm" />
+                              <button type="button" onClick={() => setStopFloorLevel(String(parseInt(stopFloorLevel || '1') + 1))} className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-600 hover:border-blue-400 text-sm">+</button>
+                            </div>
+                          </div>
+                          {stopFields.showElevator && (
+                            <div>
+                              <p className="text-xs text-gray-600 mb-1 font-medium">Elevator</p>
+                              <div className="flex gap-1">
+                                <PillButton selected={stopElevator === 'yes'} onClick={() => setStopElevator('yes')}>Yes</PillButton>
+                                <PillButton selected={stopElevator === 'no'} onClick={() => setStopElevator('no')}>No</PillButton>
+                              </div>
+                            </div>
+                          )}
                         </div>
+                      )}
+
+                      {/* Additional details */}
+                      <div>
+                        <p className="text-xs text-gray-600 mb-1 font-medium">Additional Details</p>
+                        <textarea
+                          value={stopDetails}
+                          onChange={(e) => setStopDetails(e.target.value)}
+                          placeholder="Additional Details"
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y"
+                          rows={4}
+                        />
                       </div>
-                    )}
+                    </div>
                   </>
                 )}
               </div>
-            </div>
-            )}
-          </div>
-        </section>
-
-        {/* Pickup Location Access */}
-        {formData.serviceType !== 'labor-only' && formData.pickupLocationType !== 'storage-unit' && (
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-amber-500">
-          <h2 className="text-xl font-bold text-amber-900 mb-4">Pickup Location Access</h2>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Levels
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({
-                    ...prev,
-                    pickupStairs: Math.max(1, prev.pickupStairs - 1)
-                  }))}
-                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                >
-                  -
-                </button>
-                <span className="w-12 text-center font-semibold">{formData.pickupStairs}</span>
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({
-                    ...prev,
-                    pickupStairs: prev.pickupStairs + 1
-                  }))}
-                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="pickupNarrowDoorways"
-                checked={formData.pickupNarrowDoorways}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Narrow Doorways/Tight Spaces
-              </label>
-            </div>
-
-            {formData.pickupStairs > 1 && (
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="pickupElevator"
-                  checked={formData.pickupElevator}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  Elevator Available
-                </label>
-              </div>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Parking to Door Distance
-              </label>
-              <select
-                name="pickupParkingDistance"
-                value={formData.pickupParkingDistance}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="close">Close (0-50 ft)</option>
-                <option value="medium">Medium (50-150 ft)</option>
-                <option value="long">Long (150+ ft)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Access Notes (gates, codes, restrictions)
-              </label>
-              <textarea
-                name="pickupAccessNotes"
-                value={formData.pickupAccessNotes}
-                onChange={handleInputChange}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </section>
-        )}
-
-        {/* Delivery Location Access */}
-        {formData.serviceType !== 'labor-only' && (
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-lime-500">
-          <h2 className="text-xl font-bold text-lime-900 mb-4">Delivery Location Access</h2>
-
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Levels
-              </label>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({
-                    ...prev,
-                    deliveryStairs: Math.max(1, prev.deliveryStairs - 1)
-                  }))}
-                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                >
-                  -
-                </button>
-                <span className="w-12 text-center font-semibold">{formData.deliveryStairs}</span>
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({
-                    ...prev,
-                    deliveryStairs: prev.deliveryStairs + 1
-                  }))}
-                  className="px-3 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 font-bold"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="deliveryNarrowDoorways"
-                checked={formData.deliveryNarrowDoorways}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Narrow Doorways/Tight Spaces
-              </label>
-            </div>
-
-            {formData.deliveryStairs > 1 && (
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="deliveryElevator"
-                  checked={formData.deliveryElevator}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  Elevator Available
-                </label>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Parking to Door Distance
-              </label>
-              <select
-                name="deliveryParkingDistance"
-                value={formData.deliveryParkingDistance}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="close">Close (0-50 ft)</option>
-                <option value="medium">Medium (50-150 ft)</option>
-                <option value="long">Long (150+ ft)</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Access Notes (gates, codes, restrictions)
-              </label>
-              <textarea
-                name="deliveryAccessNotes"
-                value={formData.deliveryAccessNotes}
-                onChange={handleInputChange}
-                rows={2}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </section>
-        )}
-
-        {/* Heavy/Special Items */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-rose-500">
-          <h2 className="text-xl font-bold text-rose-900 mb-4">Heavy/Special Items</h2>
-
-          <div className="space-y-3">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="gunSafes"
-                checked={formData.gunSafes}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Gun Safe (over 300 pounds)
-              </label>
-            </div>
-
-            {formData.gunSafes && (
-              <div className="ml-6 text-xs text-red-600 italic">
-                *Must be on ground level with no more than 2 steps
-              </div>
-            )}
-
-            {formData.gunSafes && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      gunSafesQty: Math.max(1, prev.gunSafesQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.gunSafesQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      gunSafesQty: prev.gunSafesQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="gunSafesDetails"
-                  value={formData.gunSafesDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="pianos"
-                checked={formData.pianos}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Piano
-              </label>
-            </div>
-
-            {formData.pianos && (
-              <div className="ml-6 text-xs text-red-600 italic">
-                *Must be on ground level with no more than 2 steps
-              </div>
-            )}
-
-            {formData.pianos && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      pianosQty: Math.max(1, prev.pianosQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.pianosQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      pianosQty: prev.pianosQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="pianosDetails"
-                  value={formData.pianosDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="poolTables"
-                checked={formData.poolTables}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Pool Table
-              </label>
-            </div>
-
-            {formData.poolTables && (
-              <div className="ml-6 text-xs text-red-600 italic">
-                *Must be on ground level with no more than 2 steps
-              </div>
-            )}
-
-            {formData.poolTables && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      poolTablesQty: Math.max(1, prev.poolTablesQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.poolTablesQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      poolTablesQty: prev.poolTablesQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="poolTablesDetails"
-                  value={formData.poolTablesDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="purpleGreenMattress"
-                checked={formData.purpleGreenMattress}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Purple/Green Mattress
-              </label>
-            </div>
-
-            {formData.purpleGreenMattress && (
-              <div className="ml-6">
-                <input
-                  type="text"
-                  name="purpleGreenMattressDetails"
-                  value={formData.purpleGreenMattressDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="largeTVs"
-                checked={formData.largeTVs}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Large TVs 45"+
-              </label>
-            </div>
-
-            {formData.largeTVs && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      largeTVsQty: Math.max(1, prev.largeTVsQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.largeTVsQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      largeTVsQty: prev.largeTVsQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="largeTVsDetails"
-                  value={formData.largeTVsDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="treadmills"
-                checked={formData.treadmills}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Treadmills/Exercise Equipment
-              </label>
-            </div>
-
-            {formData.treadmills && (
-              <div className="ml-6 text-xs text-red-600 italic">
-                *Treadmills cannot be disassembled
-              </div>
-            )}
-
-            {formData.treadmills && (
-              <div className="ml-6">
-                <input
-                  type="text"
-                  name="treadmillsDetails"
-                  value={formData.treadmillsDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="largeAppliances"
-                checked={formData.largeAppliances}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Large Appliances
-              </label>
-            </div>
-
-            {formData.largeAppliances && (
-              <div className="ml-6 space-y-2">
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="applianceFridge"
-                    checked={formData.applianceFridge}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="text-sm text-gray-700">
-                    Fridge
-                  </label>
-                  {formData.applianceFridge && (
-                    <div className="flex items-center gap-1 ml-auto">
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceFridgeQty: Math.max(1, prev.applianceFridgeQty - 1)
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                      >
-                        -
-                      </button>
-                      <span className="w-8 text-center text-sm font-semibold">{formData.applianceFridgeQty}</span>
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceFridgeQty: prev.applianceFridgeQty + 1
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                      >
-                        +
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {formData.applianceFridge && (
-                  <div className="ml-6 text-xs text-red-600 italic">
-                    *Fridge doors cannot be fully removed to fit through narrow spaces
+            {/* ========== MOVING TO ========== */}
+            {serviceType === 'truck' && (
+              <div className="bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+                {/* Header with marker */}
+                <div className="px-3 py-2 flex items-center gap-2 border-b border-gray-200" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+                  <div className="w-6 h-6 bg-rose-500 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+                    {hasStop ? 'C' : 'B'}
                   </div>
-                )}
-
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="applianceWasher"
-                    checked={formData.applianceWasher}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="text-sm text-gray-700">
-                    Clothes Washer
-                  </label>
-                  {formData.applianceWasher && (
-                    <div className="flex items-center gap-1 ml-auto">
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceWasherQty: Math.max(1, prev.applianceWasherQty - 1)
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                      >
-                        -
-                      </button>
-                      <span className="w-8 text-center text-sm font-semibold">{formData.applianceWasherQty}</span>
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceWasherQty: prev.applianceWasherQty + 1
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                      >
-                        +
-                      </button>
-                    </div>
-                  )}
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-700 font-medium">Where are you moving your belongings to?</p>
+                    <label className="flex items-center gap-1 mt-0.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={toIsCurrentHome}
+                        onChange={(e) => handleToCurrentHomeChange(e.target.checked)}
+                        className="w-3 h-3 rounded border-gray-300 bg-white text-rose-500 focus:ring-rose-500"
+                      />
+                      <span className="text-gray-500 text-xs">This is my current home or business</span>
+                    </label>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="applianceDryer"
-                    checked={formData.applianceDryer}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="text-sm text-gray-700">
-                    Clothes Dryer
-                  </label>
-                  {formData.applianceDryer && (
-                    <div className="flex items-center gap-1 ml-auto">
+                <div className="p-3 space-y-3">
+                  {/* Address inputs */}
+                  <div className="flex gap-2">
+                    <input
+                      ref={toInputRef}
+                      type="text"
+                      value={toAddress}
+                      onChange={(e) => setToAddress(e.target.value)}
+                      placeholder="Enter destination address"
+                      autoComplete="one-time-code"
+                      autoCapitalize="off"
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+                    />
+                    <input
+                      type="text"
+                      value={toUnit}
+                      onChange={(e) => setToUnit(e.target.value)}
+                      placeholder="Unit"
+                      className="w-16 border border-gray-300 rounded-lg px-2 py-2 text-sm"
+                    />
+                  </div>
+
+                  {/* Property Data - Sq Ft, Value, $ button - Only when current home */}
+                  {toIsCurrentHome && (
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={isLoadingToProperty ? '' : formatNumberWithCommas(toSquareFootage)}
+                        onChange={(e) => setToSquareFootage(e.target.value.replace(/,/g, ''))}
+                        placeholder={isLoadingToProperty ? "Loading..." : "Sq Ft"}
+                        disabled={isLoadingToProperty}
+                        className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      />
+                      <input
+                        type="text"
+                        value={isLoadingToProperty ? '' : formatNumberWithCommas(toZestimate)}
+                        onChange={(e) => setToZestimate(e.target.value.replace(/,/g, ''))}
+                        placeholder={isLoadingToProperty ? "Loading..." : "Value"}
+                        disabled={isLoadingToProperty}
+                        className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-2 text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      />
                       <button
                         type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceDryerQty: Math.max(1, prev.applianceDryerQty - 1)
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
+                        onClick={fetchToPropertyData}
+                        disabled={isLoadingToProperty}
+                        className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium flex-shrink-0 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                        title="Fetch property data from Zillow"
                       >
-                        -
-                      </button>
-                      <span className="w-8 text-center text-sm font-semibold">{formData.applianceDryerQty}</span>
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceDryerQty: prev.applianceDryerQty + 1
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                      >
-                        +
+                        $
                       </button>
                     </div>
                   )}
-                </div>
 
-                <div className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    name="applianceOven"
-                    checked={formData.applianceOven}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="text-sm text-gray-700">
-                    Oven
-                  </label>
-                  {formData.applianceOven && (
-                    <div className="flex items-center gap-1 ml-auto">
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceOvenQty: Math.max(1, prev.applianceOvenQty - 1)
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                      >
-                        -
-                      </button>
-                      <span className="w-8 text-center text-sm font-semibold">{formData.applianceOvenQty}</span>
-                      <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({
-                          ...prev,
-                          applianceOvenQty: prev.applianceOvenQty + 1
-                        }))}
-                        className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                      >
-                        +
-                      </button>
+                  {/* Property Type */}
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Property Type</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {propertyTypes.map((type) => (
+                        <PillButton
+                          key={`to-${type.id}`}
+                          selected={toPropertyType === type.id}
+                          onClick={() => handleToPropertyTypeChange(type.id as PropertyType)}
+                        >
+                          {type.label}
+                        </PillButton>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Storage-specific fields */}
+                  {toFields.showUnitSize && (
+                    <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
+                      {toStorageUnits.map((unit, index) => (
+                        <div key={unit.id} className="mb-2 last:mb-0">
+                          <div className="flex justify-between items-center mb-1">
+                            <span className="text-xs font-medium text-gray-700">Unit {index + 1}</span>
+                            {toStorageUnits.length > 1 && (
+                              <button onClick={() => removeStorageUnit('to', unit.id)} className="text-red-500 text-xs">Remove</button>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap gap-1 mb-1">
+                            <span className="text-xs text-gray-500 mr-1">Size:</span>
+                            {unitSizeOptions.map((option) => (
+                              <PillButton
+                                key={`to-${unit.id}-${option}`}
+                                selected={unit.size === option}
+                                onClick={() => updateStorageUnit('to', unit.id, 'size', option)}
+                              >
+                                {option}
+                              </PillButton>
+                            ))}
+                          </div>
+                          <div className="flex gap-1 mb-1">
+                            <span className="text-xs text-gray-500 mr-1">Type:</span>
+                            <PillButton selected={unit.type === 'conditioned'} onClick={() => updateStorageUnit('to', unit.id, 'type', 'conditioned')}>Conditioned</PillButton>
+                            <PillButton selected={unit.type === 'standard'} onClick={() => updateStorageUnit('to', unit.id, 'type', 'standard')}>Standard</PillButton>
+                          </div>
+                        </div>
+                      ))}
+                      <button onClick={() => addStorageUnit('to')} className="text-rose-500 text-xs font-medium mt-1">+ Add Unit</button>
                     </div>
                   )}
-                </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Other Details
-                  </label>
-                  <input
-                    type="text"
-                    name="applianceOtherDetails"
-                    value={formData.applianceOtherDetails}
-                    onChange={handleInputChange}
-                    placeholder="Other appliance details"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-            )}
+                  {/* Stories - for home */}
+                  {toFields.showStories && (
+                    <div>
+                      <p className="text-xs text-gray-600 mb-1 font-medium">Stories</p>
+                      <div className="flex gap-1">
+                        {storiesOptions.map((option) => (
+                          <PillButton
+                            key={`to-story-${option}`}
+                            selected={toStories === option}
+                            onClick={() => setToStories(option)}
+                            className="w-10"
+                          >
+                            {option}
+                          </PillButton>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="plants"
-                checked={formData.plants}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Plants
-              </label>
-            </div>
-
-            {formData.plants && (
-              <div className="ml-6">
-                <input
-                  type="text"
-                  name="plantsDetails"
-                  value={formData.plantsDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="tableSaw"
-                checked={formData.tableSaw}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Table Saw / Heavy Tools
-              </label>
-            </div>
-
-            {formData.tableSaw && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      tableSawQty: Math.max(1, prev.tableSawQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.tableSawQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      tableSawQty: prev.tableSawQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="tableSawDetails"
-                  value={formData.tableSawDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="otherHeavyItems"
-                checked={formData.otherHeavyItems}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Other Heavy Items
-              </label>
-            </div>
-
-            {formData.otherHeavyItems && (
-              <div className="ml-6">
-                <input
-                  type="text"
-                  name="otherHeavyItemsDetails"
-                  value={formData.otherHeavyItemsDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Special Disassembly */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-orange-500">
-          <h2 className="text-xl font-bold text-orange-900 mb-4">Special Disassembly</h2>
-
-          <div className="space-y-3">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="trampoline"
-                checked={formData.trampoline}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Trampoline
-              </label>
-            </div>
-
-            {formData.trampoline && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      trampolineQty: Math.max(1, prev.trampolineQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.trampolineQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      trampolineQty: prev.trampolineQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="trampolineDetails"
-                  value={formData.trampolineDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="bunkBeds"
-                checked={formData.bunkBeds}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Bunk Beds
-              </label>
-            </div>
-
-            {formData.bunkBeds && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      bunkBedsQty: Math.max(1, prev.bunkBedsQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.bunkBedsQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      bunkBedsQty: prev.bunkBedsQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="bunkBedsDetails"
-                  value={formData.bunkBedsDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="gymEquipment"
-                checked={formData.gymEquipment}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Gym Equipment
-              </label>
-            </div>
-
-            {formData.gymEquipment && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      gymEquipmentQty: Math.max(1, prev.gymEquipmentQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.gymEquipmentQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      gymEquipmentQty: prev.gymEquipmentQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="gymEquipmentDetails"
-                  value={formData.gymEquipmentDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="sauna"
-                checked={formData.sauna}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Sauna
-              </label>
-            </div>
-
-            {formData.sauna && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      saunaQty: Math.max(1, prev.saunaQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.saunaQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      saunaQty: prev.saunaQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="saunaDetails"
-                  value={formData.saunaDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="playsets"
-                checked={formData.playsets}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Playset
-              </label>
-            </div>
-
-            {formData.playsets && (
-              <div className="ml-6 flex items-center gap-2">
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      playsetsQty: Math.max(1, prev.playsetsQty - 1)
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    -
-                  </button>
-                  <span className="w-8 text-center text-sm font-semibold">{formData.playsetsQty}</span>
-                  <button
-                    type="button"
-                    onClick={() => setFormData(prev => ({
-                      ...prev,
-                      playsetsQty: prev.playsetsQty + 1
-                    }))}
-                    className="w-6 h-6 flex items-center justify-center bg-gray-200 text-gray-700 rounded hover:bg-gray-300 font-bold text-sm"
-                  >
-                    +
-                  </button>
-                </div>
-                <input
-                  type="text"
-                  name="playsetsDetails"
-                  value={formData.playsetsDetails}
-                  onChange={handleInputChange}
-                  placeholder="Details"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="specialDisassemblyOther"
-                checked={formData.specialDisassemblyOther}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Other
-              </label>
-            </div>
-
-            {formData.specialDisassemblyOther && (
-              <div className="ml-6">
-                <input
-                  type="text"
-                  name="specialDisassemblyOtherDetails"
-                  value={formData.specialDisassemblyOtherDetails}
-                  onChange={handleInputChange}
-                  placeholder="Describe other special disassembly items"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Pets */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-yellow-500">
-          <h2 className="text-xl font-bold text-yellow-900 mb-4">Pets</h2>
-
-          <div className="flex items-center">
-            <input
-              type="checkbox"
-              name="catsPresent"
-              checked={formData.catsPresent}
-              onChange={handleInputChange}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-            />
-            <label className="ml-2 text-sm text-gray-700">
-              Cats Present
-            </label>
-          </div>
-        </section>
-
-        {/* Other Services */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-teal-500">
-          <h2 className="text-xl font-bold text-teal-900 mb-4">Other Services</h2>
-
-          <div className="space-y-3">
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="needsPacking"
-                checked={formData.needsPacking}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Customer Needs Packing Services
-              </label>
-            </div>
-
-            {formData.needsPacking && (
-              <>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Packing Needs (boxes)
-                  </label>
-                  <select
-                    name="packingStatus"
-                    value={formData.packingStatus}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="a few">A Few</option>
-                    <option value="moderate">Moderate</option>
-                    <option value="quite a bit">Quite a Bit</option>
-                    <option value="lots">Everything!</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center ml-6">
-                  <input
-                    type="checkbox"
-                    name="packingKitchen"
-                    checked={formData.packingKitchen}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="ml-2 text-sm text-gray-700">
-                    Kitchen
-                  </label>
-                </div>
-
-                <div className="flex items-center ml-6">
-                  <input
-                    type="checkbox"
-                    name="packingGarage"
-                    checked={formData.packingGarage}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="ml-2 text-sm text-gray-700">
-                    Garage/Shop (Heavy Items)
-                  </label>
-                </div>
-
-                <div className="flex items-center ml-6">
-                  <input
-                    type="checkbox"
-                    name="packingAttic"
-                    checked={formData.packingAttic}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="ml-2 text-sm text-gray-700">
-                    Attic
-                  </label>
-                </div>
-
-                <div className="flex items-center ml-6">
-                  <input
-                    type="checkbox"
-                    name="packingBedrooms"
-                    checked={formData.packingBedrooms}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="ml-2 text-sm text-gray-700">
-                    Bedrooms
-                  </label>
-                </div>
-
-                <div className="flex items-center ml-6">
-                  <input
-                    type="checkbox"
-                    name="packingWardrobeBoxes"
-                    checked={formData.packingWardrobeBoxes}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="ml-2 text-sm text-gray-700">
-                    Wardrobe Boxes
-                  </label>
-                </div>
-
-                <div className="flex items-center ml-6">
-                  <input
-                    type="checkbox"
-                    name="packingFragileItems"
-                    checked={formData.packingFragileItems}
-                    onChange={handleInputChange}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label className="ml-2 text-sm text-gray-700">
-                    Lots of Fragile Items
-                  </label>
-                </div>
-
-                <div className="mt-3 ml-6">
-                  <label className="block text-sm text-gray-700 mb-1">
-                    Packing Notes
-                  </label>
-                  <textarea
-                    name="packingNotes"
-                    value={formData.packingNotes}
-                    onChange={handleInputChange}
-                    rows={2}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="Additional packing details..."
-                  />
-                </div>
-              </>
-            )}
-
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                name="junkRemovalNeeded"
-                checked={formData.junkRemovalNeeded}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label className="ml-2 text-sm text-gray-700">
-                Junk Removal Needed
-              </label>
-            </div>
-
-            {formData.junkRemovalNeeded && (
-              <div className="ml-6 space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Estimated Amount
-                  </label>
-                  <select
-                    name="junkRemovalAmount"
-                    value={formData.junkRemovalAmount}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="">Select amount</option>
-                    <option value="up to 1/4">up to 1/4</option>
-                    <option value="1/4-1/2">1/4-1/2</option>
-                    <option value="1/2-3/4">1/2-3/4</option>
-                    <option value="3/4-full">3/4-full</option>
-                    <option value="full+">full+</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Details
-                  </label>
-                  <input
-                    type="text"
-                    name="junkRemovalDetails"
-                    value={formData.junkRemovalDetails}
-                    onChange={handleInputChange}
-                    placeholder="Describe items to be removed"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Recommended Crew Size */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-violet-500">
-          <h2 className="text-xl font-bold text-violet-900 mb-4">Recommended Crew Size</h2>
-
-          <div className="space-y-3">
-            <div>
-              <select
-                name="estimatedCrewSize"
-                value={formData.estimatedCrewSize}
-                onChange={handleInputChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="2 max">2 max</option>
-                <option value="2-3">2-3</option>
-                <option value="3-4">3-4</option>
-                <option value="4-6">4-6</option>
-                <option value="6+">6+</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Additional Notes
-              </label>
-              <textarea
-                name="crewSizeNotes"
-                value={formData.crewSizeNotes}
-                onChange={handleInputChange}
-                rows={3}
-                placeholder="Additional notes about crew size requirements"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* Special Requests/Notes */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-fuchsia-500">
-          <h2 className="text-xl font-bold text-fuchsia-900 mb-4">Special Requests & Notes</h2>
-
-          <div className="space-y-4">
-            {/* Fixed Budget Checkbox */}
-            <div className="flex items-center">
-              <input
-                type="checkbox"
-                id="fixedBudgetRequested"
-                name="fixedBudgetRequested"
-                checked={formData.fixedBudgetRequested}
-                onChange={handleInputChange}
-                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <label htmlFor="fixedBudgetRequested" className="ml-2 text-sm font-medium text-gray-700">
-                Fixed Budget Requested
-              </label>
-            </div>
-
-            {/* Budget Input Field */}
-            {formData.fixedBudgetRequested && (
-              <div>
-                <label htmlFor="desiredBudget" className="block text-sm font-medium text-gray-700 mb-1">
-                  Desired Budget
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3 top-2 text-gray-500">$</span>
-                  <input
-                    type="number"
-                    id="desiredBudget"
-                    name="desiredBudget"
-                    value={formData.desiredBudget}
-                    onChange={handleInputChange}
-                    placeholder="Enter budget amount"
-                    min="0"
-                    step="1"
-                    className="w-full pl-7 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-
-                {/* Budget Crew Options */}
-                {budgetCrewOptions && (
-                  <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                    {budgetCrewOptions.viable ? (
+                  {/* Floor Level & Elevator - for apartment/office */}
+                  {(toFields.showFloorLevel && toPropertyType !== 'storage') && (
+                    <div className="flex gap-3">
                       <div>
-                        <div className="mb-3">
-                          <p className="text-sm font-medium text-gray-700 mb-1">
-                            Budget Breakdown:
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Desired Budget: <span className="font-semibold">${budgetCrewOptions.desiredBudget?.toLocaleString() || '0'}</span>
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Fixed Costs (Travel, Packing, Stairs, etc.): <span className="font-semibold">${Math.round(budgetCrewOptions.fixedCosts || 0).toLocaleString()}</span>
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Available for Moving Labor: <span className="font-semibold text-green-600">${Math.round(budgetCrewOptions.movingLaborBudget || 0).toLocaleString()}</span>
-                          </p>
-                          <p className="text-sm text-gray-600">
-                            Moving Materials (5%): <span className="font-semibold">${Math.round(budgetCrewOptions.movingMaterialsBudget || 0).toLocaleString()}</span>
-                          </p>
+                        <p className="text-xs text-gray-600 mb-1 font-medium">Floor Level</p>
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => setToFloorLevel(String(Math.max(1, parseInt(toFloorLevel || '1') - 1)))} className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-600 hover:border-blue-400 text-sm">-</button>
+                          <input type="text" value={toFloorLevel} onChange={(e) => setToFloorLevel(e.target.value.replace(/\D/g, '') || '1')} className="w-10 border border-gray-300 rounded-lg px-2 py-1 text-center text-sm" />
+                          <button type="button" onClick={() => setToFloorLevel(String(parseInt(toFloorLevel || '1') + 1))} className="w-6 h-6 flex items-center justify-center border border-gray-300 rounded-full text-gray-600 hover:border-blue-400 text-sm">+</button>
                         </div>
-
-                        {/* Display crew options (non-selectable) */}
-                        {budgetCrewOptions.options && budgetCrewOptions.options.length > 0 && (
-                          <div className="mt-4">
-                            <p className="text-sm font-medium text-gray-700 mb-2">
-                              Possible Crew Configurations:
-                            </p>
-                            <div className="space-y-2">
-                              {budgetCrewOptions.options.map((option, index) => (
-                                <div
-                                  key={index}
-                                  className="p-3 bg-white border border-gray-200 rounded-md opacity-75 cursor-not-allowed"
-                                >
-                                  <div className="flex justify-between items-center">
-                                    <div className="text-sm">
-                                      <span className="font-semibold text-gray-800">
-                                        {option.crewSize} {option.crewSize === 1 ? 'Mover' : 'Movers'}
-                                      </span>
-                                      <span className="text-gray-600"> × </span>
-                                      <span className="font-semibold text-gray-800">
-                                        {option.hours.toFixed(1)} {option.hours === 1 ? 'Hour' : 'Hours'}
-                                      </span>
-                                      <span className="text-gray-500 text-xs ml-2">
-                                        ({option.totalHours.toFixed(1)} total hours)
-                                      </span>
-                                    </div>
-                                    <div className="text-sm font-semibold text-gray-700">
-                                      ${Math.round(option.totalCost).toLocaleString()}
-                                    </div>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
+                      </div>
+                      {toFields.showElevator && (
+                        <div>
+                          <p className="text-xs text-gray-600 mb-1 font-medium">Elevator</p>
+                          <div className="flex gap-1">
+                            <PillButton selected={toElevator === 'yes'} onClick={() => setToElevator('yes')}>Yes</PillButton>
+                            <PillButton selected={toElevator === 'no'} onClick={() => setToElevator('no')}>No</PillButton>
                           </div>
-                        )}
-
-                        <p className="text-sm text-gray-700 italic mt-3">
-                          Crew configuration will be determined based on availability
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="text-center p-4">
-                        <p className="text-red-600 font-semibold">
-                          {budgetCrewOptions.message}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Additional Notes */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Additional Notes
-              </label>
-              <textarea
-                name="specialRequests"
-                value={formData.specialRequests}
-                onChange={handleInputChange}
-                rows={4}
-                placeholder="Any other important information..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* Tools Needed */}
-        <section className="bg-white rounded-lg shadow p-4 border-l-4 border-emerald-500">
-          <h2 className="text-xl font-bold text-emerald-900 mb-4">Tools Needed</h2>
-
-          <div className="space-y-3">
-            {/* Predefined Tools */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="hd4Wheel"
-                  checked={formData.hd4Wheel}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  HD 4-Wheel
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="airSled"
-                  checked={formData.airSled}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  Air Sled
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="applianceDolly"
-                  checked={formData.applianceDolly}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  Appliance Dolly
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="socketWrenches"
-                  checked={formData.socketWrenches}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  Socket Wrenches
-                </label>
-              </div>
-
-              <div className="flex items-center">
-                <input
-                  type="checkbox"
-                  name="safeDolly"
-                  checked={formData.safeDolly}
-                  onChange={handleInputChange}
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                />
-                <label className="ml-2 text-sm text-gray-700">
-                  Safe Dolly
-                </label>
-              </div>
-            </div>
-
-            {/* Custom Tool Fields */}
-            <div className="mt-4 space-y-2">
-              <label className="block text-sm font-medium text-gray-700">
-                Additional Tools
-              </label>
-              <input
-                type="text"
-                name="toolCustom1"
-                value={formData.toolCustom1}
-                onChange={handleInputChange}
-                placeholder="Other tool needed..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="text"
-                name="toolCustom2"
-                value={formData.toolCustom2}
-                onChange={handleInputChange}
-                placeholder="Other tool needed..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-              <input
-                type="text"
-                name="toolCustom3"
-                value={formData.toolCustom3}
-                onChange={handleInputChange}
-                placeholder="Other tool needed..."
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* Quote Display */}
-        {quote && quote.total > 0 && (
-          <section id="quote-section" className={`rounded-lg shadow-lg p-6 border-2 ${
-            isBudgetInsufficient
-              ? 'bg-gradient-to-br from-red-50 to-red-100 border-red-300'
-              : 'bg-gradient-to-br from-green-50 to-blue-50 border-green-300'
-          }`}>
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">
-              Moving Estimate
-            </h2>
-
-            {/* Move Date Display */}
-            {formData.preferredDate && (
-              <div className="text-sm text-gray-700 mb-4">
-                {formData.moveDateUnknown ? (
-                  <span className="font-medium">Move Date Unknown</span>
-                ) : (
-                  <span className="font-medium">
-                    Move date {new Date(formData.preferredDate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
-                    {formData.timeFlexible && ' (flexible)'}
-                  </span>
-                )}
-              </div>
-            )}
-
-            <div className="space-y-2 mb-4">
-              {quote.items.map((item, index) => {
-                // Split description to make parenthetical text italic
-                const descParts = item.description.match(/^(.+?)(\s*\([^)]+\))?$/);
-                const mainDesc = descParts?.[1] || item.description;
-                const italicDesc = descParts?.[2]?.trim();
-
-                return (
-                  <div key={index}>
-                    <div className="flex justify-between items-center py-2 border-b border-gray-200">
-                      <span className="text-gray-700 font-medium">
-                        {mainDesc}
-                        {italicDesc && <span className="italic text-gray-600"> {italicDesc}</span>}
-                      </span>
-                      <span className="font-semibold text-gray-900">${Math.round(item.amount).toLocaleString()}</span>
+                        </div>
+                      )}
                     </div>
-                    {item.discount && (
-                      <div className="pl-6 py-0.5">
-                        <span className="text-xs italic text-gray-500">{item.discount}</span>
+                  )}
+
+                  {/* Additional details */}
+                  <div>
+                    <p className="text-xs text-gray-600 mb-1 font-medium">Additional Details</p>
+                    <textarea
+                      value={toDetails}
+                      onChange={(e) => setToDetails(e.target.value)}
+                      placeholder="Additional Details"
+                      className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-y"
+                      rows={4}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+
+          </div>
+          {/* END RIGHT COLUMN */}
+
+        </div>
+
+        {/* Save Button and Estimate - Same width as columns */}
+        <div className="max-w-4xl mx-auto">
+          {/* Save Button - Centered, above estimate */}
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="py-1.5 px-8 bg-[#06649b] hover:bg-[#055180] text-white text-sm font-medium rounded-lg shadow-sm disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-1.5"
+            >
+              {isSaving ? (
+                <>
+                  <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                  </svg>
+                  {currentEstimateId ? 'Update' : 'Save'}
+                </>
+              )}
+            </button>
+
+            {saveMessage && (
+              <span className={`text-sm font-medium ${
+                saveMessage.type === 'success' ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {saveMessage.text}
+              </span>
+            )}
+
+            {currentQuoteId && (
+              <span className="text-sm text-gray-500">
+                Quote: {currentQuoteId}
+              </span>
+            )}
+          </div>
+
+          {/* Live Quote Display - Matches Website Format */}
+          {quote.total > 0 && (
+            <div className="mt-3 bg-white border border-gray-300 rounded-lg shadow-sm overflow-hidden">
+              {/* Header - matches other section headers */}
+              <div className="px-3 py-2 border-b border-gray-200 flex items-center gap-2" style={{ backgroundColor: 'rgba(6, 100, 155, 0.1)' }}>
+                <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <p className="text-sm text-gray-700 font-medium">Moving Estimate</p>
+              </div>
+
+              {/* Quote Items */}
+              <div className="p-4 space-y-3">
+                {quote.items.map((item, index) => (
+                  <div key={index} className="border-b border-gray-200 pb-2 last:border-b-0">
+                    {/* Main item row */}
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <p className="font-semibold text-gray-800 text-sm">
+                          {item.description}
+                          {item.details && (
+                            <span className="font-normal text-gray-500 text-xs italic ml-2">{item.details}</span>
+                          )}
+                        </p>
                       </div>
-                    )}
-                    {item.subItems && item.subItems.map((subItem, subIndex) => (
-                      <div key={`${index}-${subIndex}`} className="py-1 pl-6 text-sm">
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <div className="text-gray-600">
-                              {subItem.alert && <span className="text-red-600 font-bold">* </span>}
-                              {subItem.description}
+                      <p className="font-semibold text-gray-800 text-sm">${item.amount.toLocaleString()}</p>
+                    </div>
+
+                    {/* Sub-items */}
+                    {item.subItems && item.subItems.length > 0 && (
+                      <div className="mt-1.5 ml-3 space-y-1">
+                        {item.subItems.map((subItem, subIndex) => (
+                          <div key={subIndex}>
+                            <div className="flex justify-between text-gray-500 text-xs">
+                              <span className={subItem.description.startsWith('*') ? 'text-red-600' : ''}>
+                                {subItem.description}
+                              </span>
+                              <span>${subItem.amount.toLocaleString()}</span>
                             </div>
-                            {subItem.details && <div className="text-gray-500 text-xs mt-0.5">{subItem.details}</div>}
+                            {/* Show details below the sub-item */}
+                            {subItem.details && !subItem.details.startsWith('*') && (
+                              <p className="text-gray-400 text-[10px] italic">{subItem.details}</p>
+                            )}
                           </div>
-                          <span className="text-gray-700 ml-2 flex-shrink-0">${Math.round(subItem.amount).toLocaleString()}</span>
-                        </div>
-                        {subItem.description === 'Materials and Supplies' && (
-                          <div className="text-xs text-gray-500 italic mt-0.5">
-                            *Only charged if used
-                          </div>
+                        ))}
+                        {/* Show asterisk details at the bottom */}
+                        {item.subItems.some(sub => sub.details && sub.details.startsWith('*')) && (
+                          <p className="text-gray-400 text-[10px] italic">
+                            {item.subItems.find(sub => sub.details?.startsWith('*'))?.details}
+                          </p>
                         )}
                       </div>
-                    ))}
+                    )}
                   </div>
-                );
-              })}
-            </div>
-
-            <div className="pt-4 border-t-2 border-green-400">
-              <div className="flex justify-between items-center">
-                <span className="text-xl font-bold text-gray-900">Estimated Total:</span>
-                <span className="text-3xl font-bold text-green-600">${Math.round(quote.total).toLocaleString()}</span>
-              </div>
-              <p className="text-xs text-gray-600 mt-2 text-right italic">
-                *Estimate based on provided information. Final price may vary.
-              </p>
-            </div>
-
-            {/* Important Alerts */}
-            {(() => {
-              const alerts: string[] = [];
-
-              // Collect alerts from quote items
-              quote.items.forEach(item => {
-                if (item.subItems) {
-                  item.subItems.forEach(subItem => {
-                    if (subItem.alert && !alerts.includes(subItem.alert)) {
-                      alerts.push(subItem.alert);
-                    }
-                  });
-                }
-              });
-
-              // Add alerts from formData items that don't have costs
-              if (formData.applianceFridge && !alerts.includes('Fridge doors cannot be fully removed to fit through narrow spaces')) {
-                alerts.push('Fridge doors cannot be fully removed to fit through narrow spaces');
-              }
-              if (formData.treadmills && !alerts.includes('Treadmills cannot be disassembled')) {
-                alerts.push('Treadmills cannot be disassembled');
-              }
-
-              return alerts.length > 0 ? (
-                <div className="mt-4 pt-4 border-t border-gray-300">
-                  <h3 className="text-sm font-semibold text-red-600 mb-2">Important Notes:</h3>
-                  <ul className="space-y-1">
-                    {alerts.map((alert, idx) => (
-                      <li key={idx} className="text-sm text-red-600">
-                        <span className="font-bold">* </span>{alert}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null;
-            })()}
-          </section>
-        )}
-
-        {/* Quote Action Buttons */}
-        {quote && quote.total > 0 && (
-          <section className="mb-6">
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                type="button"
-                onClick={() => setShowQuotePreview(true)}
-                className="py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105"
-                style={{
-                  background: 'linear-gradient(135deg, #0072BC, #10B981)',
-                  boxShadow: '0 4px 12px rgba(16,185,129,0.3)'
-                }}
-              >
-                Preview Quote
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!quoteNumber) {
-                    alert('Please save the form first to generate a quote number.');
-                    return;
-                  }
-
-                  const phoneNumber = phones[0]?.number || formData?.phone;
-                  if (!formData.firstName || !phoneNumber) {
-                    alert('Customer name and phone number are required.');
-                    return;
-                  }
-
-                  setIsSendingQuote(true);
-
-                  try {
-                    // Save form data first to ensure Supabase has latest data
-                    await saveFormData(false);
-
-                    const response = await fetch('/api/move-wt/send-quote', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        quoteNumber: quoteNumber,
-                        quoteTotal: quote.total,
-                      }),
-                    });
-
-                    const result = await response.json();
-
-                    if (!response.ok) {
-                      throw new Error(result.error || 'Failed to send quote');
-                    }
-
-                    console.log(`Quote sent successfully to ${formData.firstName}. URL: ${result.quoteUrl}`);
-
-                    // Store the quote URL
-                    if (result.quoteUrl) {
-                      setSentQuoteUrl(result.quoteUrl);
-                    }
-
-                    const timestamp = new Date().toISOString();
-
-                    // Record SMS status
-                    setSendHistory(prev => [...prev, {
-                      timestamp,
-                      method: 'sms',
-                      status: result.sms?.sent ? 'success' : 'failed',
-                      error: result.sms?.error
-                    }]);
-
-                    // Record Email status
-                    setSendHistory(prev => [...prev, {
-                      timestamp,
-                      method: 'email',
-                      status: result.email?.sent ? 'success' : 'failed',
-                      error: result.email?.error
-                    }]);
-
-                    // Show "Sent" for 3 seconds if at least SMS was successful
-                    if (result.sms?.sent) {
-                      setQuoteSent(true);
-                      setTimeout(() => {
-                        setQuoteSent(false);
-                      }, 3000);
-                    }
-                  } catch (error) {
-                    console.error('Send quote error:', error);
-
-                    const timestamp = new Date().toISOString();
-                    const errorMsg = error instanceof Error ? error.message : 'Failed to send quote';
-
-                    // Record failed sends for both
-                    setSendHistory(prev => [...prev,
-                      { timestamp, method: 'sms', status: 'failed', error: errorMsg },
-                      { timestamp, method: 'email', status: 'failed', error: errorMsg }
-                    ]);
-
-                    alert(errorMsg);
-                  } finally {
-                    setIsSendingQuote(false);
-                  }
-                }}
-                disabled={!quoteNumber || !formData.firstName || !(phones[0]?.number || formData?.phone) || isSendingQuote}
-                className="py-4 px-6 text-white font-bold rounded-lg shadow-lg transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{
-                  background: 'linear-gradient(135deg, #10B981, #0072BC)',
-                  boxShadow: '0 4px 12px rgba(0,114,188,0.3)'
-                }}
-              >
-                {isSendingQuote ? 'Sending...' : (quoteSent ? 'Sent' : 'Send to Customer')}
-              </button>
-            </div>
-          </section>
-        )}
-
-        {/* Quote Link Display */}
-        {sentQuoteUrl && (
-          <section className="bg-blue-50 rounded-lg shadow p-4 border border-blue-200">
-            <h3 className="text-sm font-semibold text-blue-800 mb-2">Quote Link Sent</h3>
-            <div className="flex items-center gap-2">
-              <a
-                href={sentQuoteUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-600 text-sm underline break-all hover:text-blue-800"
-              >
-                {sentQuoteUrl}
-              </a>
-              <button
-                type="button"
-                onClick={() => {
-                  navigator.clipboard.writeText(sentQuoteUrl);
-                }}
-                className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
-              >
-                Copy
-              </button>
-            </div>
-          </section>
-        )}
-
-        {/* Send History */}
-        {sendHistory.length > 0 && (
-          <section className="bg-white rounded-lg shadow p-4">
-            <h3 className="text-sm font-semibold text-gray-700 mb-2">Send History</h3>
-            <div className="space-y-2">
-              {sendHistory.map((record, index) => (
-                <div key={index} className="flex items-center justify-between text-xs border-b border-gray-100 pb-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2 py-1 rounded ${
-                      record.status === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {record.status === 'success' ? '✓' : '✗'} {record.method.toUpperCase()}
-                    </span>
-                    <span className="text-gray-600">
-                      {new Date(record.timestamp).toLocaleString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit',
-                        hour12: true
-                      })}
-                    </span>
-                  </div>
-                  {record.error && (
-                    <span className="text-red-600 text-xs truncate max-w-[200px]" title={record.error}>
-                      {record.error}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* House Quality Rating */}
-        <div className="bg-white p-4 rounded-lg shadow flex items-center justify-center">
-          <div className="w-full">
-            <div className="relative px-2">
-              {/* Hidden slider for accessibility */}
-              <input
-                type="range"
-                name="houseQuality"
-                min="1"
-                max="5"
-                step="1"
-                value={formData.houseQuality}
-                onChange={handleInputChange}
-                className="sr-only"
-              />
-              {/* Clickable dot markers */}
-              <div className="flex justify-between px-2" style={{ paddingTop: '2px' }}>
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setFormData(prev => {
-                      const hasLargeAppliances = prev.applianceFridge || prev.applianceWasher || prev.applianceDryer;
-                      return {
-                        ...prev,
-                        houseQuality: value,
-                        // Auto-check Air Sled if quality level 5 is selected AND any Large Appliances are selected
-                        airSled: (value === 5 && hasLargeAppliances) ? true : prev.airSled
-                      };
-                    })}
-                    className={`w-4 h-4 rounded-full border-2 transition-all cursor-pointer ${
-                      formData.houseQuality === value
-                        ? 'bg-gray-300 border-gray-400 scale-125'
-                        : 'bg-white border-gray-400 hover:bg-gray-100'
-                    }`}
-                    aria-label={`Quality level ${value}`}
-                  />
                 ))}
+
+                {/* Total - Price Range (matching website) */}
+                <div className="border-t-2 border-gray-300 pt-3 mt-3">
+                  <div className="flex justify-between items-center mb-1">
+                    <p className="text-sm font-bold text-gray-800">Estimated Total:</p>
+                    <p className="text-lg font-bold text-green-600">
+                      ${Math.round(Math.max(quote.movingLabor * 0.8, quote.minimumCharge) + quote.movingMaterials * 0.8 + quote.otherServices * 0.8 + quote.fixedTotal).toLocaleString()} - ${Math.round((quote.movingLabor + quote.movingMaterials + quote.otherServices) * 1.2 + quote.fixedTotal).toLocaleString()}
+                    </p>
+                  </div>
+                  <p className="text-gray-500 text-[10px] italic text-center">
+                    *Estimate based on provided information. Final price may vary.
+                  </p>
+                </div>
+
+                {/* Important Notes - for heavy items with alerts */}
+                {quote.items.some(item => item.subItems?.some(sub => sub.alert)) && (
+                  <div className="mt-3 pt-2 border-t border-gray-200">
+                    <p className="font-semibold text-gray-700 mb-1 text-xs">Important Notes:</p>
+                    <p className="text-red-600 text-[10px]">
+                      * Must be on ground level with no more than 2 steps
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Submit Button - Fixed on desktop, normal on mobile */}
-        <div className="bg-white p-4 shadow-lg rounded-lg md:fixed md:bottom-0 md:left-0 md:right-0 md:z-50">
-          <div className="max-w-2xl mx-auto">
-            <button
-              type="submit"
-              disabled={isSaving || !jobNumber || !address || isFormSaved}
-              className="w-full py-3 px-4 text-white font-bold rounded-lg shadow-md transition-all disabled:bg-gray-400 disabled:cursor-not-allowed"
-              style={{ backgroundColor: isSaving || !jobNumber || !address || isFormSaved ? '#9CA3AF' : '#06649b' }}
-            >
-              {isSaving ? 'Saving...' : (isFormSaved ? 'Saved' : 'Save')}
-            </button>
-          </div>
-        </div>
-      </form>
-
-      {/* Floating See Quote Button */}
-      {quote && quote.total > 0 && (
-        <button
-          onClick={() => {
-            const quoteSection = document.getElementById('quote-section');
-            if (quoteSection) {
-              quoteSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-          }}
-          className="fixed bottom-2 left-1/2 -translate-x-1/2 bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-6 rounded-full shadow-lg transition-all z-40 flex items-center gap-2"
-          style={{ backgroundColor: '#10b981' }}
-        >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 13.5L12 21m0 0l-7.5-7.5M12 21V3" />
-          </svg>
-          See Quote
-        </button>
-      )}
-    </main>
-      {/* Quote Preview Modal */}
-      <QuotePreview
-        isOpen={showQuotePreview}
-        onClose={() => setShowQuotePreview(false)}
-        formData={formData}
-        quote={quote}
-        jobNumber={jobNumber}
-      />
-
-    </>
-  );
-}
-
-export default function MoveWalkthrough() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" />
       </div>
-    }>
-      <MoveWalkthroughContent />
-    </Suspense>
+    </div>
   );
 }
