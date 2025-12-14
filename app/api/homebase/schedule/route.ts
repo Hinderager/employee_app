@@ -2,25 +2,41 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-// Homebase API configuration - uses Token auth, not Bearer
+// Homebase API configuration
+// Correct base URL is api.joinhomebase.com (NOT app.joinhomebase.com)
 const HOMEBASE_API_KEY = process.env.HOMEBASE_API_KEY || 'HGJqqfH5iscRjyxCcLlvg2DIXQgH4cLAJli5A3abugM';
-const HOMEBASE_API_URL = 'https://app.joinhomebase.com/api';
+const HOMEBASE_LOCATION_UUID = process.env.HOMEBASE_LOCATION_UUID || '243321fc-abcf-435c-9a5d-e1a992be0cf7';
+const HOMEBASE_API_URL = 'https://api.joinhomebase.com';
+
+// Generate Bearer auth header
+function getAuthHeader(): string {
+  if (HOMEBASE_API_KEY) {
+    return `Bearer ${HOMEBASE_API_KEY}`;
+  }
+  return '';
+}
 
 interface HomebaseShift {
-  id: string;
-  employee_id: string;
-  start_at: string;  // ISO date string
+  id: number;
+  user_id: number;      // This is the employee ID field
+  employee_id?: number; // Alternative field name
+  start_at: string;     // ISO date string like "2025-12-01T10:00:00-07:00"
   end_at: string;
-  date?: string;     // YYYY-MM-DD
   role?: string;
+  first_name?: string;
+  last_name?: string;
 }
 
 interface HomebaseEmployee {
-  id: string;
+  id: number;
   first_name: string;
   last_name: string;
+  email?: string;
   phone?: string;
-  mobile?: string;
+  job?: {
+    default_role?: string;
+    level?: string;
+  };
 }
 
 interface HomebaseTimeOff {
@@ -56,85 +72,124 @@ export async function GET(request: NextRequest) {
 
     console.log('[homebase/schedule] Fetching data for dates:', dates);
 
-    // Fetch employees from Homebase
-    const employeesResponse = await fetch(`${HOMEBASE_API_URL}/employees`, {
-      headers: {
-        'Authorization': `Token token=${HOMEBASE_API_KEY}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    });
-
-    if (!employeesResponse.ok) {
-      const errorText = await employeesResponse.text();
-      console.error('[homebase/schedule] Failed to fetch employees:', employeesResponse.status, errorText);
+    const authHeader = getAuthHeader();
+    if (!authHeader) {
+      console.log('[homebase/schedule] No API credentials configured');
+      const results = dates.map(date => ({ date, techs: [] }));
       return NextResponse.json({
-        error: 'Failed to fetch employees from Homebase',
-        status: employeesResponse.status,
-        details: errorText
-      }, { status: 500 });
+        success: true,
+        data: results,
+        apiStatus: 'no_credentials',
+        message: 'Homebase API credentials not configured'
+      });
     }
 
-    const employees: HomebaseEmployee[] = await employeesResponse.json();
-    console.log('[homebase/schedule] Found employees:', employees.length);
-
-    // Fetch all shifts from Homebase
-    const shiftsResponse = await fetch(`${HOMEBASE_API_URL}/shifts`, {
-      headers: {
-        'Authorization': `Token token=${HOMEBASE_API_KEY}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-    });
-
+    // Try to fetch employees from Homebase
+    let employees: HomebaseEmployee[] = [];
     let allShifts: HomebaseShift[] = [];
-    if (shiftsResponse.ok) {
-      allShifts = await shiftsResponse.json();
-      console.log('[homebase/schedule] Found shifts:', allShifts.length);
-    } else {
-      console.error('[homebase/schedule] Failed to fetch shifts:', shiftsResponse.status);
-    }
-
-    // Try to fetch time off requests (may not be available on all plans)
     let allTimeOff: HomebaseTimeOff[] = [];
+    let apiWorking = false;
+
     try {
-      const timeOffResponse = await fetch(`${HOMEBASE_API_URL}/time_off_requests`, {
+      // V2 API uses location-based endpoints
+      const employeesUrl = `${HOMEBASE_API_URL}/locations/${HOMEBASE_LOCATION_UUID}/employees`;
+      console.log('[homebase/schedule] Fetching employees from:', employeesUrl);
+
+      const employeesResponse = await fetch(employeesUrl, {
         headers: {
-          'Authorization': `Token token=${HOMEBASE_API_KEY}`,
+          'Authorization': authHeader,
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
       });
 
-      if (timeOffResponse.ok) {
-        allTimeOff = await timeOffResponse.json();
-        console.log('[homebase/schedule] Found time off requests:', allTimeOff.length);
+      console.log('[homebase/schedule] Employees response status:', employeesResponse.status);
+
+      if (employeesResponse.ok) {
+        const employeesData = await employeesResponse.json();
+        // V2 API may return data in different formats
+        employees = Array.isArray(employeesData) ? employeesData : (employeesData.employees || employeesData.data || []);
+        apiWorking = true;
+        console.log('[homebase/schedule] Found employees:', employees.length);
+
+        // Fetch shifts for the date range
+        const minDate = dates.reduce((a, b) => a < b ? a : b);
+        const maxDate = dates.reduce((a, b) => a > b ? a : b);
+        const shiftsUrl = `${HOMEBASE_API_URL}/locations/${HOMEBASE_LOCATION_UUID}/shifts?start_date=${minDate}&end_date=${maxDate}`;
+        console.log('[homebase/schedule] Fetching shifts from:', shiftsUrl);
+
+        const shiftsResponse = await fetch(shiftsUrl, {
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+        });
+
+        console.log('[homebase/schedule] Shifts response status:', shiftsResponse.status);
+
+        if (shiftsResponse.ok) {
+          const shiftsData = await shiftsResponse.json();
+          allShifts = Array.isArray(shiftsData) ? shiftsData : (shiftsData.shifts || shiftsData.data || []);
+          console.log('[homebase/schedule] Found shifts:', allShifts.length);
+        } else {
+          const shiftsError = await shiftsResponse.text();
+          console.log('[homebase/schedule] Shifts error:', shiftsError);
+        }
+
+        // Try time off
+        try {
+          const timeOffUrl = `${HOMEBASE_API_URL}/locations/${HOMEBASE_LOCATION_UUID}/time_off_requests`;
+          const timeOffResponse = await fetch(timeOffUrl, {
+            headers: {
+              'Authorization': authHeader,
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+            },
+          });
+          if (timeOffResponse.ok) {
+            const timeOffData = await timeOffResponse.json();
+            allTimeOff = Array.isArray(timeOffData) ? timeOffData : (timeOffData.time_off_requests || timeOffData.data || []);
+          }
+        } catch (e) {
+          // Time off endpoint may not be available
+          console.log('[homebase/schedule] Time off fetch error:', e);
+        }
+      } else {
+        const errorText = await employeesResponse.text();
+        console.log('[homebase/schedule] Homebase API returned:', employeesResponse.status, errorText, '- using fallback');
       }
     } catch (e) {
-      console.log('[homebase/schedule] Time off endpoint not available');
+      console.log('[homebase/schedule] Homebase API error:', e, '- using fallback');
+    }
+
+    // If API is not working, return empty techs (no mock data to avoid confusion)
+    if (!apiWorking) {
+      const results = dates.map(date => ({ date, techs: [] }));
+      return NextResponse.json({
+        success: true,
+        data: results,
+        apiStatus: 'unavailable',
+        message: 'Homebase API not accessible - check API key or plan level'
+      });
     }
 
     // Process each requested date
     const results = dates.map((date) => {
-      // Filter shifts for this date
       const shiftsForDate = allShifts.filter(shift => {
-        const shiftDate = shift.start_at?.split('T')[0] || shift.date;
+        // Extract date from ISO string like "2025-12-01T10:00:00-07:00"
+        const shiftDate = shift.start_at?.split('T')[0];
         return shiftDate === date;
       });
 
-      // Filter time off for this date
       const timeOffForDate = allTimeOff.filter(to => {
-        // Check if the date falls within the time off range
         return to.status === 'approved' && date >= to.start_date && date <= to.end_date;
       });
 
-      // Get employee IDs scheduled for this date
-      const scheduledEmployeeIds = new Set(shiftsForDate.map(s => s.employee_id));
+      // Use user_id (the actual field from the API) or fall back to employee_id
+      const scheduledEmployeeIds = new Set(shiftsForDate.map(s => s.user_id || s.employee_id));
+      const timeOffEmployeeIds = new Set(timeOffForDate.map(t => Number(t.employee_id)));
 
-      // Get employee IDs with time off for this date
-      const timeOffEmployeeIds = new Set(timeOffForDate.map(t => t.employee_id));
-
-      // Map employees to tech info - only include those scheduled or with time off
       const techs: TechInfo[] = employees
         .map(emp => {
           const isScheduled = scheduledEmployeeIds.has(emp.id);
@@ -149,10 +204,7 @@ export async function GET(request: NextRequest) {
         })
         .filter(t => t.isScheduled || t.hasTimeOff);
 
-      return {
-        date,
-        techs,
-      };
+      return { date, techs };
     });
 
     console.log('[homebase/schedule] Returning results for dates:', results.map(r => `${r.date}: ${r.techs.length} techs`));
