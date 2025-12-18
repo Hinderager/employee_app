@@ -1,4 +1,4 @@
-import { GA4Metrics, DailyMetric, PageMetric, TrafficSource } from '../../../admin/website-analytics/types/analytics';
+import { GA4Metrics, DailyMetric, PageMetric, TrafficSource, LocationData, LandingPageMetric, DeviceData } from '../../../admin/website-analytics/types/analytics';
 import { calculateDateRange } from './cacheManager';
 
 // Google Analytics Data API client
@@ -29,11 +29,28 @@ async function getGA4Auth() {
   return oauth2Client;
 }
 
+// Helper to build hostname filter for GA4 queries
+function buildHostnameFilter(hostname?: string) {
+  if (!hostname) return undefined;
+  // Extract domain name without www. prefix for matching
+  const domainMatch = hostname.replace(/^www\./, '');
+  return {
+    filter: {
+      fieldName: 'hostName',
+      stringFilter: {
+        matchType: 'CONTAINS' as const,
+        value: domainMatch,
+      },
+    },
+  };
+}
+
 export async function getGA4OverviewData(
   propertyId: string,
   dateRange: string,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  hostname?: string
 ): Promise<Partial<GA4Metrics> | null> {
   if (!propertyId || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
     console.log('[ga4Client] Missing property ID or OAuth credentials');
@@ -46,6 +63,7 @@ export async function getGA4OverviewData(
     const analyticsData = google.analyticsdata('v1beta');
 
     const { start, end } = calculateDateRange(dateRange, startDate, endDate);
+    const dimensionFilter = buildHostnameFilter(hostname);
 
     const response = await analyticsData.properties.runReport({
       auth,
@@ -61,6 +79,7 @@ export async function getGA4OverviewData(
           { name: 'averageSessionDuration' },
           { name: 'conversions' },
         ],
+        dimensionFilter,
       },
     });
 
@@ -92,7 +111,8 @@ export async function getGA4DetailedData(
   propertyId: string,
   dateRange: string,
   startDate?: string,
-  endDate?: string
+  endDate?: string,
+  hostname?: string
 ): Promise<GA4Metrics | null> {
   if (!propertyId || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
     return null;
@@ -104,9 +124,10 @@ export async function getGA4DetailedData(
     const analyticsData = google.analyticsdata('v1beta');
 
     const { start, end } = calculateDateRange(dateRange, startDate, endDate);
+    const dimensionFilter = buildHostnameFilter(hostname);
 
     // Fetch multiple reports in parallel
-    const [overviewRes, pagesRes, sourcesRes, dailyRes] = await Promise.all([
+    const [overviewRes, pagesRes, sourcesRes, dailyRes, locationRes, landingPagesRes, allPagesRes, deviceRes] = await Promise.all([
       // Overview metrics
       analyticsData.properties.runReport({
         auth,
@@ -122,6 +143,7 @@ export async function getGA4DetailedData(
             { name: 'averageSessionDuration' },
             { name: 'conversions' },
           ],
+          dimensionFilter,
         },
       }),
       // Top pages
@@ -137,6 +159,7 @@ export async function getGA4DetailedData(
           ],
           limit: '10',
           orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+          dimensionFilter,
         },
       }),
       // Traffic sources
@@ -153,6 +176,7 @@ export async function getGA4DetailedData(
           ],
           limit: '10',
           orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+          dimensionFilter,
         },
       }),
       // Daily trend
@@ -169,6 +193,74 @@ export async function getGA4DetailedData(
             { name: 'conversions' },
           ],
           orderBys: [{ dimension: { dimensionName: 'date' }, desc: false }],
+          dimensionFilter,
+        },
+      }),
+      // Location data (users by country)
+      analyticsData.properties.runReport({
+        auth,
+        property: `properties/${propertyId}`,
+        requestBody: {
+          dateRanges: [{ startDate: start, endDate: end }],
+          dimensions: [{ name: 'country' }],
+          metrics: [
+            { name: 'totalUsers' },
+            { name: 'sessions' },
+          ],
+          limit: '20',
+          orderBys: [{ metric: { metricName: 'totalUsers' }, desc: true }],
+          dimensionFilter,
+        },
+      }),
+      // Landing pages (entry pages)
+      analyticsData.properties.runReport({
+        auth,
+        property: `properties/${propertyId}`,
+        requestBody: {
+          dateRanges: [{ startDate: start, endDate: end }],
+          dimensions: [{ name: 'landingPage' }, { name: 'landingPagePlusQueryString' }],
+          metrics: [
+            { name: 'sessions' },
+            { name: 'totalUsers' },
+            { name: 'bounceRate' },
+            { name: 'averageSessionDuration' },
+          ],
+          limit: '50',
+          orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+          dimensionFilter,
+        },
+      }),
+      // All pages (pageviews for every page)
+      analyticsData.properties.runReport({
+        auth,
+        property: `properties/${propertyId}`,
+        requestBody: {
+          dateRanges: [{ startDate: start, endDate: end }],
+          dimensions: [{ name: 'pagePath' }, { name: 'pageTitle' }],
+          metrics: [
+            { name: 'screenPageViews' },
+            { name: 'averageSessionDuration' },
+          ],
+          limit: '100',
+          orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+          dimensionFilter,
+        },
+      }),
+      // Device breakdown
+      analyticsData.properties.runReport({
+        auth,
+        property: `properties/${propertyId}`,
+        requestBody: {
+          dateRanges: [{ startDate: start, endDate: end }],
+          dimensions: [{ name: 'deviceCategory' }],
+          metrics: [
+            { name: 'sessions' },
+            { name: 'totalUsers' },
+            { name: 'screenPageViews' },
+            { name: 'bounceRate' },
+          ],
+          orderBys: [{ metric: { metricName: 'sessions' }, desc: true }],
+          dimensionFilter,
         },
       }),
     ]);
@@ -194,14 +286,63 @@ export async function getGA4DetailedData(
       bounceRate: parseFloat(row.metricValues?.[2]?.value || '0') * 100,
     }));
 
-    // Parse daily trend
-    const dailyTrend: DailyMetric[] = (dailyRes.data.rows || []).map(row => ({
-      date: row.dimensionValues?.[0]?.value || '',
-      pageViews: parseInt(row.metricValues?.[0]?.value || '0'),
+    // Parse daily trend - GA4 returns dates in YYYYMMDD format, convert to YYYY-MM-DD
+    const dailyTrend: DailyMetric[] = (dailyRes.data.rows || []).map(row => {
+      const rawDate = row.dimensionValues?.[0]?.value || '';
+      // Convert YYYYMMDD to YYYY-MM-DD format for proper Date parsing
+      const formattedDate = rawDate.length === 8
+        ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
+        : rawDate;
+      return {
+        date: formattedDate,
+        pageViews: parseInt(row.metricValues?.[0]?.value || '0'),
+        sessions: parseInt(row.metricValues?.[1]?.value || '0'),
+        users: parseInt(row.metricValues?.[2]?.value || '0'),
+        conversions: parseInt(row.metricValues?.[3]?.value || '0'),
+      };
+    });
+
+    // Parse location data
+    const locationData: LocationData[] = (locationRes.data.rows || []).map(row => ({
+      country: row.dimensionValues?.[0]?.value || 'Unknown',
+      users: parseInt(row.metricValues?.[0]?.value || '0'),
       sessions: parseInt(row.metricValues?.[1]?.value || '0'),
-      users: parseInt(row.metricValues?.[2]?.value || '0'),
-      conversions: parseInt(row.metricValues?.[3]?.value || '0'),
     }));
+
+    // Parse landing pages
+    const landingPages: LandingPageMetric[] = (landingPagesRes.data.rows || []).map(row => ({
+      path: row.dimensionValues?.[0]?.value || '',
+      pageTitle: row.dimensionValues?.[1]?.value || row.dimensionValues?.[0]?.value || '',
+      sessions: parseInt(row.metricValues?.[0]?.value || '0'),
+      users: parseInt(row.metricValues?.[1]?.value || '0'),
+      bounceRate: parseFloat(row.metricValues?.[2]?.value || '0') * 100,
+      avgSessionDuration: parseFloat(row.metricValues?.[3]?.value || '0'),
+    }));
+
+    // Parse all pages (pageviews for every page)
+    const allPages: PageMetric[] = (allPagesRes.data.rows || []).map(row => ({
+      path: row.dimensionValues?.[0]?.value || '',
+      pageTitle: row.dimensionValues?.[1]?.value || '',
+      pageViews: parseInt(row.metricValues?.[0]?.value || '0'),
+      avgTimeOnPage: parseFloat(row.metricValues?.[1]?.value || '0'),
+    }));
+
+    // Parse device data
+    const totalDeviceSessions = (deviceRes.data.rows || []).reduce(
+      (sum, row) => sum + parseInt(row.metricValues?.[0]?.value || '0'),
+      0
+    );
+    const deviceData: DeviceData[] = (deviceRes.data.rows || []).map(row => {
+      const sessions = parseInt(row.metricValues?.[0]?.value || '0');
+      return {
+        device: row.dimensionValues?.[0]?.value || 'unknown',
+        sessions,
+        users: parseInt(row.metricValues?.[1]?.value || '0'),
+        pageViews: parseInt(row.metricValues?.[2]?.value || '0'),
+        bounceRate: parseFloat(row.metricValues?.[3]?.value || '0') * 100,
+        percentOfTotal: totalDeviceSessions > 0 ? (sessions / totalDeviceSessions) * 100 : 0,
+      };
+    });
 
     return {
       pageViews: Math.round(overviewValues[0]),
@@ -215,6 +356,10 @@ export async function getGA4DetailedData(
       topPages,
       trafficSources,
       dailyTrend,
+      locationData,
+      landingPages,
+      allPages,
+      deviceData,
     };
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';

@@ -30,14 +30,16 @@ export async function GET(
 
     const supabase = getSupabase();
 
-    // Fetch site configuration
-    const { data: site, error: siteError } = await supabase
+    // Fetch site configuration - first try by ID, then by slug
+    let site = null;
+
+    const { data: siteById, error: siteError } = await supabase
       .from('analytics_sites')
       .select('*')
       .eq('id', siteId)
       .single();
 
-    if (siteError || !site) {
+    if (siteError || !siteById) {
       // Try finding by slug
       const { data: siteBySlug, error: slugError } = await supabase
         .from('analytics_sites')
@@ -52,7 +54,9 @@ export async function GET(
         );
       }
 
-      Object.assign(site || {}, siteBySlug);
+      site = siteBySlug;
+    } else {
+      site = siteById;
     }
 
     // Fetch data from all sources in parallel
@@ -65,7 +69,7 @@ export async function GET(
             'ga4',
             'detailed',
             dateRange,
-            () => getGA4DetailedData(site.ga4_property_id, dateRange, startDate, endDate),
+            () => getGA4DetailedData(site.ga4_property_id, dateRange, startDate, endDate, site.domain),
             startDate,
             endDate
           )

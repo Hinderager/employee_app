@@ -34,6 +34,18 @@ export interface OverviewMetrics {
   avgCpc: number;
   avgRoas: number;
   siteCount: number;
+  // Search Console metrics
+  totalSearchClicks: number;
+  totalSearchImpressions: number;
+  avgSearchCtr: number;
+  avgSearchPosition: number;
+}
+
+// Location data
+export interface LocationData {
+  country: string;
+  users: number;
+  sessions: number;
 }
 
 // GA4 specific metrics
@@ -49,6 +61,10 @@ export interface GA4Metrics {
   topPages: PageMetric[];
   trafficSources: TrafficSource[];
   dailyTrend: DailyMetric[];
+  locationData: LocationData[];
+  landingPages?: LandingPageMetric[];
+  allPages?: PageMetric[];
+  deviceData?: DeviceData[];
 }
 
 // Meta (Facebook/Instagram) metrics
@@ -104,6 +120,26 @@ export interface PageMetric {
   pageTitle: string;
   pageViews: number;
   avgTimeOnPage: number;
+}
+
+// Landing page metrics (entry pages)
+export interface LandingPageMetric {
+  path: string;
+  pageTitle: string;
+  sessions: number;
+  users: number;
+  bounceRate: number;
+  avgSessionDuration: number;
+}
+
+// Device breakdown
+export interface DeviceData {
+  device: 'desktop' | 'mobile' | 'tablet' | string;
+  sessions: number;
+  users: number;
+  pageViews: number;
+  bounceRate: number;
+  percentOfTotal: number;
 }
 
 export interface TrafficSource {

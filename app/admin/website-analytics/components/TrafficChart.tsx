@@ -32,6 +32,7 @@ interface TrafficChartProps {
   loading?: boolean;
   height?: number;
   showLegend?: boolean;
+  showTitle?: boolean;
   metrics?: ('pageViews' | 'sessions' | 'users' | 'conversions')[];
 }
 
@@ -63,13 +64,29 @@ export default function TrafficChart({
   loading = false,
   height = 300,
   showLegend = true,
+  showTitle = true,
   metrics = ['pageViews', 'sessions'],
 }: TrafficChartProps) {
   const chartData = useMemo(() => {
     const sortedData = [...data].sort((a, b) => a.date.localeCompare(b.date));
 
     const labels = sortedData.map(d => {
-      const date = new Date(d.date);
+      // Handle various date formats: YYYY-MM-DD, YYYYMMDD, or already formatted
+      let dateStr = d.date;
+
+      // If it's in YYYYMMDD format, convert to YYYY-MM-DD
+      if (dateStr && dateStr.length === 8 && !dateStr.includes('-')) {
+        dateStr = `${dateStr.slice(0, 4)}-${dateStr.slice(4, 6)}-${dateStr.slice(6, 8)}`;
+      }
+
+      // Parse the date - add T00:00:00 to ensure consistent parsing across browsers
+      const date = new Date(dateStr + 'T00:00:00');
+
+      // Check if date is valid
+      if (isNaN(date.getTime())) {
+        return d.date || 'N/A';
+      }
+
       return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     });
 
@@ -149,8 +166,8 @@ export default function TrafficChart({
 
   if (!data || data.length === 0) {
     return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <h3 className="text-sm font-semibold text-gray-900 mb-4">Traffic Trend</h3>
+      <div className={showTitle ? "bg-white rounded-xl shadow-sm border border-gray-200 p-4" : ""}>
+        {showTitle && <h3 className="text-sm font-semibold text-gray-900 mb-4">Traffic Trend</h3>}
         <div
           className="flex items-center justify-center bg-gray-50 rounded-lg"
           style={{ height }}
@@ -162,8 +179,8 @@ export default function TrafficChart({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-      <h3 className="text-sm font-semibold text-gray-900 mb-4">Traffic Trend</h3>
+    <div className={showTitle ? "bg-white rounded-xl shadow-sm border border-gray-200 p-4" : ""}>
+      {showTitle && <h3 className="text-sm font-semibold text-gray-900 mb-4">Traffic Trend</h3>}
       <div style={{ height }}>
         <Line data={chartData} options={options} />
       </div>
