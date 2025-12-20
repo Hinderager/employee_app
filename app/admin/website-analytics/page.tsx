@@ -25,7 +25,7 @@ import TrafficChart from './components/TrafficChart';
 import SourcesPieChart from './components/SourcesPieChart';
 import KeywordRankingsTable from './components/KeywordRankingsTable';
 import CampaignTable from './components/CampaignTable';
-import { DateRange, OverviewMetrics, SiteMetrics, AnalyticsSite } from './types/analytics';
+import { DateRange, OverviewMetrics, SiteMetrics, AnalyticsSite, PageTitleMetric } from './types/analytics';
 
 
 interface Site {
@@ -64,6 +64,7 @@ export default function WebsiteAnalyticsPage() {
   // Data state
   const [overviewData, setOverviewData] = useState<OverviewMetrics | null>(null);
   const [siteMetrics, setSiteMetrics] = useState<SiteMetrics | null>(null);
+  const [pageTitleBreakdown, setPageTitleBreakdown] = useState<PageTitleMetric[]>([]);
   const [keywordsData, setKeywordsData] = useState<{ keywords: Array<{
     keyword: string;
     position: number;
@@ -152,6 +153,7 @@ export default function WebsiteAnalyticsPage() {
       if (data.success) {
         setOverviewData(data.data);
         setSites(data.sites || []);
+        setPageTitleBreakdown(data.pageTitleBreakdown || []);
         setLastUpdated(data.lastUpdated);
       }
     } catch (error) {
@@ -401,6 +403,75 @@ export default function WebsiteAnalyticsPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {/* Views by Page Title - Cross-site breakdown */}
+            {!selectedSite && pageTitleBreakdown.length > 0 && (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                  <h3 className="text-sm font-semibold text-gray-900">Views by Page Title</h3>
+                  <p className="text-xs text-gray-500 mt-1">Traffic distribution across all sites by page title</p>
+                </div>
+                {loadingOverview ? (
+                  <div className="p-4 animate-pulse space-y-3">
+                    {[...Array(10)].map((_, i) => (
+                      <div key={i} className="h-10 bg-gray-100 rounded"></div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Page Title</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Views</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Active Users</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Views/User</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Avg Time</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Events</th>
+                          <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Conversions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {pageTitleBreakdown.slice(0, 30).map((page, index) => (
+                          <tr key={index} className="hover:bg-gray-50">
+                            <td className="px-4 py-2">
+                              <div className="text-sm text-gray-900 truncate max-w-[300px]" title={page.pageTitle}>
+                                {page.pageTitle}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm font-medium text-gray-900">
+                              {new Intl.NumberFormat('en-US').format(page.views)}
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-gray-600">
+                              {new Intl.NumberFormat('en-US').format(page.activeUsers)}
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-gray-600">
+                              {page.viewsPerUser.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-gray-600">
+                              {Math.floor(page.avgEngagementTime / 60)}:{String(Math.floor(page.avgEngagementTime % 60)).padStart(2, '0')}
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-gray-600">
+                              {new Intl.NumberFormat('en-US').format(page.eventCount)}
+                            </td>
+                            <td className="px-4 py-2 text-right text-sm text-gray-600">
+                              {new Intl.NumberFormat('en-US').format(page.conversions)}
+                            </td>
+                          </tr>
+                        ))}
+                        {pageTitleBreakdown.length === 0 && (
+                          <tr>
+                            <td colSpan={7} className="px-4 py-8 text-center text-gray-500">
+                              No page title data available
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
 

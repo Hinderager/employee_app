@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { getCacheOrFetch } from '../lib/cacheManager';
-import { getGA4OverviewData } from '../lib/ga4Client';
+import { getGA4OverviewData, getGA4PageTitleBreakdown } from '../lib/ga4Client';
 import { getMetaOverviewData } from '../lib/metaClient';
 import { getGoogleAdsOverviewData } from '../lib/googleAdsClient';
-import { OverviewMetrics, AnalyticsSite } from '../../../admin/website-analytics/types/analytics';
+import { getSearchConsoleOverview } from '../lib/searchConsoleClient';
+import { OverviewMetrics, AnalyticsSite, PageTitleMetric } from '../../../admin/website-analytics/types/analytics';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -54,10 +55,17 @@ export async function GET(request: NextRequest) {
       avgCpc: 0,
       avgRoas: 0,
       siteCount: sites?.length || 0,
+      // Search Console metrics
+      totalSearchClicks: 0,
+      totalSearchImpressions: 0,
+      avgSearchCtr: 0,
+      avgSearchPosition: 0,
     };
 
     const bounceRates: number[] = [];
     const roasValues: number[] = [];
+    const searchCtrValues: number[] = [];
+    const searchPositionValues: number[] = [];
     const siteMetrics: Array<{
       site: AnalyticsSite;
       ga4: Partial<{
@@ -80,11 +88,17 @@ export async function GET(request: NextRequest) {
         impressions: number;
         conversions: number;
       }> | null;
+      searchConsole: Partial<{
+        totalClicks: number;
+        totalImpressions: number;
+        avgCtr: number;
+        avgPosition: number;
+      }> | null;
     }> = [];
 
     // Fetch data for each site in parallel
     const sitePromises = (sites || []).map(async (site: AnalyticsSite) => {
-      const [ga4Data, googleAdsData, metaData] = await Promise.all([
+      const [ga4Data, googleAdsData, metaData, searchConsoleData] = await Promise.all([
         // GA4 data
         site.ga4_property_id
           ? getCacheOrFetch(
@@ -93,7 +107,7 @@ export async function GET(request: NextRequest) {
               'ga4',
               'overview',
               dateRange,
-              () => getGA4OverviewData(site.ga4_property_id!, dateRange, startDate, endDate),
+              () => getGA4OverviewData(site.ga4_property_id!, dateRange, startDate, endDate, site.domain),
               startDate,
               endDate
             )
@@ -124,9 +138,22 @@ export async function GET(request: NextRequest) {
               endDate
             )
           : null,
+        // Search Console data
+        site.search_console_property
+          ? getCacheOrFetch(
+              supabase,
+              site.id,
+              'search_console',
+              'overview',
+              dateRange,
+              () => getSearchConsoleOverview(site.search_console_property!, dateRange, startDate, endDate),
+              startDate,
+              endDate
+            )
+          : null,
       ]);
 
-      return { site, ga4: ga4Data, googleAds: googleAdsData, meta: metaData };
+      return { site, ga4: ga4Data, googleAds: googleAdsData, meta: metaData, searchConsole: searchConsoleData };
     });
 
     const results = await Promise.all(sitePromises);
@@ -159,6 +186,17 @@ export async function GET(request: NextRequest) {
         aggregated.totalAdClicks += result.meta.clicks || 0;
         aggregated.totalAdImpressions += result.meta.impressions || 0;
       }
+
+      if (result.searchConsole) {
+        aggregated.totalSearchClicks += result.searchConsole.totalClicks || 0;
+        aggregated.totalSearchImpressions += result.searchConsole.totalImpressions || 0;
+        if (result.searchConsole.avgCtr) {
+          searchCtrValues.push(result.searchConsole.avgCtr);
+        }
+        if (result.searchConsole.avgPosition) {
+          searchPositionValues.push(result.searchConsole.avgPosition);
+        }
+      }
     }
 
     // Calculate averages
@@ -171,6 +209,29 @@ export async function GET(request: NextRequest) {
     aggregated.avgCpc = aggregated.totalAdClicks > 0
       ? aggregated.totalAdSpend / aggregated.totalAdClicks
       : 0;
+    aggregated.avgSearchCtr = searchCtrValues.length > 0
+      ? searchCtrValues.reduce((a, b) => a + b, 0) / searchCtrValues.length
+      : 0;
+    aggregated.avgSearchPosition = searchPositionValues.length > 0
+      ? searchPositionValues.reduce((a, b) => a + b, 0) / searchPositionValues.length
+      : 0;
+
+    // Fetch page title breakdown (cross-site view) using shared GA4 property
+    let pageTitleBreakdown: PageTitleMetric[] = [];
+    const sharedPropertyId = sites?.find(s => s.ga4_property_id)?.ga4_property_id;
+    if (sharedPropertyId) {
+      const pageTitles = await getCacheOrFetch(
+        supabase,
+        'overview', // Use 'overview' as site_id for shared data
+        'ga4',
+        'page_title_breakdown',
+        dateRange,
+        () => getGA4PageTitleBreakdown(sharedPropertyId, dateRange, startDate, endDate),
+        startDate,
+        endDate
+      );
+      pageTitleBreakdown = pageTitles || [];
+    }
 
     return NextResponse.json({
       success: true,
@@ -184,7 +245,12 @@ export async function GET(request: NextRequest) {
         pageViews: sm.ga4?.pageViews || 0,
         sessions: sm.ga4?.sessions || 0,
         adSpend: (sm.googleAds?.spend || 0) + (sm.meta?.spend || 0),
+        searchClicks: sm.searchConsole?.totalClicks || 0,
+        searchImpressions: sm.searchConsole?.totalImpressions || 0,
+        avgPosition: sm.searchConsole?.avgPosition || 0,
+        avgCtr: sm.searchConsole?.avgCtr || 0,
       })),
+      pageTitleBreakdown,
       dateRange: { range: dateRange, startDate, endDate },
       lastUpdated: new Date().toISOString(),
     }, {

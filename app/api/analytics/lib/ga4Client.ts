@@ -1,4 +1,4 @@
-import { GA4Metrics, DailyMetric, PageMetric, TrafficSource, LocationData, LandingPageMetric, DeviceData } from '../../../admin/website-analytics/types/analytics';
+import { GA4Metrics, DailyMetric, PageMetric, TrafficSource, LocationData, LandingPageMetric, DeviceData, PageTitleMetric } from '../../../admin/website-analytics/types/analytics';
 import { calculateDateRange } from './cacheManager';
 
 // Google Analytics Data API client
@@ -364,6 +364,68 @@ export async function getGA4DetailedData(
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('[ga4Client] Error fetching detailed data:', errorMessage);
+    return null;
+  }
+}
+
+/**
+ * Get page title breakdown across all sites (no hostname filter)
+ * This shows views distributed by page title, which typically represents different microsites
+ */
+export async function getGA4PageTitleBreakdown(
+  propertyId: string,
+  dateRange: string,
+  startDate?: string,
+  endDate?: string
+): Promise<PageTitleMetric[] | null> {
+  if (!propertyId || !process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_REFRESH_TOKEN) {
+    console.log('[ga4Client] Missing property ID or OAuth credentials');
+    return null;
+  }
+
+  try {
+    const { google } = await import('googleapis');
+    const auth = await getGA4Auth();
+    const analyticsData = google.analyticsdata('v1beta');
+
+    const { start, end } = calculateDateRange(dateRange, startDate, endDate);
+
+    const response = await analyticsData.properties.runReport({
+      auth,
+      property: `properties/${propertyId}`,
+      requestBody: {
+        dateRanges: [{ startDate: start, endDate: end }],
+        dimensions: [{ name: 'pageTitle' }],
+        metrics: [
+          { name: 'screenPageViews' },
+          { name: 'activeUsers' },
+          { name: 'averageSessionDuration' },
+          { name: 'eventCount' },
+          { name: 'conversions' },
+        ],
+        limit: '50',
+        orderBys: [{ metric: { metricName: 'screenPageViews' }, desc: true }],
+      },
+    });
+
+    const pageTitles: PageTitleMetric[] = (response.data.rows || []).map(row => {
+      const views = parseInt(row.metricValues?.[0]?.value || '0');
+      const activeUsers = parseInt(row.metricValues?.[1]?.value || '0');
+      return {
+        pageTitle: row.dimensionValues?.[0]?.value || 'Unknown',
+        views,
+        activeUsers,
+        viewsPerUser: activeUsers > 0 ? views / activeUsers : 0,
+        avgEngagementTime: parseFloat(row.metricValues?.[2]?.value || '0'),
+        eventCount: parseInt(row.metricValues?.[3]?.value || '0'),
+        conversions: parseInt(row.metricValues?.[4]?.value || '0'),
+      };
+    });
+
+    return pageTitles;
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error('[ga4Client] Error fetching page title breakdown:', errorMessage);
     return null;
   }
 }

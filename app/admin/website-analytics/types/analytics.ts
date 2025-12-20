@@ -142,6 +142,17 @@ export interface DeviceData {
   percentOfTotal: number;
 }
 
+// Page title performance (for cross-site breakdown)
+export interface PageTitleMetric {
+  pageTitle: string;
+  views: number;
+  activeUsers: number;
+  viewsPerUser: number;
+  avgEngagementTime: number;
+  eventCount: number;
+  conversions: number;
+}
+
 export interface TrafficSource {
   source: string;
   medium: string;
