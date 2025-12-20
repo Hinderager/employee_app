@@ -708,19 +708,21 @@ export default function WebsiteAnalyticsPage() {
                       <table className="w-full">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Country</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">City</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">State</th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Users</th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Sessions</th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">% of Total</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                          {(siteMetrics?.ga4?.locationData || []).slice(0, 10).map((location, index) => {
+                          {(siteMetrics?.ga4?.locationData || []).slice(0, 15).map((location, index) => {
                             const totalUsers = siteMetrics?.ga4?.users || 1;
                             const percentage = ((location.users / totalUsers) * 100).toFixed(1);
                             return (
                               <tr key={index} className="hover:bg-gray-50">
-                                <td className="px-4 py-2 text-sm text-gray-900">{location.country}</td>
+                                <td className="px-4 py-2 text-sm text-gray-900">{location.city}</td>
+                                <td className="px-4 py-2 text-sm text-gray-600">{location.region}</td>
                                 <td className="px-4 py-2 text-right text-sm text-gray-600">
                                   {new Intl.NumberFormat('en-US').format(location.users)}
                                 </td>
@@ -733,7 +735,7 @@ export default function WebsiteAnalyticsPage() {
                           })}
                           {(!siteMetrics?.ga4?.locationData || siteMetrics.ga4.locationData.length === 0) && (
                             <tr>
-                              <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                              <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                                 No location data available
                               </td>
                             </tr>
@@ -1154,7 +1156,8 @@ export default function WebsiteAnalyticsPage() {
                       <table className="w-full">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">Country</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">City</th>
+                            <th className="px-4 py-2 text-left text-xs font-semibold text-gray-600 uppercase">State</th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Users</th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">Sessions</th>
                             <th className="px-4 py-2 text-right text-xs font-semibold text-gray-600 uppercase">% of Total</th>
@@ -1166,7 +1169,8 @@ export default function WebsiteAnalyticsPage() {
                             const percentage = ((location.users / totalUsers) * 100).toFixed(1);
                             return (
                               <tr key={index} className="hover:bg-gray-50">
-                                <td className="px-4 py-3 text-sm text-gray-900">{location.country}</td>
+                                <td className="px-4 py-3 text-sm text-gray-900">{location.city}</td>
+                                <td className="px-4 py-3 text-sm text-gray-600">{location.region}</td>
                                 <td className="px-4 py-3 text-right text-sm text-gray-600">
                                   {new Intl.NumberFormat('en-US').format(location.users)}
                                 </td>
@@ -1179,7 +1183,7 @@ export default function WebsiteAnalyticsPage() {
                           })}
                           {(!siteMetrics?.ga4?.locationData || siteMetrics.ga4.locationData.length === 0) && (
                             <tr>
-                              <td colSpan={4} className="px-4 py-8 text-center text-gray-500">
+                              <td colSpan={5} className="px-4 py-8 text-center text-gray-500">
                                 No location data available
                               </td>
                             </tr>

@@ -43,7 +43,8 @@ export interface OverviewMetrics {
 
 // Location data
 export interface LocationData {
-  country: string;
+  city: string;
+  region: string;
   users: number;
   sessions: number;
 }

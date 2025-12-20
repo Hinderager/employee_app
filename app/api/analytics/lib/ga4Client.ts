@@ -196,18 +196,18 @@ export async function getGA4DetailedData(
           dimensionFilter,
         },
       }),
-      // Location data (users by country)
+      // Location data (users by city)
       analyticsData.properties.runReport({
         auth,
         property: `properties/${propertyId}`,
         requestBody: {
           dateRanges: [{ startDate: start, endDate: end }],
-          dimensions: [{ name: 'country' }],
+          dimensions: [{ name: 'city' }, { name: 'region' }],
           metrics: [
             { name: 'totalUsers' },
             { name: 'sessions' },
           ],
-          limit: '20',
+          limit: '30',
           orderBys: [{ metric: { metricName: 'totalUsers' }, desc: true }],
           dimensionFilter,
         },
@@ -302,9 +302,10 @@ export async function getGA4DetailedData(
       };
     });
 
-    // Parse location data
+    // Parse location data (by city)
     const locationData: LocationData[] = (locationRes.data.rows || []).map(row => ({
-      country: row.dimensionValues?.[0]?.value || 'Unknown',
+      city: row.dimensionValues?.[0]?.value || 'Unknown',
+      region: row.dimensionValues?.[1]?.value || '',
       users: parseInt(row.metricValues?.[0]?.value || '0'),
       sessions: parseInt(row.metricValues?.[1]?.value || '0'),
     }));
